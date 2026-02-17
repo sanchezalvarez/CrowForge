@@ -1,0 +1,45 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+dist-ssr/
+build/
+
+# Tauri build artifacts
+src-tauri/target/
+src-tauri/bin/*.exe
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+*.spec
+
+# Database
+*.db
+
+# Environment / secrets
+.env
+*.local
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Editor / OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Misc junk files
+nul
+C:unitycrowcut*

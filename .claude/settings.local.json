@@ -1,0 +1,34 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir:*)",
+      "Bash(npx tsc:*)",
+      "Bash(git -C \"C:\\\\unity\\\\crowcut\" log --oneline -5 -- backend/ai_engine.py)",
+      "Bash(git -C \"C:\\\\unity\\\\crowcut\" diff c475035~1 c475035 -- backend/ai_engine.py)",
+      "Bash(git -C \"C:\\\\unity\\\\crowcut\" diff HEAD -- backend/ai_engine.py)",
+      "Bash(git -C \"C:\\\\unity\\\\crowcut\" diff HEAD -- backend/prompts.py)",
+      "Bash(git -C \"C:\\\\unity\\\\crowcut\" diff HEAD -- backend/app.py)",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:til.simonwillison.net)",
+      "WebFetch(domain:docs.unsloth.ai)",
+      "WebFetch(domain:unsloth.ai)",
+      "Bash(npm run build:*)",
+      "Bash(npx vite build:*)",
+      "Bash(findstr /V \"is declared but\")",
+      "Bash(python -c:*)",
+      "Bash(node:*)",
+      "Bash(ls -la \"C:\\\\unity\\\\crowcut\\\\src\\\\components\\\\ui\"\" 2>&1 || echo \"Directory listing failed \")",
+      "Bash(npm install:*)",
+      "Bash(npm run dev:*)",
+      "Bash(npx tailwindcss:*)",
+      "Bash(del \"C:\\\\unity\\\\crowcut\\\\tailwind.config.js\")",
+      "Bash(del \"C:\\\\unity\\\\crowcut\\\\postcss.config.js\")",
+      "Bash(ls:*)",
+      "Bash(npm ls:*)",
+      "Bash(npx shadcn@latest add:*)",
+      "Bash(pip show:*)",
+      "Bash(pip install:*)"
+    ]
+  }
+}

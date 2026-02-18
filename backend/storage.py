@@ -1,7 +1,8 @@
 import sqlite3
 import json
 from typing import List, Optional, Dict
-from backend.models import Client, BrandProfile, Campaign, CampaignStatus, PromptTemplate, ConceptRevision, GenerationVersion, BenchmarkRun, ChatSession, ChatMessage
+import uuid
+from backend.models import Client, BrandProfile, Campaign, CampaignStatus, PromptTemplate, ConceptRevision, GenerationVersion, BenchmarkRun, ChatSession, ChatMessage, Document
 
 class DatabaseManager:
     def __init__(self, db_path: str):
@@ -59,6 +60,15 @@ class DatabaseManager:
             content TEXT NOT NULL,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE
+        )""")
+
+        # Ensure documents table exists
+        conn.execute("""CREATE TABLE IF NOT EXISTS documents (
+            id TEXT PRIMARY KEY,
+            title TEXT NOT NULL DEFAULT 'Untitled',
+            content_json TEXT NOT NULL DEFAULT '{}',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )""")
 
         conn.commit()
@@ -399,3 +409,43 @@ class BenchmarkRepository:
                 "SELECT * FROM benchmark_runs ORDER BY created_at DESC LIMIT ?", (limit,)
             ).fetchall()
             return [BenchmarkRun(**dict(r)) for r in rows]
+
+
+class DocumentRepository:
+    def __init__(self, db: DatabaseManager):
+        self.db = db
+
+    def _row_to_document(self, row) -> Document:
+        d = dict(row)
+        d["content_json"] = json.loads(d["content_json"]) if isinstance(d["content_json"], str) else d["content_json"]
+        return Document(**d)
+
+    def create(self, title: str = "Untitled", content_json: dict = None) -> Document:
+        doc_id = str(uuid.uuid4())
+        content_str = json.dumps(content_json or {})
+        with self.db.get_connection() as conn:
+            conn.execute(
+                "INSERT INTO documents (id, title, content_json) VALUES (?, ?, ?)",
+                (doc_id, title, content_str),
+            )
+            conn.commit()
+            return self.get_by_id(doc_id)
+
+    def get_by_id(self, doc_id: str) -> Optional[Document]:
+        with self.db.get_connection() as conn:
+            row = conn.execute("SELECT * FROM documents WHERE id = ?", (doc_id,)).fetchone()
+            return self._row_to_document(row) if row else None
+
+    def get_all(self) -> List[Document]:
+        with self.db.get_connection() as conn:
+            rows = conn.execute("SELECT * FROM documents ORDER BY updated_at DESC").fetchall()
+            return [self._row_to_document(r) for r in rows]
+
+    def update(self, doc_id: str, title: str = None, content_json: dict = None) -> Optional[Document]:
+        with self.db.get_connection() as conn:
+            if title is not None:
+                conn.execute("UPDATE documents SET title = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (title, doc_id))
+            if content_json is not None:
+                conn.execute("UPDATE documents SET content_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (json.dumps(content_json), doc_id))
+            conn.commit()
+            return self.get_by_id(doc_id)

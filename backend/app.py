@@ -18,8 +18,8 @@ def get_resource_path(relative_path):
         return os.path.join(sys._MEIPASS, relative_path)
     return os.path.abspath(relative_path)
 
-from backend.models import Client, Campaign, CampaignStatus, PromptTemplate, RefineRequest, BenchmarkRun, BenchmarkRequest, ChatSession, ChatMessage, ChatMessageRequest
-from backend.storage import DatabaseManager, ClientRepository, CampaignRepository, AppRepository, PromptTemplateRepository, ConceptRevisionRepository, GenerationVersionRepository, BenchmarkRepository, ChatSessionRepository, ChatMessageRepository
+from backend.models import Client, Campaign, CampaignStatus, PromptTemplate, RefineRequest, BenchmarkRun, BenchmarkRequest, ChatSession, ChatMessage, ChatMessageRequest, Document, DocumentCreate, DocumentUpdate
+from backend.storage import DatabaseManager, ClientRepository, CampaignRepository, AppRepository, PromptTemplateRepository, ConceptRevisionRepository, GenerationVersionRepository, BenchmarkRepository, ChatSessionRepository, ChatMessageRepository, DocumentRepository
 from backend.ai_engine import MockAIEngine, HTTPAIEngine, LocalLLAMAEngine, AILogger
 from backend.ai.engine_manager import AIEngineManager
 
@@ -56,6 +56,7 @@ version_repo = GenerationVersionRepository(db)
 benchmark_repo = BenchmarkRepository(db)
 chat_session_repo = ChatSessionRepository(db)
 chat_message_repo = ChatMessageRepository(db)
+document_repo = DocumentRepository(db)
 
 # ── AI Engine Manager (runtime-switchable) ───────────────────────────
 engine_manager = AIEngineManager()
@@ -871,6 +872,7 @@ async def send_chat_message(session_id: int, req: ChatMessageRequest):
         async for chunk in engine_manager.get_active().generate_stream(
             system_prompt, user_prompt,
             temperature=temperature, max_tokens=max_tokens,
+            json_mode=False,
         ):
             full_response += chunk
     except Exception as e:
@@ -883,6 +885,31 @@ async def send_chat_message(session_id: int, req: ChatMessageRequest):
     # Store assistant message and return it
     assistant_msg = chat_message_repo.create(session_id, "assistant", assistant_text)
     return assistant_msg
+
+
+# ── Documents ─────────────────────────────────────────────────────
+
+@app.post("/documents", response_model=Document)
+async def create_document(req: DocumentCreate):
+    return document_repo.create(title=req.title, content_json=req.content_json)
+
+@app.get("/documents")
+async def list_documents():
+    return document_repo.get_all()
+
+@app.get("/documents/{doc_id}", response_model=Document)
+async def get_document(doc_id: str):
+    doc = document_repo.get_by_id(doc_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return doc
+
+@app.put("/documents/{doc_id}", response_model=Document)
+async def update_document(doc_id: str, req: DocumentUpdate):
+    doc = document_repo.get_by_id(doc_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return document_repo.update(doc_id, title=req.title, content_json=req.content_json)
 
 
 if __name__ == "__main__":

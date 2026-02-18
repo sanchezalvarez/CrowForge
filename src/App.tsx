@@ -9,6 +9,7 @@ import {
   AlertCircle,
   Gauge,
   MessageSquare,
+  FileText,
 } from "lucide-react";
 import crowforgeLogo from "./assets/crowforge_ico.png";
 import { cn } from "./lib/utils";
@@ -16,6 +17,7 @@ import { Client, Campaign, PromptTemplate } from "./types";
 import { MarketingGeneratorPage } from "./pages/MarketingGeneratorPage";
 import { BenchmarkPage } from "./pages/BenchmarkPage";
 import { ChatPage } from "./pages/ChatPage";
+import { DocumentsPage } from "./pages/DocumentsPage";
 import { Toaster } from "./components/ui/toaster";
 import { AIControlPanel } from "./components/AIControlPanel";
 import { Button } from "./components/ui/button";
@@ -30,7 +32,7 @@ import {
 
 const API_BASE = "http://127.0.0.1:8000";
 
-type AppPage = "chat" | "main" | "benchmark";
+type AppPage = "chat" | "documents" | "main" | "benchmark";
 type DialogMode = "create-client" | "create-campaign" | null;
 
 export default function App() {
@@ -366,6 +368,18 @@ export default function App() {
               Chat
             </button>
             <button
+              onClick={() => setCurrentPage("documents")}
+              className={cn(
+                "w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-sm transition-colors",
+                currentPage === "documents"
+                  ? "bg-primary/10 text-primary font-semibold"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+              )}
+            >
+              <FileText size={14} />
+              Documents
+            </button>
+            <button
               onClick={() => setCurrentPage("main")}
               className={cn(
                 "w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-sm transition-colors",
@@ -414,6 +428,8 @@ export default function App() {
 
         {currentPage === "chat" ? (
           <ChatPage />
+        ) : currentPage === "documents" ? (
+          <DocumentsPage />
         ) : currentPage === "benchmark" ? (
           <BenchmarkPage />
         ) : !backendOnline ? (

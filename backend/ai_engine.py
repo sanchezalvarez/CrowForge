@@ -23,20 +23,26 @@ class AIEngine(ABC):
         self, system_prompt: str, user_prompt: str, *,
         temperature: float = 0.7, top_p: float = 0.95,
         max_tokens: int = 1024, seed: int | None = None,
+        json_mode: bool = True,
     ) -> AsyncGenerator[str, None]:
         pass
 
 class MockAIEngine(AIEngine):
+    MOCK_CONCEPTS = json.dumps({"schema_version": "v1", "concepts": [
+        {"concept_name": "Mock Concept 1", "rationale": "Mock Rationale 1", "target_audience": "Young professionals aged 25-35", "key_message": "Innovation starts here"},
+        {"concept_name": "Mock Concept 2", "rationale": "Mock Rationale 2", "target_audience": "Tech-savvy early adopters", "key_message": "Built for the future"},
+        {"concept_name": "Mock Concept 3", "rationale": "Mock Rationale 3", "target_audience": "Small business owners", "key_message": "Grow smarter, not harder"}
+    ]})
+
+    MOCK_CHAT = "This is a mock AI response. The mock engine is active — connect a real LLM engine to get actual responses."
+
     async def generate_stream(
         self, system_prompt: str, user_prompt: str, *,
         temperature: float = 0.7, top_p: float = 0.95,
         max_tokens: int = 1024, seed: int | None = None,
+        json_mode: bool = True,
     ) -> AsyncGenerator[str, None]:
-        response_text = json.dumps({"schema_version": "v1", "concepts": [
-            {"concept_name": "Mock Concept 1", "rationale": "Mock Rationale 1", "target_audience": "Young professionals aged 25-35", "key_message": "Innovation starts here"},
-            {"concept_name": "Mock Concept 2", "rationale": "Mock Rationale 2", "target_audience": "Tech-savvy early adopters", "key_message": "Built for the future"},
-            {"concept_name": "Mock Concept 3", "rationale": "Mock Rationale 3", "target_audience": "Small business owners", "key_message": "Grow smarter, not harder"}
-        ]})
+        response_text = self.MOCK_CONCEPTS if json_mode else self.MOCK_CHAT
         for i in range(0, len(response_text), 4):
             yield response_text[i:i+4]
             await asyncio.sleep(0.01)
@@ -52,6 +58,7 @@ class HTTPAIEngine(AIEngine):
         self, system_prompt: str, user_prompt: str, *,
         temperature: float = 0.7, top_p: float = 0.95,
         max_tokens: int = 1024, seed: int | None = None,
+        json_mode: bool = True,
     ) -> AsyncGenerator[str, None]:
         payload = {
             "model": self.model,
@@ -61,6 +68,8 @@ class HTTPAIEngine(AIEngine):
             "top_p": top_p,
             "max_tokens": max_tokens,
         }
+        if json_mode:
+            payload["response_format"] = {"type": "json_object"}
         if seed is not None:
             payload["seed"] = seed
         headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
@@ -153,6 +162,7 @@ class LocalLLAMAEngine(AIEngine):
         self, system_prompt: str, user_prompt: str, *,
         temperature: float = 0.7, top_p: float = 0.95,
         max_tokens: int = 1024, seed: int | None = None,
+        json_mode: bool = True,
     ) -> AsyncGenerator[str, None]:
         if not self.is_ready:
             yield "[ERROR] Local model is not loaded."
@@ -169,12 +179,13 @@ class LocalLLAMAEngine(AIEngine):
                 temperature=temperature,
                 top_p=top_p,
                 repeat_penalty=1.3,
-                response_format={
-                    "type": "json_object",
-                    "schema": CONCEPT_SCHEMA_V1
-                },
                 stream=True,
             )
+            if json_mode:
+                kwargs["response_format"] = {
+                    "type": "json_object",
+                    "schema": CONCEPT_SCHEMA_V1
+                }
             if seed is not None:
                 kwargs["seed"] = seed
 

@@ -109,6 +109,21 @@ class ChatMessageRequest(BaseModel):
     temperature: Optional[float] = None
     max_tokens: Optional[int] = None
 
+class Document(BaseModel):
+    id: Optional[str] = Field(default=None)
+    title: str = "Untitled"
+    content_json: dict = Field(default_factory=dict)
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+class DocumentCreate(BaseModel):
+    title: str = "Untitled"
+    content_json: dict = Field(default_factory=dict)
+
+class DocumentUpdate(BaseModel):
+    title: Optional[str] = None
+    content_json: Optional[dict] = None
+
 class PromptTemplate(BaseModel):
     id: Optional[int] = Field(default=None)
     name: str

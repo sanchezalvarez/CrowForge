@@ -28,7 +28,8 @@
       "Bash(npm ls:*)",
       "Bash(npx shadcn@latest add:*)",
       "Bash(pip show:*)",
-      "Bash(pip install:*)"
+      "Bash(pip install:*)",
+      "Bash(where:*)"
     ]
   }
 }

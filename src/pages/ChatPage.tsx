@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import axios from "axios";
-import { PlusCircle, Send, Trash2, MessageSquare, Loader2 } from "lucide-react";
+import { PlusCircle, Send, Trash2, MessageSquare, Loader2, FileText } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Textarea } from "../components/ui/textarea";
 import { ScrollArea } from "../components/ui/scroll-area";
@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from "../components/ui/select";
 import { cn } from "../lib/utils";
+import type { DocumentContext } from "../App";
 
 const API_BASE = "http://127.0.0.1:8000";
 
@@ -39,7 +40,11 @@ interface ChatMessage {
   created_at: string;
 }
 
-export function ChatPage() {
+interface ChatPageProps {
+  documentContext?: DocumentContext | null;
+}
+
+export function ChatPage({ documentContext }: ChatPageProps) {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<number | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -129,20 +134,40 @@ export function ChatPage() {
     }
   }
 
+  function buildContextPrefix(): string {
+    if (!documentContext) return "";
+    const parts: string[] = [];
+    parts.push(`[Active Document: "${documentContext.title}"]`);
+    if (documentContext.outline.length > 0) {
+      parts.push(`[Outline:\n${documentContext.outline.join("\n")}]`);
+    }
+    if (documentContext.selectedText) {
+      const sel = documentContext.selectedText.length > 500
+        ? documentContext.selectedText.slice(0, 500) + "..."
+        : documentContext.selectedText;
+      parts.push(`[Selected Text: "${sel}"]`);
+    }
+    return parts.join("\n") + "\n\n";
+  }
+
   async function sendMessage() {
     if (!input.trim() || !activeSessionId) return;
-    const content = input.trim();
+    const userText = input.trim();
     setInput("");
     setSending(true);
 
+    // Show the user's original text in the UI
     const tempUserMsg: ChatMessage = {
       id: Date.now(),
       session_id: activeSessionId,
       role: "user",
-      content,
+      content: userText,
       created_at: new Date().toISOString(),
     };
     setMessages((prev) => [...prev, tempUserMsg]);
+
+    // Prefix document context for the AI (invisible to the user)
+    const content = buildContextPrefix() + userText;
 
     try {
       await axios.post(
@@ -227,8 +252,17 @@ export function ChatPage() {
       <div className="flex-1 flex flex-col min-w-0">
         {activeSessionId ? (
           <>
-            {/* Header with mode selector */}
+            {/* Header with mode selector + document context badge */}
             <div className="border-b px-4 py-2 flex items-center gap-3">
+              {documentContext && (
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
+                  <FileText className="h-3 w-3" />
+                  <span className="truncate max-w-[140px]">{documentContext.title}</span>
+                  {documentContext.selectedText && (
+                    <span className="text-[10px] text-primary font-medium">sel</span>
+                  )}
+                </div>
+              )}
               <span className="text-xs font-medium text-muted-foreground">Mode</span>
               <Select value={activeMode} onValueChange={changeMode}>
                 <SelectTrigger className="w-[150px] h-8 text-sm">

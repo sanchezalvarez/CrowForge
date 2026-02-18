@@ -43,6 +43,42 @@ function htmlToFragment(schema: import("@tiptap/pm/model").Schema, html: string)
   return PmDOMParser.fromSchema(schema).parse(wrapper);
 }
 
+interface SuggestionBlock {
+  title: string;
+  description: string;
+  html: string;
+}
+
+const TAG_LABELS: Record<string, string> = {
+  H1: "Heading 1", H2: "Heading 2", H3: "Heading 3",
+  P: "Paragraph", UL: "Bullet List", OL: "Numbered List",
+  BLOCKQUOTE: "Blockquote", LI: "List Item",
+};
+
+function parseHtmlToBlocks(html: string): SuggestionBlock[] {
+  const wrapper = document.createElement("div");
+  wrapper.innerHTML = html.trim();
+  const blocks: SuggestionBlock[] = [];
+  for (let i = 0; i < wrapper.children.length; i++) {
+    const el = wrapper.children[i] as HTMLElement;
+    const tag = el.tagName;
+    const title = TAG_LABELS[tag] ?? tag.toLowerCase();
+    const text = el.textContent ?? "";
+    const description = text.length > 80 ? text.slice(0, 80) + "..." : text;
+    blocks.push({ title, description, html: el.outerHTML });
+  }
+  // If no block-level elements found, treat the whole thing as one block
+  if (blocks.length === 0 && html.trim()) {
+    const text = wrapper.textContent ?? "";
+    blocks.push({
+      title: "Text",
+      description: text.length > 80 ? text.slice(0, 80) + "..." : text,
+      html,
+    });
+  }
+  return blocks;
+}
+
 const AI_ACTIONS = [
   { key: "rewrite", label: "Rewrite", icon: RefreshCw },
   { key: "summarize", label: "Summarize", icon: AlignLeft },
@@ -66,13 +102,19 @@ export interface EditorSelection {
   text: string;
 }
 
-export function DocumentsPage() {
+import type { DocumentContext } from "../App";
+
+interface DocumentsPageProps {
+  onContextChange?: (ctx: DocumentContext | null) => void;
+}
+
+export function DocumentsPage({ onContextChange }: DocumentsPageProps) {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [activeDocId, setActiveDocId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [selection, setSelection] = useState<EditorSelection | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
-  const [aiHtml, setAiHtml] = useState<string | null>(null);
+  const [aiBlocks, setAiBlocks] = useState<SuggestionBlock[]>([]);
   const [aiError, setAiError] = useState<string | null>(null);
   const [activeEngine, setActiveEngine] = useState<string>("mock");
   const [outline, setOutline] = useState<OutlineItem[]>([]);
@@ -80,6 +122,20 @@ export function DocumentsPage() {
   const pendingOriginalText = useRef<string | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeDoc = documents.find((d) => d.id === activeDocId) ?? null;
+
+  // Report document context to parent (for Chat integration)
+  useEffect(() => {
+    if (!onContextChange) return;
+    if (!activeDoc) {
+      onContextChange(null);
+      return;
+    }
+    onContextChange({
+      title: activeDoc.title,
+      outline: outline.map((h) => `${"#".repeat(h.level)} ${h.text}`),
+      selectedText: selection?.text ?? null,
+    });
+  }, [activeDoc?.id, activeDoc?.title, outline, selection, onContextChange]);
 
   const runAiActionRef = useRef<(action: string) => void>(() => {});
 
@@ -221,7 +277,7 @@ export function DocumentsPage() {
     pendingRange.current = { from: selection.from, to: selection.to };
     pendingOriginalText.current = selection.text;
     setAiLoading(true);
-    setAiHtml(null);
+    setAiBlocks([]);
     setAiError(null);
     try {
       const res = await axios.post(`${API_BASE}/documents/ai`, {
@@ -230,7 +286,14 @@ export function DocumentsPage() {
       });
       const html = res.data.html as string | undefined;
       if (typeof html === "string" && html.trim()) {
-        setAiHtml(html);
+        const blocks = parseHtmlToBlocks(html);
+        if (blocks.length > 0) {
+          setAiBlocks(blocks);
+        } else {
+          setAiError("AI returned empty response. No changes were made.");
+          pendingRange.current = null;
+          pendingOriginalText.current = null;
+        }
       } else {
         setAiError("AI returned empty response. No changes were made.");
         pendingRange.current = null;
@@ -238,7 +301,7 @@ export function DocumentsPage() {
       }
     } catch {
       setAiError("AI request failed. No changes were made.");
-      setAiHtml(null);
+      setAiBlocks([]);
       pendingRange.current = null;
       pendingOriginalText.current = null;
     } finally {
@@ -247,14 +310,12 @@ export function DocumentsPage() {
     }
   }
 
-  function acceptResult() {
-    if (!editor || !pendingRange.current || !aiHtml) return;
+  function insertBlock(block: SuggestionBlock) {
+    if (!editor || !pendingRange.current) return;
     const { from, to } = pendingRange.current;
 
-    // Parse AI HTML into ProseMirror nodes
-    const parsed = htmlToFragment(editor.state.schema, aiHtml);
+    const parsed = htmlToFragment(editor.state.schema, block.html);
     const nodes: import("@tiptap/pm/model").Node[] = [];
-    // Leading spacer if mid-document
     const schema = editor.state.schema;
     if (from > 1) {
       nodes.push(schema.nodes.paragraph.create());
@@ -262,7 +323,6 @@ export function DocumentsPage() {
     for (let i = 0; i < parsed.content.childCount; i++) {
       nodes.push(parsed.content.child(i));
     }
-    // Trailing spacer
     nodes.push(schema.nodes.paragraph.create());
 
     // Single transaction → single Ctrl+Z undo
@@ -271,14 +331,44 @@ export function DocumentsPage() {
     tr.insert(from, Fragment.from(nodes));
     editor.view.dispatch(tr);
 
-    setAiHtml(null);
+    // Update pending range to cursor position after insert so subsequent
+    // inserts from remaining cards go to the right place.
+    const newPos = from + nodes.reduce((s, n) => s + n.nodeSize, 0);
+    pendingRange.current = { from: newPos, to: newPos };
+
+    // Remove the inserted block from the list
+    setAiBlocks((prev) => prev.filter((b) => b !== block));
+  }
+
+  function insertAll() {
+    if (!editor || !pendingRange.current || aiBlocks.length === 0) return;
+    const { from, to } = pendingRange.current;
+
+    const fullHtml = aiBlocks.map((b) => b.html).join("");
+    const parsed = htmlToFragment(editor.state.schema, fullHtml);
+    const nodes: import("@tiptap/pm/model").Node[] = [];
+    const schema = editor.state.schema;
+    if (from > 1) {
+      nodes.push(schema.nodes.paragraph.create());
+    }
+    for (let i = 0; i < parsed.content.childCount; i++) {
+      nodes.push(parsed.content.child(i));
+    }
+    nodes.push(schema.nodes.paragraph.create());
+
+    const tr = editor.state.tr;
+    tr.delete(from, to);
+    tr.insert(from, Fragment.from(nodes));
+    editor.view.dispatch(tr);
+
+    setAiBlocks([]);
     setAiError(null);
     pendingRange.current = null;
     pendingOriginalText.current = null;
   }
 
-  function rejectResult() {
-    setAiHtml(null);
+  function dismissSuggestions() {
+    setAiBlocks([]);
     setAiError(null);
     pendingRange.current = null;
     pendingOriginalText.current = null;
@@ -475,7 +565,7 @@ export function DocumentsPage() {
               </ScrollArea>
 
               {/* AI error banner */}
-              {aiError && !aiHtml && (
+              {aiError && aiBlocks.length === 0 && (
                 <div className="w-[320px] shrink-0 border-l flex flex-col bg-background">
                   <div className="px-3 py-2 border-b flex items-center justify-between">
                     <span className="text-xs font-medium text-destructive">Error</span>
@@ -492,38 +582,56 @@ export function DocumentsPage() {
                 </div>
               )}
 
-              {/* AI result sidebar */}
-              {aiHtml && (
+              {/* AI suggestion cards */}
+              {aiBlocks.length > 0 && (
                 <div className="w-[320px] shrink-0 border-l flex flex-col bg-background">
-                  <div className="px-3 py-2 border-b">
-                    <span className="text-xs font-medium text-muted-foreground">AI Suggestion</span>
+                  <div className="px-3 py-2 border-b flex items-center justify-between">
+                    <span className="text-xs font-medium text-muted-foreground">
+                      AI Suggestions ({aiBlocks.length})
+                    </span>
                   </div>
-                  <ScrollArea className="flex-1 p-3">
-                    {pendingOriginalText.current && (
-                      <>
-                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground/60 mb-1">Original</p>
-                        <div className="text-xs text-muted-foreground/80 leading-relaxed line-through decoration-muted-foreground/30 mb-2">
-                          {pendingOriginalText.current.length > 200
-                            ? pendingOriginalText.current.slice(0, 200) + "..."
-                            : pendingOriginalText.current}
+                  <ScrollArea className="flex-1">
+                    <div className="p-2 space-y-2">
+                      {pendingOriginalText.current && (
+                        <div className="px-2 py-1.5 rounded border border-dashed border-border bg-muted/30">
+                          <p className="text-[10px] uppercase tracking-wider text-muted-foreground/60 mb-0.5">Replacing</p>
+                          <p className="text-xs text-muted-foreground/80 line-through truncate">
+                            {pendingOriginalText.current.length > 100
+                              ? pendingOriginalText.current.slice(0, 100) + "..."
+                              : pendingOriginalText.current}
+                          </p>
                         </div>
-                        <hr className="border-border mb-2" />
-                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground/60 mb-1">Suggestion</p>
-                      </>
-                    )}
-                    <div
-                      className="prose prose-sm max-w-none text-sm leading-relaxed"
-                      dangerouslySetInnerHTML={{ __html: aiHtml }}
-                    />
+                      )}
+                      {aiBlocks.map((block, i) => (
+                        <div key={i} className="rounded border border-border bg-background p-2.5">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
+                              {block.title}
+                            </span>
+                          </div>
+                          <p className="text-xs text-foreground/80 leading-relaxed mb-2">
+                            {block.description}
+                          </p>
+                          <Button
+                            size="sm"
+                            className="h-6 text-[11px] gap-1 w-full"
+                            onClick={() => insertBlock(block)}
+                          >
+                            <Check className="h-3 w-3" />
+                            Insert
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
                   </ScrollArea>
                   <div className="border-t px-3 py-2 flex items-center gap-2">
-                    <Button size="sm" className="h-7 text-xs gap-1.5 flex-1" onClick={acceptResult}>
+                    <Button size="sm" className="h-7 text-xs gap-1.5 flex-1" onClick={insertAll}>
                       <Check className="h-3 w-3" />
-                      Accept
+                      Insert All
                     </Button>
-                    <Button variant="outline" size="sm" className="h-7 text-xs gap-1.5 flex-1" onClick={rejectResult}>
+                    <Button variant="outline" size="sm" className="h-7 text-xs gap-1.5 flex-1" onClick={dismissSuggestions}>
                       <X className="h-3 w-3" />
-                      Reject
+                      Dismiss
                     </Button>
                   </div>
                 </div>

@@ -35,6 +35,12 @@ const API_BASE = "http://127.0.0.1:8000";
 type AppPage = "chat" | "documents" | "main" | "benchmark";
 type DialogMode = "create-client" | "create-campaign" | null;
 
+export interface DocumentContext {
+  title: string;
+  outline: string[];
+  selectedText: string | null;
+}
+
 export default function App() {
   const [currentPage, setCurrentPage] = useState<AppPage>("chat");
   const [clients, setClients] = useState<Client[]>([]);
@@ -46,6 +52,7 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [backendOnline, setBackendOnline] = useState(true);
   const [appError, setAppError] = useState<string | null>(null);
+  const [docContext, setDocContext] = useState<DocumentContext | null>(null);
 
   // Prompt template state (shared between AIControlPanel and MarketingGeneratorPage)
   const [templates, setTemplates] = useState<PromptTemplate[]>([]);
@@ -427,9 +434,9 @@ export default function App() {
         )}
 
         {currentPage === "chat" ? (
-          <ChatPage />
+          <ChatPage documentContext={docContext} />
         ) : currentPage === "documents" ? (
-          <DocumentsPage />
+          <DocumentsPage onContextChange={setDocContext} />
         ) : currentPage === "benchmark" ? (
           <BenchmarkPage />
         ) : !backendOnline ? (

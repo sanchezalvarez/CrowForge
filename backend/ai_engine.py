@@ -36,13 +36,52 @@ class MockAIEngine(AIEngine):
 
     MOCK_CHAT = "This is a mock AI response. The mock engine is active — connect a real LLM engine to get actual responses."
 
+    # Mock responses for sheet operations
+    MOCK_SHEET_TABLE = json.dumps({
+        "title": "Mock Table",
+        "columns": [
+            {"name": "Name", "type": "text"},
+            {"name": "Value", "type": "number"},
+            {"name": "Active", "type": "boolean"},
+            {"name": "Date", "type": "date"}
+        ],
+        "rows": [
+            ["Alice", "100", "true", "2025-01-15"],
+            ["Bob", "200", "false", "2025-02-20"],
+            ["Charlie", "150", "true", "2025-03-10"],
+        ]
+    })
+
+    def _pick_response(self, system_prompt: str, user_prompt: str, json_mode: bool) -> str:
+        """Choose a mock response based on prompt context."""
+        combined = (system_prompt + user_prompt).lower()
+        # Sheet AI Fill — expects a JSON array of values
+        if "json array" in combined and ("fill" in combined or "generate exactly" in combined):
+            # Try to extract count from prompt
+            import re
+            m = re.search(r'exactly\s+(\d+)\s+values', combined)
+            count = int(m.group(1)) if m else 3
+            mock_names = ["Alice", "Bob", "Charlie", "Diana", "Eve", "Frank", "Grace", "Hank", "Iris", "Jack"]
+            values = [mock_names[i % len(mock_names)] for i in range(count)]
+            return json.dumps(values)
+        # Sheet AI Generate — expects table JSON
+        if "table" in combined and "columns" in combined and "rows" in combined:
+            return self.MOCK_SHEET_TABLE
+        # Document AI — expects HTML
+        if "html" in combined and ("<h1>" in combined or "<p>" in combined or "semantic html" in combined):
+            return "<h2>Mock Heading</h2><p>This is a mock AI-generated paragraph. Connect a real LLM for actual content.</p>"
+        # Default
+        if json_mode:
+            return self.MOCK_CONCEPTS
+        return self.MOCK_CHAT
+
     async def generate_stream(
         self, system_prompt: str, user_prompt: str, *,
         temperature: float = 0.7, top_p: float = 0.95,
         max_tokens: int = 1024, seed: int | None = None,
         json_mode: bool = True,
     ) -> AsyncGenerator[str, None]:
-        response_text = self.MOCK_CONCEPTS if json_mode else self.MOCK_CHAT
+        response_text = self._pick_response(system_prompt, user_prompt, json_mode)
         for i in range(0, len(response_text), 4):
             yield response_text[i:i+4]
             await asyncio.sleep(0.01)

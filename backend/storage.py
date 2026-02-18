@@ -475,13 +475,14 @@ class SheetRepository:
             rows=rows_raw,
         )
 
-    def create(self, title: str = "Untitled Sheet", columns: List[SheetColumn] = None) -> Sheet:
+    def create(self, title: str = "Untitled Sheet", columns: List[SheetColumn] = None, rows: List[List[str]] = None) -> Sheet:
         sheet_id = str(uuid.uuid4())
         cols = columns or []
+        row_data = rows or []
         with self.db.get_connection() as conn:
             conn.execute(
                 "INSERT INTO sheets (id, title, columns_json, rows_json) VALUES (?, ?, ?, ?)",
-                (sheet_id, title, json.dumps([c.model_dump() for c in cols]), "[]"),
+                (sheet_id, title, json.dumps([c.model_dump() for c in cols]), json.dumps(row_data)),
             )
             conn.commit()
         return self.get_by_id(sheet_id)

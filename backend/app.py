@@ -18,8 +18,8 @@ def get_resource_path(relative_path):
         return os.path.join(sys._MEIPASS, relative_path)
     return os.path.abspath(relative_path)
 
-from backend.models import Client, Campaign, CampaignStatus, PromptTemplate, RefineRequest, BenchmarkRun, BenchmarkRequest, ChatSession, ChatMessage, ChatMessageRequest, Document, DocumentCreate, DocumentUpdate, DocumentAIRequest
-from backend.storage import DatabaseManager, ClientRepository, CampaignRepository, AppRepository, PromptTemplateRepository, ConceptRevisionRepository, GenerationVersionRepository, BenchmarkRepository, ChatSessionRepository, ChatMessageRepository, DocumentRepository
+from backend.models import Client, Campaign, CampaignStatus, PromptTemplate, RefineRequest, BenchmarkRun, BenchmarkRequest, ChatSession, ChatMessage, ChatMessageRequest, Document, DocumentCreate, DocumentUpdate, DocumentAIRequest, Sheet, SheetCreate, SheetAddColumn, SheetUpdateCell, SheetDeleteRow, SheetDeleteColumn
+from backend.storage import DatabaseManager, ClientRepository, CampaignRepository, AppRepository, PromptTemplateRepository, ConceptRevisionRepository, GenerationVersionRepository, BenchmarkRepository, ChatSessionRepository, ChatMessageRepository, DocumentRepository, SheetRepository
 from backend.ai_engine import MockAIEngine, HTTPAIEngine, LocalLLAMAEngine, AILogger
 from backend.ai.engine_manager import AIEngineManager
 
@@ -57,6 +57,7 @@ benchmark_repo = BenchmarkRepository(db)
 chat_session_repo = ChatSessionRepository(db)
 chat_message_repo = ChatMessageRepository(db)
 document_repo = DocumentRepository(db)
+sheet_repo = SheetRepository(db)
 
 # ── AI Engine Manager (runtime-switchable) ───────────────────────────
 engine_manager = AIEngineManager()
@@ -961,6 +962,245 @@ async def document_ai_action(req: DocumentAIRequest):
         html = f"<p>{html}</p>"
 
     return {"html": html, "action_type": req.action_type}
+
+
+# ── Sheets (Table Data Engine) ────────────────────────────────────
+
+@app.post("/sheets/ai-generate", response_model=Sheet)
+async def ai_generate_sheet(req: dict):
+    prompt = req.get("prompt", "").strip()
+    if not prompt:
+        raise HTTPException(status_code=400, detail="Prompt is required")
+
+    system_prompt = (
+        "You are a data architect. Given a user request, generate a table schema with example data.\n"
+        "Respond with ONLY valid JSON, no markdown fences, no explanation.\n"
+        "Format:\n"
+        '{"title":"Table Name","columns":[{"name":"Col","type":"text|number|boolean|date"}],'
+        '"rows":[["val1","val2"]]}\n'
+        "Rules:\n"
+        "- 3-8 columns appropriate to the domain\n"
+        "- 3-6 realistic example rows\n"
+        "- All row values must be strings\n"
+        "- number type values: numeric strings like \"42.5\"\n"
+        "- boolean type values: \"true\" or \"false\"\n"
+        "- date type values: \"YYYY-MM-DD\" format\n"
+        "- text type values: plain strings"
+    )
+    user_prompt = f"Create a table for: {prompt}"
+
+    full_response = ""
+    try:
+        async with asyncio.timeout(GENERATION_TIMEOUT):
+            async for chunk in engine_manager.get_active().generate_stream(
+                system_prompt, user_prompt, temperature=0.5
+            ):
+                full_response += chunk
+    except (TimeoutError, asyncio.TimeoutError):
+        full_response = ""
+        async for chunk in MockAIEngine().generate_stream(system_prompt, user_prompt, temperature=0.5):
+            full_response += chunk
+
+    # Parse JSON from response
+    raw = full_response.strip()
+    import re as _re
+    raw = _re.sub(r'^```(?:json)?\s*\n?', '', raw)
+    raw = _re.sub(r'\n?```\s*$', '', raw)
+    # Find first { and last }
+    start = raw.find('{')
+    end = raw.rfind('}')
+    if start == -1 or end == -1:
+        raise HTTPException(status_code=500, detail="AI returned invalid response")
+    raw = raw[start:end + 1]
+
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=500, detail="AI returned invalid JSON")
+
+    title = data.get("title", "AI Generated Sheet")
+    columns_raw = data.get("columns", [])
+    rows_raw = data.get("rows", [])
+
+    from backend.models import SheetColumn as SC
+    columns = []
+    for c in columns_raw:
+        ctype = c.get("type", "text")
+        if ctype not in ("text", "number", "boolean", "date"):
+            ctype = "text"
+        columns.append(SC(name=c.get("name", "Column"), type=ctype))
+
+    # Ensure each row has the right number of columns (as strings)
+    rows = []
+    for row in rows_raw:
+        r = [str(v) if v is not None else "" for v in row]
+        while len(r) < len(columns):
+            r.append("")
+        rows.append(r[:len(columns)])
+
+    sheet = sheet_repo.create(title=title, columns=columns)
+    # Add rows
+    for row in rows:
+        sheet_repo.add_row(sheet.id)
+    # Fill cells
+    for ri, row in enumerate(rows):
+        for ci, val in enumerate(row):
+            if val:
+                try:
+                    sheet_repo.update_cell(sheet.id, ri, ci, val)
+                except ValueError:
+                    pass  # skip invalid cells
+
+    return sheet_repo.get_by_id(sheet.id)
+
+
+@app.post("/sheets", response_model=Sheet)
+async def create_sheet(req: SheetCreate):
+    return sheet_repo.create(title=req.title, columns=req.columns)
+
+@app.get("/sheets", response_model=List[Sheet])
+async def list_sheets():
+    return sheet_repo.get_all()
+
+@app.get("/sheets/{sheet_id}", response_model=Sheet)
+async def get_sheet(sheet_id: str):
+    sheet = sheet_repo.get_by_id(sheet_id)
+    if not sheet:
+        raise HTTPException(status_code=404, detail="Sheet not found")
+    return sheet
+
+@app.delete("/sheets/{sheet_id}")
+async def delete_sheet(sheet_id: str):
+    sheet = sheet_repo.get_by_id(sheet_id)
+    if not sheet:
+        raise HTTPException(status_code=404, detail="Sheet not found")
+    sheet_repo.delete(sheet_id)
+    return {"ok": True}
+
+@app.put("/sheets/{sheet_id}/title")
+async def update_sheet_title(sheet_id: str, body: dict):
+    title = body.get("title")
+    if not title:
+        raise HTTPException(status_code=400, detail="title is required")
+    sheet = sheet_repo.update_title(sheet_id, title)
+    if not sheet:
+        raise HTTPException(status_code=404, detail="Sheet not found")
+    return sheet
+
+@app.post("/sheets/{sheet_id}/rows", response_model=Sheet)
+async def add_sheet_row(sheet_id: str):
+    sheet = sheet_repo.add_row(sheet_id)
+    if not sheet:
+        raise HTTPException(status_code=404, detail="Sheet not found")
+    return sheet
+
+@app.post("/sheets/{sheet_id}/columns", response_model=Sheet)
+async def add_sheet_column(sheet_id: str, req: SheetAddColumn):
+    sheet = sheet_repo.add_column(sheet_id, req.name, req.type)
+    if not sheet:
+        raise HTTPException(status_code=404, detail="Sheet not found")
+    return sheet
+
+@app.put("/sheets/{sheet_id}/cell", response_model=Sheet)
+async def update_sheet_cell(sheet_id: str, req: SheetUpdateCell):
+    try:
+        sheet = sheet_repo.update_cell(sheet_id, req.row_index, req.col_index, req.value)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    if not sheet:
+        raise HTTPException(status_code=404, detail="Sheet not found or invalid indices")
+    return sheet
+
+@app.delete("/sheets/{sheet_id}/rows", response_model=Sheet)
+async def delete_sheet_row(sheet_id: str, req: SheetDeleteRow):
+    sheet = sheet_repo.delete_row(sheet_id, req.row_index)
+    if not sheet:
+        raise HTTPException(status_code=404, detail="Sheet not found or invalid row index")
+    return sheet
+
+@app.delete("/sheets/{sheet_id}/columns", response_model=Sheet)
+async def delete_sheet_column(sheet_id: str, req: SheetDeleteColumn):
+    sheet = sheet_repo.delete_column(sheet_id, req.col_index)
+    if not sheet:
+        raise HTTPException(status_code=404, detail="Sheet not found or invalid column index")
+    return sheet
+
+
+@app.get("/sheets/{sheet_id}/ai-fill")
+async def ai_fill_column(sheet_id: str, request: Request, col_index: int, instruction: str):
+    """SSE endpoint: AI fills empty cells in the target column row-by-row."""
+    sheet = sheet_repo.get_by_id(sheet_id)
+    if not sheet:
+        raise HTTPException(status_code=404, detail="Sheet not found")
+    if col_index < 0 or col_index >= len(sheet.columns):
+        raise HTTPException(status_code=400, detail="Invalid column index")
+
+    target_col = sheet.columns[col_index]
+
+    async def event_generator():
+        for ri, row in enumerate(sheet.rows):
+            # Check cancellation
+            if await request.is_disconnected():
+                break
+
+            # Skip rows that already have a value in the target column
+            if col_index < len(row) and row[col_index].strip():
+                continue
+
+            # Build row context: key=value pairs for all columns except target
+            context_parts = []
+            for ci, col in enumerate(sheet.columns):
+                if ci == col_index:
+                    continue
+                val = row[ci] if ci < len(row) else ""
+                if val.strip():
+                    context_parts.append(f"{col.name}: {val}")
+            row_context = "\n".join(context_parts) if context_parts else "(empty row)"
+
+            system_prompt = (
+                "You are a data assistant. Respond with ONLY the cell value, nothing else. "
+                "No quotes, no explanation, no labels. Just the raw value."
+            )
+            user_prompt = (
+                f"Column to fill: \"{target_col.name}\" (type: {target_col.type})\n"
+                f"Instruction: {instruction}\n\n"
+                f"Row context:\n{row_context}\n\n"
+                f"Provide the value for \"{target_col.name}\"."
+            )
+
+            # Generate with active engine, accumulate full response
+            full_response = ""
+            try:
+                async with asyncio.timeout(GENERATION_TIMEOUT):
+                    async for chunk in engine_manager.get_active().generate_stream(
+                        system_prompt, user_prompt, temperature=0.3
+                    ):
+                        if await request.is_disconnected():
+                            return
+                        full_response += chunk
+            except (TimeoutError, asyncio.TimeoutError):
+                yield {"data": json.dumps({"type": "error", "row": ri, "error": "Timeout"})}
+                continue
+            except Exception as e:
+                yield {"data": json.dumps({"type": "error", "row": ri, "error": str(e)})}
+                continue
+
+            value = full_response.strip().strip('"').strip("'")
+
+            # Validate against column type
+            validation_error = sheet_repo.validate_cell(value, target_col.type)
+            if validation_error:
+                yield {"data": json.dumps({"type": "error", "row": ri, "error": validation_error})}
+                continue
+
+            # Persist the cell
+            sheet_repo.update_cell(sheet_id, ri, col_index, value)
+
+            yield {"data": json.dumps({"type": "cell", "row": ri, "col": col_index, "value": value})}
+
+        yield {"data": "[DONE]"}
+
+    return EventSourceResponse(event_generator())
 
 
 if __name__ == "__main__":

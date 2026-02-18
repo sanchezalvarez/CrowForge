@@ -130,6 +130,37 @@ class DocumentAIRequest(BaseModel):
     temperature: Optional[float] = None
     max_tokens: Optional[int] = None
 
+class SheetColumn(BaseModel):
+    name: str
+    type: str = "text"  # text, number, boolean
+
+class Sheet(BaseModel):
+    id: Optional[str] = Field(default=None)
+    title: str = "Untitled Sheet"
+    columns: List[SheetColumn] = Field(default_factory=list)
+    rows: List[List[str]] = Field(default_factory=list)
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+class SheetCreate(BaseModel):
+    title: str = "Untitled Sheet"
+    columns: List[SheetColumn] = Field(default_factory=list)
+
+class SheetAddColumn(BaseModel):
+    name: str
+    type: str = "text"
+
+class SheetUpdateCell(BaseModel):
+    row_index: int
+    col_index: int
+    value: str
+
+class SheetDeleteRow(BaseModel):
+    row_index: int
+
+class SheetDeleteColumn(BaseModel):
+    col_index: int
+
 class PromptTemplate(BaseModel):
     id: Optional[int] = Field(default=None)
     name: str

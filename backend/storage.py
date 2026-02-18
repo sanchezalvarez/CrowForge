@@ -2,7 +2,7 @@ import sqlite3
 import json
 from typing import List, Optional, Dict
 import uuid
-from backend.models import Client, BrandProfile, Campaign, CampaignStatus, PromptTemplate, ConceptRevision, GenerationVersion, BenchmarkRun, ChatSession, ChatMessage, Document
+from backend.models import Client, BrandProfile, Campaign, CampaignStatus, PromptTemplate, ConceptRevision, GenerationVersion, BenchmarkRun, ChatSession, ChatMessage, Document, Sheet, SheetColumn
 
 class DatabaseManager:
     def __init__(self, db_path: str):
@@ -60,6 +60,16 @@ class DatabaseManager:
             content TEXT NOT NULL,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE
+        )""")
+
+        # Ensure sheets table exists
+        conn.execute("""CREATE TABLE IF NOT EXISTS sheets (
+            id TEXT PRIMARY KEY,
+            title TEXT NOT NULL DEFAULT 'Untitled Sheet',
+            columns_json TEXT NOT NULL DEFAULT '[]',
+            rows_json TEXT NOT NULL DEFAULT '[]',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )""")
 
         # Ensure documents table exists
@@ -449,3 +459,140 @@ class DocumentRepository:
                 conn.execute("UPDATE documents SET content_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (json.dumps(content_json), doc_id))
             conn.commit()
             return self.get_by_id(doc_id)
+
+
+class SheetRepository:
+    def __init__(self, db: DatabaseManager):
+        self.db = db
+
+    def _row_to_sheet(self, row) -> Sheet:
+        d = dict(row)
+        columns_raw = json.loads(d.pop("columns_json", "[]"))
+        rows_raw = json.loads(d.pop("rows_json", "[]"))
+        return Sheet(
+            **d,
+            columns=[SheetColumn(**c) if isinstance(c, dict) else SheetColumn(name=str(c)) for c in columns_raw],
+            rows=rows_raw,
+        )
+
+    def create(self, title: str = "Untitled Sheet", columns: List[SheetColumn] = None) -> Sheet:
+        sheet_id = str(uuid.uuid4())
+        cols = columns or []
+        with self.db.get_connection() as conn:
+            conn.execute(
+                "INSERT INTO sheets (id, title, columns_json, rows_json) VALUES (?, ?, ?, ?)",
+                (sheet_id, title, json.dumps([c.model_dump() for c in cols]), "[]"),
+            )
+            conn.commit()
+        return self.get_by_id(sheet_id)
+
+    def get_by_id(self, sheet_id: str) -> Optional[Sheet]:
+        with self.db.get_connection() as conn:
+            row = conn.execute("SELECT * FROM sheets WHERE id = ?", (sheet_id,)).fetchone()
+            return self._row_to_sheet(row) if row else None
+
+    def get_all(self) -> List[Sheet]:
+        with self.db.get_connection() as conn:
+            rows = conn.execute("SELECT * FROM sheets ORDER BY updated_at DESC").fetchall()
+            return [self._row_to_sheet(r) for r in rows]
+
+    def _save(self, conn, sheet_id: str, columns: List[SheetColumn], rows: List[List[str]]):
+        conn.execute(
+            "UPDATE sheets SET columns_json = ?, rows_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (json.dumps([c.model_dump() for c in columns]), json.dumps(rows), sheet_id),
+        )
+        conn.commit()
+
+    def add_row(self, sheet_id: str) -> Optional[Sheet]:
+        with self.db.get_connection() as conn:
+            sheet = self.get_by_id(sheet_id)
+            if not sheet:
+                return None
+            new_row = [""] * len(sheet.columns)
+            sheet.rows.append(new_row)
+            self._save(conn, sheet_id, sheet.columns, sheet.rows)
+            return self.get_by_id(sheet_id)
+
+    def add_column(self, sheet_id: str, name: str, col_type: str = "text") -> Optional[Sheet]:
+        with self.db.get_connection() as conn:
+            sheet = self.get_by_id(sheet_id)
+            if not sheet:
+                return None
+            sheet.columns.append(SheetColumn(name=name, type=col_type))
+            for row in sheet.rows:
+                row.append("")
+            self._save(conn, sheet_id, sheet.columns, sheet.rows)
+            return self.get_by_id(sheet_id)
+
+    @staticmethod
+    def validate_cell(value: str, col_type: str) -> Optional[str]:
+        """Validate value against column type. Returns error message or None."""
+        if not value:
+            return None  # empty is always valid
+        if col_type == "number":
+            try:
+                float(value)
+            except ValueError:
+                return f"Invalid number: {value}"
+        elif col_type == "boolean":
+            if value.lower() not in ("true", "false", "1", "0", "yes", "no"):
+                return f"Invalid boolean: {value}"
+        elif col_type == "date":
+            import re
+            if not re.match(r"^\d{4}-\d{2}-\d{2}$", value):
+                return f"Invalid date (expected YYYY-MM-DD): {value}"
+        return None
+
+    def update_cell(self, sheet_id: str, row_index: int, col_index: int, value: str) -> Optional[Sheet]:
+        with self.db.get_connection() as conn:
+            sheet = self.get_by_id(sheet_id)
+            if not sheet:
+                return None
+            if row_index < 0 or row_index >= len(sheet.rows):
+                return None
+            if col_index < 0 or col_index >= len(sheet.columns):
+                return None
+            col_type = sheet.columns[col_index].type
+            error = self.validate_cell(value, col_type)
+            if error:
+                raise ValueError(error)
+            sheet.rows[row_index][col_index] = value
+            self._save(conn, sheet_id, sheet.columns, sheet.rows)
+            return self.get_by_id(sheet_id)
+
+    def delete_row(self, sheet_id: str, row_index: int) -> Optional[Sheet]:
+        with self.db.get_connection() as conn:
+            sheet = self.get_by_id(sheet_id)
+            if not sheet:
+                return None
+            if row_index < 0 or row_index >= len(sheet.rows):
+                return None
+            sheet.rows.pop(row_index)
+            self._save(conn, sheet_id, sheet.columns, sheet.rows)
+            return self.get_by_id(sheet_id)
+
+    def delete_column(self, sheet_id: str, col_index: int) -> Optional[Sheet]:
+        with self.db.get_connection() as conn:
+            sheet = self.get_by_id(sheet_id)
+            if not sheet:
+                return None
+            if col_index < 0 or col_index >= len(sheet.columns):
+                return None
+            sheet.columns.pop(col_index)
+            for row in sheet.rows:
+                if col_index < len(row):
+                    row.pop(col_index)
+            self._save(conn, sheet_id, sheet.columns, sheet.rows)
+            return self.get_by_id(sheet_id)
+
+    def update_title(self, sheet_id: str, title: str) -> Optional[Sheet]:
+        with self.db.get_connection() as conn:
+            conn.execute("UPDATE sheets SET title = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (title, sheet_id))
+            conn.commit()
+            return self.get_by_id(sheet_id)
+
+    def delete(self, sheet_id: str) -> bool:
+        with self.db.get_connection() as conn:
+            conn.execute("DELETE FROM sheets WHERE id = ?", (sheet_id,))
+            conn.commit()
+            return True

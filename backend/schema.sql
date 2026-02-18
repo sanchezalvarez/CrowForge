@@ -138,6 +138,16 @@ CREATE TABLE IF NOT EXISTS documents (
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Sheets (table data engine)
+CREATE TABLE IF NOT EXISTS sheets (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL DEFAULT 'Untitled Sheet',
+    columns_json TEXT NOT NULL DEFAULT '[]',
+    rows_json TEXT NOT NULL DEFAULT '[]',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Settings (Last session)
 CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,

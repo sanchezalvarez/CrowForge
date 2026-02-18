@@ -10,6 +10,7 @@ import {
   Gauge,
   MessageSquare,
   FileText,
+  Table2,
 } from "lucide-react";
 import crowforgeLogo from "./assets/crowforge_ico.png";
 import { cn } from "./lib/utils";
@@ -18,6 +19,7 @@ import { MarketingGeneratorPage } from "./pages/MarketingGeneratorPage";
 import { BenchmarkPage } from "./pages/BenchmarkPage";
 import { ChatPage } from "./pages/ChatPage";
 import { DocumentsPage } from "./pages/DocumentsPage";
+import { SheetsPage } from "./pages/SheetsPage";
 import { Toaster } from "./components/ui/toaster";
 import { AIControlPanel } from "./components/AIControlPanel";
 import { Button } from "./components/ui/button";
@@ -32,7 +34,7 @@ import {
 
 const API_BASE = "http://127.0.0.1:8000";
 
-type AppPage = "chat" | "documents" | "main" | "benchmark";
+type AppPage = "chat" | "documents" | "sheets" | "main" | "benchmark";
 type DialogMode = "create-client" | "create-campaign" | null;
 
 export interface DocumentContext {
@@ -387,6 +389,18 @@ export default function App() {
               Documents
             </button>
             <button
+              onClick={() => setCurrentPage("sheets")}
+              className={cn(
+                "w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-sm transition-colors",
+                currentPage === "sheets"
+                  ? "bg-primary/10 text-primary font-semibold"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+              )}
+            >
+              <Table2 size={14} />
+              Sheets
+            </button>
+            <button
               onClick={() => setCurrentPage("main")}
               className={cn(
                 "w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-sm transition-colors",
@@ -437,6 +451,8 @@ export default function App() {
           <ChatPage documentContext={docContext} />
         ) : currentPage === "documents" ? (
           <DocumentsPage onContextChange={setDocContext} />
+        ) : currentPage === "sheets" ? (
+          <SheetsPage />
         ) : currentPage === "benchmark" ? (
           <BenchmarkPage />
         ) : !backendOnline ? (

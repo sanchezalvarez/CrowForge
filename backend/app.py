@@ -18,8 +18,8 @@ def get_resource_path(relative_path):
         return os.path.join(sys._MEIPASS, relative_path)
     return os.path.abspath(relative_path)
 
-from backend.models import Client, Campaign, CampaignStatus, PromptTemplate, RefineRequest, BenchmarkRun, BenchmarkRequest
-from backend.storage import DatabaseManager, ClientRepository, CampaignRepository, AppRepository, PromptTemplateRepository, ConceptRevisionRepository, GenerationVersionRepository, BenchmarkRepository
+from backend.models import Client, Campaign, CampaignStatus, PromptTemplate, RefineRequest, BenchmarkRun, BenchmarkRequest, ChatSession, ChatMessage, ChatMessageRequest
+from backend.storage import DatabaseManager, ClientRepository, CampaignRepository, AppRepository, PromptTemplateRepository, ConceptRevisionRepository, GenerationVersionRepository, BenchmarkRepository, ChatSessionRepository, ChatMessageRepository
 from backend.ai_engine import MockAIEngine, HTTPAIEngine, LocalLLAMAEngine, AILogger
 from backend.ai.engine_manager import AIEngineManager
 
@@ -54,6 +54,8 @@ template_repo.seed_default()
 revision_repo = ConceptRevisionRepository(db)
 version_repo = GenerationVersionRepository(db)
 benchmark_repo = BenchmarkRepository(db)
+chat_session_repo = ChatSessionRepository(db)
+chat_message_repo = ChatMessageRepository(db)
 
 # ── AI Engine Manager (runtime-switchable) ───────────────────────────
 engine_manager = AIEngineManager()
@@ -788,6 +790,100 @@ async def export_markdown(campaign_id: int):
         return {"markdown": md}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+# ── Chat ──────────────────────────────────────────────────────────
+
+CHAT_MODES = {
+    "general": "You are a helpful AI assistant. Answer questions clearly and concisely.",
+    "writing": "You are a skilled writing assistant. Help the user draft, edit, and improve written content. Focus on clarity, tone, and structure.",
+    "coding": "You are an expert programming assistant. Help the user write, debug, and understand code. Provide clear explanations and working examples.",
+    "analysis": "You are an analytical assistant. Help the user break down problems, interpret data, evaluate arguments, and draw conclusions with rigorous reasoning.",
+    "brainstorm": "You are a creative brainstorming partner. Help the user generate ideas, explore possibilities, and think outside the box. Encourage divergent thinking.",
+}
+
+@app.get("/chat/modes")
+async def list_chat_modes():
+    return {"modes": list(CHAT_MODES.keys())}
+
+@app.post("/chat/session", response_model=ChatSession)
+async def create_chat_session(data: dict = {}):
+    mode = data.get("mode", "general")
+    if mode not in CHAT_MODES:
+        raise HTTPException(status_code=400, detail=f"Invalid mode: {mode}")
+    return chat_session_repo.create(mode=mode)
+
+@app.get("/chat/sessions")
+async def list_chat_sessions():
+    return chat_session_repo.get_all()
+
+@app.get("/chat/session/{session_id}")
+async def get_chat_session(session_id: int):
+    session = chat_session_repo.get_by_id(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Chat session not found")
+    messages = chat_message_repo.get_by_session_id(session_id)
+    return {"session": session.model_dump(), "messages": [m.model_dump() for m in messages]}
+
+@app.put("/chat/session/{session_id}/mode")
+async def update_chat_mode(session_id: int, data: dict):
+    session = chat_session_repo.get_by_id(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Chat session not found")
+    mode = data.get("mode", "general")
+    if mode not in CHAT_MODES:
+        raise HTTPException(status_code=400, detail=f"Invalid mode: {mode}")
+    chat_session_repo.update_mode(session_id, mode)
+    return chat_session_repo.get_by_id(session_id)
+
+@app.delete("/chat/session/{session_id}")
+async def delete_chat_session(session_id: int):
+    session = chat_session_repo.get_by_id(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Chat session not found")
+    chat_session_repo.delete(session_id)
+    return {"status": "deleted"}
+
+@app.post("/chat/session/{session_id}/message", response_model=ChatMessage)
+async def send_chat_message(session_id: int, req: ChatMessageRequest):
+    session = chat_session_repo.get_by_id(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Chat session not found")
+
+    # Store user message
+    chat_message_repo.create(session_id, "user", req.content)
+
+    # Build context from history
+    history = chat_message_repo.get_by_session_id(session_id)
+    context_parts = []
+    for msg in history:
+        prefix = "User" if msg.role == "user" else "Assistant"
+        context_parts.append(f"{prefix}: {msg.content}")
+    user_prompt = "\n".join(context_parts)
+
+    # Resolve system prompt from session mode
+    system_prompt = CHAT_MODES.get(session.mode, CHAT_MODES["general"])
+
+    # Generate response (non-streaming: accumulate chunks)
+    temperature = req.temperature if req.temperature is not None else 0.7
+    max_tokens = req.max_tokens if req.max_tokens is not None else 1024
+    full_response = ""
+    try:
+        async for chunk in engine_manager.get_active().generate_stream(
+            system_prompt, user_prompt,
+            temperature=temperature, max_tokens=max_tokens,
+        ):
+            full_response += chunk
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"AI generation failed: {e}")
+
+    assistant_text = full_response.strip()
+    if not assistant_text:
+        assistant_text = "(No response generated)"
+
+    # Store assistant message and return it
+    assistant_msg = chat_message_repo.create(session_id, "assistant", assistant_text)
+    return assistant_msg
+
 
 if __name__ == "__main__":
     import uvicorn

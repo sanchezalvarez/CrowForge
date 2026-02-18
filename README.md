@@ -1,8 +1,21 @@
 # CrowForge
 
-A local-first Windows desktop app that generates marketing campaign concepts from a client brief using AI. No cloud services required — everything runs on your machine.
+**Local-first AI Workspace with Chat, Documents, and Sheets.**
 
-## How It Works
+A desktop app (Windows) that runs entirely on your machine — no cloud services required. Connect any local LLM or OpenAI-compatible API and work with AI through multiple interfaces.
+
+## Roadmap / TODO
+
+- [ ] **Chat** (core) — Conversational AI interface
+- [ ] **Documents** — AI-assisted editor for long-form content
+- [ ] **Sheets** — AI-assisted tables and structured data
+- [ ] **Images** — AI image generation (later)
+
+## Legacy: Marketing Campaign Generator
+
+The current UI is a marketing campaign generator (brief → concepts). This will be retained as a legacy feature while the workspace modules above are built out. See `src/pages/MarketingGeneratorPage.tsx` and `src/pages/BenchmarkPage.tsx`.
+
+## How It Works (Current / Legacy)
 
 Enter a client brief (brand name, industry, goals) and CrowForge generates creative campaign concepts using a local LLM or any OpenAI-compatible API. Concepts stream in via SSE so you see results as they're generated. A built-in benchmark tool lets you compare models side-by-side.
 

@@ -1,3 +1,7 @@
+/**
+ * LEGACY — Marketing campaign generator UI.
+ * Retained while the new workspace modules (Chat, Documents, Sheets) are built.
+ */
 import { useState, useEffect } from "react";
 import axios from "axios";
 import { Sparkles, AlertCircle } from "lucide-react";

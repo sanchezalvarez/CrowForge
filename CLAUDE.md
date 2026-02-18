@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**CrowForge** is a local-first Windows desktop app that generates marketing campaign concepts from a client brief using AI. Three-layer architecture: Tauri v2 (Rust shell) → React/TypeScript frontend → Python FastAPI backend. All communication between frontend and backend is via HTTP/SSE (no Tauri IPC for app logic).
+**CrowForge** is a local-first AI Workspace with Chat, Documents, and Sheets. Three-layer architecture: Tauri v2 (Rust shell) → React/TypeScript frontend → Python FastAPI backend. All communication between frontend and backend is via HTTP/SSE (no Tauri IPC for app logic).
+
+> **Legacy note:** The current UI is a marketing campaign generator (brief → concepts). This code is retained while the new workspace modules are built. See `MarketingGeneratorPage.tsx` and `BenchmarkPage.tsx`.
 
 ## Development Commands
 

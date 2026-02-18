@@ -1,7 +1,7 @@
 import sqlite3
 import json
 from typing import List, Optional, Dict
-from backend.models import Client, BrandProfile, Campaign, CampaignStatus, PromptTemplate, ConceptRevision, GenerationVersion, BenchmarkRun
+from backend.models import Client, BrandProfile, Campaign, CampaignStatus, PromptTemplate, ConceptRevision, GenerationVersion, BenchmarkRun, ChatSession, ChatMessage
 
 class DatabaseManager:
     def __init__(self, db_path: str):
@@ -39,6 +39,27 @@ class DatabaseManager:
             conn.execute("ALTER TABLE prompt_templates ADD COLUMN description TEXT NOT NULL DEFAULT ''")
         if "version" not in pt_cols:
             conn.execute("ALTER TABLE prompt_templates ADD COLUMN version INTEGER NOT NULL DEFAULT 1")
+
+        # Ensure chat tables exist for older databases
+        conn.execute("""CREATE TABLE IF NOT EXISTS chat_sessions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL DEFAULT 'New Chat',
+            mode TEXT NOT NULL DEFAULT 'general',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )""")
+        # Add mode column if missing (upgrade from earlier chat schema)
+        cursor = conn.execute("PRAGMA table_info(chat_sessions)")
+        cs_cols = {row["name"] for row in cursor.fetchall()}
+        if "mode" not in cs_cols:
+            conn.execute("ALTER TABLE chat_sessions ADD COLUMN mode TEXT NOT NULL DEFAULT 'general'")
+        conn.execute("""CREATE TABLE IF NOT EXISTS chat_messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id INTEGER NOT NULL,
+            role TEXT NOT NULL,
+            content TEXT NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE
+        )""")
 
         conn.commit()
 
@@ -290,6 +311,62 @@ class PromptTemplateRepository:
         with self.db.get_connection() as conn:
             conn.execute("DELETE FROM prompt_templates WHERE id = ?", (template_id,))
             conn.commit()
+
+
+class ChatSessionRepository:
+    def __init__(self, db: DatabaseManager):
+        self.db = db
+
+    def create(self, title: str = "New Chat", mode: str = "general") -> ChatSession:
+        with self.db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("INSERT INTO chat_sessions (title, mode) VALUES (?, ?)", (title, mode))
+            conn.commit()
+            return self.get_by_id(cursor.lastrowid)
+
+    def update_mode(self, session_id: int, mode: str):
+        with self.db.get_connection() as conn:
+            conn.execute("UPDATE chat_sessions SET mode = ? WHERE id = ?", (mode, session_id))
+            conn.commit()
+
+    def get_by_id(self, session_id: int) -> Optional[ChatSession]:
+        with self.db.get_connection() as conn:
+            row = conn.execute("SELECT * FROM chat_sessions WHERE id = ?", (session_id,)).fetchone()
+            return ChatSession(**dict(row)) if row else None
+
+    def get_all(self) -> List[ChatSession]:
+        with self.db.get_connection() as conn:
+            rows = conn.execute("SELECT * FROM chat_sessions ORDER BY created_at DESC").fetchall()
+            return [ChatSession(**dict(r)) for r in rows]
+
+    def delete(self, session_id: int):
+        with self.db.get_connection() as conn:
+            conn.execute("DELETE FROM chat_sessions WHERE id = ?", (session_id,))
+            conn.commit()
+
+
+class ChatMessageRepository:
+    def __init__(self, db: DatabaseManager):
+        self.db = db
+
+    def create(self, session_id: int, role: str, content: str) -> ChatMessage:
+        with self.db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "INSERT INTO chat_messages (session_id, role, content) VALUES (?, ?, ?)",
+                (session_id, role, content),
+            )
+            conn.commit()
+            row = conn.execute("SELECT * FROM chat_messages WHERE id = ?", (cursor.lastrowid,)).fetchone()
+            return ChatMessage(**dict(row))
+
+    def get_by_session_id(self, session_id: int) -> List[ChatMessage]:
+        with self.db.get_connection() as conn:
+            rows = conn.execute(
+                "SELECT * FROM chat_messages WHERE session_id = ? ORDER BY created_at ASC",
+                (session_id,),
+            ).fetchall()
+            return [ChatMessage(**dict(r)) for r in rows]
 
 
 class BenchmarkRepository:

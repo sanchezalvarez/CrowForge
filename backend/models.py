@@ -91,6 +91,24 @@ class BenchmarkRequest(BaseModel):
     max_tokens: int = 1024
     top_p: float = 0.95
 
+class ChatSession(BaseModel):
+    id: Optional[int] = Field(default=None)
+    title: str = "New Chat"
+    mode: str = "general"
+    created_at: Optional[str] = None
+
+class ChatMessage(BaseModel):
+    id: Optional[int] = Field(default=None)
+    session_id: Optional[int] = Field(default=None)
+    role: str = ""
+    content: str = ""
+    created_at: Optional[str] = None
+
+class ChatMessageRequest(BaseModel):
+    content: str
+    temperature: Optional[float] = None
+    max_tokens: Optional[int] = None
+
 class PromptTemplate(BaseModel):
     id: Optional[int] = Field(default=None)
     name: str

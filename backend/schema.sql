@@ -111,6 +111,24 @@ CREATE TABLE IF NOT EXISTS benchmark_runs (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Chat Sessions
+CREATE TABLE IF NOT EXISTS chat_sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL DEFAULT 'New Chat',
+    mode TEXT NOT NULL DEFAULT 'general',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Chat Messages
+CREATE TABLE IF NOT EXISTS chat_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id INTEGER NOT NULL,
+    role TEXT NOT NULL,
+    content TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE
+);
+
 -- Settings (Last session)
 CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,

@@ -1,3 +1,7 @@
+/**
+ * LEGACY — Model benchmark/comparison tool for the marketing generator.
+ * Retained while the new workspace modules (Chat, Documents, Sheets) are built.
+ */
 import { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { Play, Loader2, AlertCircle, Check, Zap, FileText, ChevronDown, ChevronRight, History, RotateCcw, CheckCircle2, XCircle, Trash2, Info } from "lucide-react";

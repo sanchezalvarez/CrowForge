@@ -4,6 +4,7 @@ fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
 }
 
+use tauri::{image::Image, Manager};
 use tauri_plugin_shell::ShellExt;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -12,6 +13,13 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
+            // Set window icon from bundled PNG
+            let icon = Image::from_bytes(include_bytes!("../icons/icon.png"))
+                .expect("failed to load icon");
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.set_icon(icon);
+            }
+
             let shell = app.shell();
             let sidecar_command = shell.sidecar("crowforge-backend").unwrap();
             let (_rx, _child) = sidecar_command.spawn().unwrap();

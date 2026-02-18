@@ -124,6 +124,12 @@ class DocumentUpdate(BaseModel):
     title: Optional[str] = None
     content_json: Optional[dict] = None
 
+class DocumentAIRequest(BaseModel):
+    action_type: str  # rewrite, summarize, expand, fix_grammar
+    selected_text: str
+    temperature: Optional[float] = None
+    max_tokens: Optional[int] = None
+
 class PromptTemplate(BaseModel):
     id: Optional[int] = Field(default=None)
     name: str

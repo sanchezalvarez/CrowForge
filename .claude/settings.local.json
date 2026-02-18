@@ -29,7 +29,9 @@
       "Bash(npx shadcn@latest add:*)",
       "Bash(pip show:*)",
       "Bash(pip install:*)",
-      "Bash(where:*)"
+      "Bash(where:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(cargo check:*)"
     ]
   }
 }

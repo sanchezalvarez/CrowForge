@@ -18,7 +18,7 @@ def get_resource_path(relative_path):
         return os.path.join(sys._MEIPASS, relative_path)
     return os.path.abspath(relative_path)
 
-from backend.models import Client, Campaign, CampaignStatus, PromptTemplate, RefineRequest, BenchmarkRun, BenchmarkRequest, ChatSession, ChatMessage, ChatMessageRequest, Document, DocumentCreate, DocumentUpdate
+from backend.models import Client, Campaign, CampaignStatus, PromptTemplate, RefineRequest, BenchmarkRun, BenchmarkRequest, ChatSession, ChatMessage, ChatMessageRequest, Document, DocumentCreate, DocumentUpdate, DocumentAIRequest
 from backend.storage import DatabaseManager, ClientRepository, CampaignRepository, AppRepository, PromptTemplateRepository, ConceptRevisionRepository, GenerationVersionRepository, BenchmarkRepository, ChatSessionRepository, ChatMessageRepository, DocumentRepository
 from backend.ai_engine import MockAIEngine, HTTPAIEngine, LocalLLAMAEngine, AILogger
 from backend.ai.engine_manager import AIEngineManager
@@ -910,6 +910,57 @@ async def update_document(doc_id: str, req: DocumentUpdate):
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
     return document_repo.update(doc_id, title=req.title, content_json=req.content_json)
+
+
+_DOC_AI_FORMAT = """
+You MUST respond with ONLY valid semantic HTML. No markdown, no backticks, no explanations, no wrapping.
+Allowed tags ONLY: <h1> <h2> <h3> <p> <ul> <ol> <li> <strong> <em> <blockquote>.
+Do NOT wrap output in ```html fences or any code block. Output raw HTML directly.
+Preserve the original language.""".strip()
+
+DOCUMENT_AI_ACTIONS = {
+    "rewrite": f"Rewrite the following text to improve clarity and flow.\n{_DOC_AI_FORMAT}",
+    "summarize": f"Summarize the following text concisely.\n{_DOC_AI_FORMAT}",
+    "expand": f"Expand the following text with more detail and depth.\n{_DOC_AI_FORMAT}",
+    "fix_grammar": f"Fix all grammar, spelling, and punctuation errors in the following text. Preserve the original structure.\n{_DOC_AI_FORMAT}",
+}
+
+@app.post("/documents/ai")
+async def document_ai_action(req: DocumentAIRequest):
+    system_prompt = DOCUMENT_AI_ACTIONS.get(req.action_type)
+    if not system_prompt:
+        raise HTTPException(status_code=400, detail=f"Invalid action_type: {req.action_type}. Must be one of: {', '.join(DOCUMENT_AI_ACTIONS.keys())}")
+    if not req.selected_text.strip():
+        raise HTTPException(status_code=400, detail="selected_text cannot be empty")
+
+    full_response = ""
+    try:
+        temperature = req.temperature if req.temperature is not None else 0.7
+        max_tokens = req.max_tokens if req.max_tokens is not None else 1024
+        async for chunk in engine_manager.get_active().generate_stream(
+            system_prompt, req.selected_text,
+            temperature=temperature, max_tokens=max_tokens,
+            json_mode=False,
+        ):
+            full_response += chunk
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"AI generation failed: {e}")
+
+    raw = full_response.strip()
+    if not raw:
+        raise HTTPException(status_code=500, detail="AI returned empty response")
+
+    # Strip markdown code fences if the model wrapped its output
+    import re
+    html = re.sub(r'^```(?:html)?\s*\n?', '', raw)
+    html = re.sub(r'\n?```\s*$', '', html)
+    html = html.strip()
+
+    # If the result has no HTML tags at all, wrap in <p>
+    if '<' not in html:
+        html = f"<p>{html}</p>"
+
+    return {"html": html, "action_type": req.action_type}
 
 
 if __name__ == "__main__":

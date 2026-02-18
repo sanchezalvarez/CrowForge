@@ -966,47 +966,43 @@ async def document_ai_action(req: DocumentAIRequest):
 
 # ── Sheets (Table Data Engine) ────────────────────────────────────
 
-@app.post("/sheets/ai-generate", response_model=Sheet)
-async def ai_generate_sheet(req: dict):
+@app.post("/sheets/ai-schema")
+async def ai_generate_schema(req: dict):
+    """AI generates a table schema (title + columns) for user review. Does NOT create the table."""
     prompt = req.get("prompt", "").strip()
     if not prompt:
         raise HTTPException(status_code=400, detail="Prompt is required")
 
     system_prompt = (
-        "You are a data architect. Given a user request, generate a table schema with example data.\n"
+        "You are a spreadsheet schema designer.\n"
+        "Given a user description, generate a table schema.\n"
         "Respond with ONLY valid JSON, no markdown fences, no explanation.\n"
-        "Format:\n"
-        '{"title":"Table Name","columns":[{"name":"Col","type":"text|number|boolean|date"}],'
-        '"rows":[["val1","val2"]]}\n'
+        "Format: {\"title\":\"Table Name\",\"columns\":[{\"name\":\"Col\",\"type\":\"text\"}]}\n"
         "Rules:\n"
         "- 3-8 columns appropriate to the domain\n"
-        "- 3-6 realistic example rows\n"
-        "- All row values must be strings\n"
-        "- number type values: numeric strings like \"42.5\"\n"
-        "- boolean type values: \"true\" or \"false\"\n"
-        "- date type values: \"YYYY-MM-DD\" format\n"
-        "- text type values: plain strings"
+        "- Allowed types: text, number, boolean, date\n"
+        "- Do NOT include rows, data, or example values\n"
+        "- Do NOT include concept_name, rationale, target_audience, or key_message\n"
+        "- Column names should be short and descriptive"
     )
-    user_prompt = f"Create a table for: {prompt}"
+    user_prompt = f"Design a table schema for: {prompt}"
 
     full_response = ""
     try:
         async with asyncio.timeout(GENERATION_TIMEOUT):
             async for chunk in engine_manager.get_active().generate_stream(
-                system_prompt, user_prompt, temperature=0.5
+                system_prompt, user_prompt, temperature=0.5, json_mode=False
             ):
                 full_response += chunk
     except (TimeoutError, asyncio.TimeoutError):
         full_response = ""
-        async for chunk in MockAIEngine().generate_stream(system_prompt, user_prompt, temperature=0.5):
+        async for chunk in MockAIEngine().generate_stream(system_prompt, user_prompt, temperature=0.5, json_mode=False):
             full_response += chunk
 
-    # Parse JSON from response
-    raw = full_response.strip()
     import re
+    raw = full_response.strip()
     raw = re.sub(r'^```(?:json)?\s*\n?', '', raw)
     raw = re.sub(r'\n?```\s*$', '', raw)
-    # Find first { and last }
     start = raw.find('{')
     end = raw.rfind('}')
     if start == -1 or end == -1:
@@ -1020,29 +1016,32 @@ async def ai_generate_sheet(req: dict):
 
     title = data.get("title", "AI Generated Sheet")
     columns_raw = data.get("columns", [])
-    rows_raw = data.get("rows", [])
 
+    # Validate: must be a list of objects with name+type, reject any marketing keys
+    BLOCKED_KEYS = {"concept_name", "rationale", "target_audience", "key_message"}
     columns = []
     for c in columns_raw:
+        if not isinstance(c, dict):
+            continue
+        if BLOCKED_KEYS & set(c.keys()):
+            raise HTTPException(status_code=500, detail="AI returned marketing data instead of a table schema")
+        name = str(c.get("name", "Column")).strip()
+        if not name:
+            continue
         ctype = c.get("type", "text")
         if ctype not in ("text", "number", "boolean", "date"):
             ctype = "text"
-        columns.append(SheetColumn(name=c.get("name", "Column"), type=ctype))
+        columns.append({"name": name, "type": ctype})
 
-    # Ensure each row has the right number of columns (as strings)
-    rows = []
-    for row in rows_raw:
-        r = [str(v) if v is not None else "" for v in row]
-        while len(r) < len(columns):
-            r.append("")
-        rows.append(r[:len(columns)])
+    if not columns:
+        raise HTTPException(status_code=500, detail="AI returned no valid columns")
 
-    return sheet_repo.create(title=title, columns=columns, rows=rows)
+    return {"title": title, "columns": columns}
 
 
 @app.post("/sheets", response_model=Sheet)
 async def create_sheet(req: SheetCreate):
-    return sheet_repo.create(title=req.title, columns=req.columns)
+    return sheet_repo.create(title=req.title, columns=req.columns, rows=req.rows if req.rows else None)
 
 @app.get("/sheets", response_model=List[Sheet])
 async def list_sheets():
@@ -1086,6 +1085,45 @@ async def add_sheet_column(sheet_id: str, req: SheetAddColumn):
     if not sheet:
         raise HTTPException(status_code=404, detail="Sheet not found")
     return sheet
+
+@app.put("/sheets/{sheet_id}/clear-range", response_model=Sheet)
+async def clear_cell_range(sheet_id: str, req: dict):
+    """Clear all cells in a rectangular range to empty strings."""
+    r1, c1, r2, c2 = req.get("r1", 0), req.get("c1", 0), req.get("r2", 0), req.get("c2", 0)
+    sheet = sheet_repo.get_by_id(sheet_id)
+    if not sheet:
+        raise HTTPException(status_code=404, detail="Sheet not found")
+    with sheet_repo.db.get_connection() as conn:
+        for ri in range(r1, r2 + 1):
+            for ci in range(c1, c2 + 1):
+                if ri < len(sheet.rows) and ci < len(sheet.rows[ri]):
+                    sheet.rows[ri][ci] = ""
+        sheet_repo._save(conn, sheet_id, sheet.columns, sheet.rows)
+    return sheet_repo.get_by_id(sheet_id)
+
+@app.put("/sheets/{sheet_id}/paste", response_model=Sheet)
+async def paste_cells(sheet_id: str, req: dict):
+    """Paste a 2D array of values starting at (start_row, start_col)."""
+    start_row = req.get("start_row", 0)
+    start_col = req.get("start_col", 0)
+    data: list = req.get("data", [])
+    sheet = sheet_repo.get_by_id(sheet_id)
+    if not sheet:
+        raise HTTPException(status_code=404, detail="Sheet not found")
+    num_cols = len(sheet.columns)
+    with sheet_repo.db.get_connection() as conn:
+        for dr, row_vals in enumerate(data):
+            ri = start_row + dr
+            # Extend rows if needed
+            while ri >= len(sheet.rows):
+                sheet.rows.append([""] * num_cols)
+            for dc, val in enumerate(row_vals):
+                ci = start_col + dc
+                if ci >= num_cols:
+                    continue
+                sheet.rows[ri][ci] = str(val)
+        sheet_repo._save(conn, sheet_id, sheet.columns, sheet.rows)
+    return sheet_repo.get_by_id(sheet_id)
 
 @app.put("/sheets/{sheet_id}/cell", response_model=Sheet)
 async def update_sheet_cell(sheet_id: str, req: SheetUpdateCell):
@@ -1135,32 +1173,32 @@ async def ai_fill_column(sheet_id: str, request: Request, col_index: int, instru
             yield {"data": "[DONE]"}
         return EventSourceResponse(no_work())
 
-    # Build a single prompt asking AI for all values at once
+    # --- EXCEL LITE DEDICATED PROMPT (never reuse marketing/concept prompts) ---
+    count = len(empty_row_indices)
     system_prompt = (
-        "You are a data assistant. The user wants to fill cells in a spreadsheet column.\n"
-        "You will be given an instruction and the number of cells to fill.\n"
-        "Respond with ONLY a JSON array of string values, one per cell.\n"
-        "No markdown fences, no explanation, no keys — just a raw JSON array.\n"
-        f"Column type is \"{target_col.type}\".\n"
-        "Rules for values:\n"
-        "- number: numeric strings like \"42\" or \"3.14\"\n"
-        "- boolean: \"true\" or \"false\"\n"
-        "- date: \"YYYY-MM-DD\"\n"
-        "- text: plain strings"
+        "You are a spreadsheet data assistant.\n"
+        "TASK: Generate cell values for a spreadsheet column.\n"
+        "RULES:\n"
+        "- Return ONLY a JSON array of plain scalar strings. Example: [\"Alice\",\"Bob\",\"Charlie\"]\n"
+        "- Each element is ONE cell value — a simple scalar (word, name, number, date).\n"
+        "- NEVER return objects, dicts, or nested JSON.\n"
+        "- NEVER include keys like concept_name, rationale, target_audience, key_message.\n"
+        "- NEVER include explanations, labels, or markdown.\n"
+        "- Just the raw JSON array, nothing else."
     )
     user_prompt = (
-        f"Column name: \"{target_col.name}\"\n"
+        f"Column: \"{target_col.name}\" (type: {target_col.type})\n"
         f"Instruction: {instruction}\n"
-        f"Generate exactly {len(empty_row_indices)} values.\n"
-        f"Respond with a JSON array of {len(empty_row_indices)} strings."
+        f"Generate exactly {count} values. Respond with ONLY a JSON array of {count} strings."
     )
 
     async def event_generator():
         full_response = ""
         try:
             async with asyncio.timeout(GENERATION_TIMEOUT):
+                # json_mode=False to prevent OpenAI from wrapping in an object
                 async for chunk in engine_manager.get_active().generate_stream(
-                    system_prompt, user_prompt, temperature=0.5
+                    system_prompt, user_prompt, temperature=0.5, json_mode=False
                 ):
                     if await request.is_disconnected():
                         return
@@ -1175,8 +1213,8 @@ async def ai_fill_column(sheet_id: str, request: Request, col_index: int, instru
             return
 
         # Parse JSON array from response
-        raw = full_response.strip()
         import re
+        raw = full_response.strip()
         raw = re.sub(r'^```(?:json)?\s*\n?', '', raw)
         raw = re.sub(r'\n?```\s*$', '', raw)
         start = raw.find('[')
@@ -1205,21 +1243,36 @@ async def ai_fill_column(sheet_id: str, request: Request, col_index: int, instru
             if i >= len(values):
                 break
 
-            value = str(values[i]).strip().strip('"').strip("'")
+            item = values[i]
+
+            # HARD BLOCK: reject dicts/lists/objects — only scalars allowed
+            if isinstance(item, (dict, list)):
+                print(f"[AI_EXCEL] column={target_col.name}, row={ri}, REJECTED structured output: {type(item).__name__}")
+                yield {"data": json.dumps({"type": "error", "row": ri, "error": "AI returned structured data instead of a scalar value"})}
+                continue
+
+            value = str(item).strip().strip('"').strip("'")
+
+            # HARD BLOCK: reject if value looks like a JSON object/multi-line blob
+            if value and (value[0] == '{' or value[0] == '[' or '\n' in value):
+                print(f"[AI_EXCEL] column={target_col.name}, row={ri}, REJECTED blob: {value[:80]}")
+                yield {"data": json.dumps({"type": "error", "row": ri, "error": "AI returned structured data instead of a scalar value"})}
+                continue
 
             validation_error = sheet_repo.validate_cell(value, target_col.type)
             if validation_error:
+                print(f"[AI_EXCEL] column={target_col.name}, row={ri}, value={value}, valid=false ({validation_error})")
                 yield {"data": json.dumps({"type": "error", "row": ri, "error": validation_error})}
                 continue
 
             try:
                 sheet_repo.update_cell(sheet_id, ri, col_index, value)
             except ValueError as e:
+                print(f"[AI_EXCEL] column={target_col.name}, row={ri}, value={value}, valid=false ({e})")
                 yield {"data": json.dumps({"type": "error", "row": ri, "error": str(e)})}
                 continue
 
-            yield {"data": json.dumps({"type": "cell", "row": ri, "col": col_index, "value": value})}
-
+            print(f"[AI_EXCEL] column={target_col.name}, row={ri}, value={value}, valid=true")
             yield {"data": json.dumps({"type": "cell", "row": ri, "col": col_index, "value": value})}
 
         yield {"data": "[DONE]"}

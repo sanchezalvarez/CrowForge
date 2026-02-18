@@ -145,6 +145,7 @@ class Sheet(BaseModel):
 class SheetCreate(BaseModel):
     title: str = "Untitled Sheet"
     columns: List[SheetColumn] = Field(default_factory=list)
+    rows: List[List[str]] = Field(default_factory=list)
 
 class SheetAddColumn(BaseModel):
     name: str

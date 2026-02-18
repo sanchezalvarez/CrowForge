@@ -1,11 +1,88 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import axios from "axios";
-import { PlusCircle, Table2, Trash2, Plus, X, AlertCircle, Sparkles, Square, Loader2 } from "lucide-react";
+import { PlusCircle, Table2, Trash2, Plus, X, AlertCircle, Sparkles, Square, Loader2, LayoutTemplate, FileSpreadsheet, ListTodo, FileText } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { ScrollArea } from "../components/ui/scroll-area";
 import { cn } from "../lib/utils";
 
 const API_BASE = "http://127.0.0.1:8000";
+
+interface SheetTemplate {
+  id: string;
+  name: string;
+  description: string;
+  icon: typeof Table2;
+  title: string;
+  columns: { name: string; type: string }[];
+  rows: string[][];
+}
+
+const SHEET_TEMPLATES: SheetTemplate[] = [
+  {
+    id: "blank",
+    name: "Blank",
+    description: "Empty sheet, start from scratch",
+    icon: Table2,
+    title: "Untitled Sheet",
+    columns: [],
+    rows: [],
+  },
+  {
+    id: "crm",
+    name: "Simple CRM",
+    description: "Track contacts and deals",
+    icon: FileSpreadsheet,
+    title: "CRM",
+    columns: [
+      { name: "Name", type: "text" },
+      { name: "Email", type: "text" },
+      { name: "Status", type: "text" },
+      { name: "Notes", type: "text" },
+    ],
+    rows: [
+      ["Jane Cooper", "jane@example.com", "Lead", "Interested in premium plan"],
+      ["John Smith", "john@example.com", "Customer", "Renewed last month"],
+      ["Emily Davis", "emily@example.com", "Prospect", "Follow up next week"],
+    ],
+  },
+  {
+    id: "tasks",
+    name: "Task List",
+    description: "Manage tasks and deadlines",
+    icon: ListTodo,
+    title: "Tasks",
+    columns: [
+      { name: "Task", type: "text" },
+      { name: "Priority", type: "text" },
+      { name: "Status", type: "text" },
+      { name: "Due Date", type: "date" },
+    ],
+    rows: [
+      ["Design mockups", "High", "In Progress", "2025-06-15"],
+      ["Write documentation", "Medium", "Todo", "2025-06-20"],
+      ["Review pull requests", "Low", "Done", "2025-06-10"],
+    ],
+  },
+  {
+    id: "content",
+    name: "Content Plan",
+    description: "Plan content across channels",
+    icon: FileText,
+    title: "Content Plan",
+    columns: [
+      { name: "Title", type: "text" },
+      { name: "Type", type: "text" },
+      { name: "Channel", type: "text" },
+      { name: "Status", type: "text" },
+      { name: "Owner", type: "text" },
+    ],
+    rows: [
+      ["Product Launch Post", "Blog", "Website", "Draft", "Alice"],
+      ["Feature Announcement", "Social", "Twitter", "Scheduled", "Bob"],
+      ["Tutorial Video", "Video", "YouTube", "In Review", "Charlie"],
+    ],
+  },
+];
 
 interface SheetColumn {
   name: string;
@@ -29,17 +106,26 @@ export function SheetsPage() {
   const [editValue, setEditValue] = useState("");
   const cellInputRef = useRef<HTMLInputElement>(null);
   const [cellError, setCellError] = useState<string | null>(null);
+
+  // Multi-cell selection: normalized rectangle {r1<=r2, c1<=c2}
+  const [selection, setSelection] = useState<{ r1: number; c1: number; r2: number; c2: number } | null>(null);
+  const [selAnchor, setSelAnchor] = useState<{ row: number; col: number } | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
   const [addingColumn, setAddingColumn] = useState(false);
   const [newColName, setNewColName] = useState("");
   const [newColType, setNewColType] = useState("text");
   const colNameRef = useRef<HTMLInputElement>(null);
 
-  // AI Generate state
+  // Template picker state
+  const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
+
+  // AI Generate state (two-phase: prompt → preview → create)
   const [aiGenOpen, setAiGenOpen] = useState(false);
   const [aiGenPrompt, setAiGenPrompt] = useState("");
   const [aiGenLoading, setAiGenLoading] = useState(false);
   const [aiGenError, setAiGenError] = useState<string | null>(null);
   const aiGenRef = useRef<HTMLInputElement>(null);
+  const [aiGenPreview, setAiGenPreview] = useState<{ title: string; columns: { name: string; type: string }[] } | null>(null);
 
   // AI Fill state
   const [aiFillOpen, setAiFillOpen] = useState(false);
@@ -84,11 +170,15 @@ export function SheetsPage() {
     setAddingColumn(false);
     cancelAiFill();
     setAiFillOpen(false);
+    setSelection(null);
+    setSelAnchor(null);
   }, [activeSheetId]);
 
   const startEditing = useCallback((ri: number, ci: number, currentValue: string) => {
     setEditingCell({ row: ri, col: ci });
     setEditValue(currentValue);
+    setSelection(null);
+    setSelAnchor(null);
   }, []);
 
   const commitEdit = useCallback(async () => {
@@ -118,6 +208,89 @@ export function SheetsPage() {
     setEditingCell(null);
   }, []);
 
+  // Selection helpers
+  const makeRect = useCallback((a: { row: number; col: number }, b: { row: number; col: number }) => ({
+    r1: Math.min(a.row, b.row),
+    c1: Math.min(a.col, b.col),
+    r2: Math.max(a.row, b.row),
+    c2: Math.max(a.col, b.col),
+  }), []);
+
+  const isCellSelected = useCallback((ri: number, ci: number) => {
+    if (!selection) return false;
+    return ri >= selection.r1 && ri <= selection.r2 && ci >= selection.c1 && ci <= selection.c2;
+  }, [selection]);
+
+  const handleCellMouseDown = useCallback((ri: number, ci: number, e: React.MouseEvent) => {
+    // Don't interfere with editing
+    if (editingCell) return;
+
+    if (e.shiftKey && selAnchor) {
+      // Extend selection from anchor
+      setSelection(makeRect(selAnchor, { row: ri, col: ci }));
+    } else {
+      // Start new selection
+      setSelAnchor({ row: ri, col: ci });
+      setSelection({ r1: ri, c1: ci, r2: ri, c2: ci });
+      setIsDragging(true);
+    }
+  }, [editingCell, selAnchor, makeRect]);
+
+  const handleCellMouseEnter = useCallback((ri: number, ci: number) => {
+    if (!isDragging || !selAnchor) return;
+    setSelection(makeRect(selAnchor, { row: ri, col: ci }));
+  }, [isDragging, selAnchor, makeRect]);
+
+  const handleMouseUp = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
+  const copySelection = useCallback(() => {
+    if (!selection || !activeSheet) return;
+    const rows: string[] = [];
+    for (let ri = selection.r1; ri <= selection.r2; ri++) {
+      const cols: string[] = [];
+      for (let ci = selection.c1; ci <= selection.c2; ci++) {
+        cols.push(activeSheet.rows[ri]?.[ci] ?? "");
+      }
+      rows.push(cols.join("\t"));
+    }
+    navigator.clipboard.writeText(rows.join("\n"));
+  }, [selection, activeSheet]);
+
+  const pasteAtSelection = useCallback(async (clipText: string) => {
+    if (!activeSheet) return;
+    const startRow = selection?.r1 ?? 0;
+    const startCol = selection?.c1 ?? 0;
+    const data = clipText.split(/\r?\n/).filter((line) => line.length > 0).map((line) => line.split("\t"));
+    if (data.length === 0) return;
+    try {
+      const res = await axios.put(`${API_BASE}/sheets/${activeSheet.id}/paste`, {
+        start_row: startRow,
+        start_col: startCol,
+        data,
+      });
+      updateSheet(res.data);
+      // Update selection to cover pasted area
+      setSelection({
+        r1: startRow,
+        c1: startCol,
+        r2: startRow + data.length - 1,
+        c2: startCol + (Math.max(...data.map((r) => r.length)) - 1),
+      });
+    } catch { /* ignore */ }
+  }, [selection, activeSheet]);
+
+  const clearSelectedCells = useCallback(async () => {
+    if (!selection || !activeSheet) return;
+    try {
+      const res = await axios.put(`${API_BASE}/sheets/${activeSheet.id}/clear-range`, {
+        r1: selection.r1, c1: selection.c1, r2: selection.r2, c2: selection.c2,
+      });
+      updateSheet(res.data);
+    } catch { /* ignore */ }
+  }, [selection, activeSheet]);
+
   useEffect(() => {
     loadSheets();
   }, []);
@@ -131,11 +304,13 @@ export function SheetsPage() {
     }
   }
 
-  async function createSheet() {
+  async function createFromTemplate(template: SheetTemplate) {
+    setTemplatePickerOpen(false);
     try {
       const res = await axios.post(`${API_BASE}/sheets`, {
-        title: "Untitled Sheet",
-        columns: [],
+        title: template.title,
+        columns: template.columns,
+        rows: template.rows,
       });
       const sheet: Sheet = res.data;
       setSheets((prev) => [sheet, ...prev]);
@@ -210,23 +385,56 @@ export function SheetsPage() {
     setAddingColumn(false);
   }
 
-  async function generateSheet() {
+  async function generateSchema() {
     if (!aiGenPrompt.trim()) return;
     setAiGenLoading(true);
     setAiGenError(null);
+    setAiGenPreview(null);
     try {
-      const res = await axios.post(`${API_BASE}/sheets/ai-generate`, { prompt: aiGenPrompt.trim() });
+      const res = await axios.post(`${API_BASE}/sheets/ai-schema`, { prompt: aiGenPrompt.trim() });
+      setAiGenPreview(res.data);
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail;
+      setAiGenError(detail || "Failed to generate schema");
+    } finally {
+      setAiGenLoading(false);
+    }
+  }
+
+  async function confirmAiGenCreate() {
+    if (!aiGenPreview) return;
+    try {
+      const res = await axios.post(`${API_BASE}/sheets`, {
+        title: aiGenPreview.title,
+        columns: aiGenPreview.columns,
+        rows: [],
+      });
       const sheet: Sheet = res.data;
       setSheets((prev) => [sheet, ...prev]);
       setActiveSheetId(sheet.id);
       setAiGenPrompt("");
+      setAiGenPreview(null);
       setAiGenOpen(false);
-    } catch (err: any) {
-      const detail = err?.response?.data?.detail;
-      setAiGenError(detail || "Failed to generate table");
-    } finally {
-      setAiGenLoading(false);
+    } catch {
+      // ignore
     }
+  }
+
+  function aiGenUpdateCol(idx: number, field: "name" | "type", value: string) {
+    if (!aiGenPreview) return;
+    const cols = [...aiGenPreview.columns];
+    cols[idx] = { ...cols[idx], [field]: value };
+    setAiGenPreview({ ...aiGenPreview, columns: cols });
+  }
+
+  function aiGenRemoveCol(idx: number) {
+    if (!aiGenPreview) return;
+    setAiGenPreview({ ...aiGenPreview, columns: aiGenPreview.columns.filter((_, i) => i !== idx) });
+  }
+
+  function aiGenAddCol() {
+    if (!aiGenPreview) return;
+    setAiGenPreview({ ...aiGenPreview, columns: [...aiGenPreview.columns, { name: "New Column", type: "text" }] });
   }
 
   function startAiFill() {
@@ -303,7 +511,7 @@ export function SheetsPage() {
       {/* Sheets sidebar */}
       <div className="w-[220px] shrink-0 border-r bg-background flex flex-col">
         <div className="p-3 border-b">
-          <Button variant="outline" size="sm" className="w-full" onClick={createSheet}>
+          <Button variant="outline" size="sm" className="w-full" onClick={() => setTemplatePickerOpen(true)}>
             <PlusCircle className="h-4 w-4 mr-1.5" />
             New Sheet
           </Button>
@@ -369,47 +577,16 @@ export function SheetsPage() {
               />
               <span className="text-xs text-muted-foreground">
                 {activeSheet.columns.length} cols, {activeSheet.rows.length} rows
+                {selection && (selection.r1 !== selection.r2 || selection.c1 !== selection.c2) && (
+                  <span className="ml-2 text-primary">
+                    {(selection.r2 - selection.r1 + 1) * (selection.c2 - selection.c1 + 1)} cells selected
+                  </span>
+                )}
               </span>
             </div>
 
             {/* Toolbar */}
             <div className="border-b px-4 py-1.5 flex items-center gap-2">
-              {addingColumn ? (
-                <div className="flex items-center gap-1.5">
-                  <input
-                    ref={colNameRef}
-                    className="h-7 px-2 text-xs border border-border rounded-md bg-background outline-none focus:ring-1 focus:ring-primary/40 w-28"
-                    placeholder="Column name"
-                    value={newColName}
-                    onChange={(e) => setNewColName(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") submitNewColumn();
-                      if (e.key === "Escape") setAddingColumn(false);
-                    }}
-                  />
-                  <select
-                    className="h-7 px-1.5 text-xs border border-border rounded-md bg-background outline-none"
-                    value={newColType}
-                    onChange={(e) => setNewColType(e.target.value)}
-                  >
-                    <option value="text">Text</option>
-                    <option value="number">Number</option>
-                    <option value="boolean">Boolean</option>
-                    <option value="date">Date</option>
-                  </select>
-                  <Button variant="outline" size="sm" className="h-7 text-xs" onClick={submitNewColumn}>
-                    Add
-                  </Button>
-                  <button onClick={() => setAddingColumn(false)} className="text-muted-foreground hover:text-foreground">
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              ) : (
-                <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={() => setAddingColumn(true)}>
-                  <Plus className="h-3 w-3" />
-                  Column
-                </Button>
-              )}
               <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={() => addRow(activeSheet.id)}>
                 <Plus className="h-3 w-3" />
                 Row
@@ -474,17 +651,60 @@ export function SheetsPage() {
             )}
 
             {/* Grid */}
-            <div className="flex-1 overflow-auto">
+            <div
+              className="flex-1 overflow-auto"
+              tabIndex={-1}
+              onKeyDown={(e) => {
+                if (e.key === "Escape" && selection && !editingCell) {
+                  setSelection(null);
+                  setSelAnchor(null);
+                }
+                if ((e.key === "Delete" || e.key === "Backspace") && selection && !editingCell) {
+                  e.preventDefault();
+                  clearSelectedCells();
+                }
+                if ((e.ctrlKey || e.metaKey) && e.key === "c" && selection && !editingCell) {
+                  e.preventDefault();
+                  copySelection();
+                }
+                if ((e.ctrlKey || e.metaKey) && e.key === "v" && !editingCell) {
+                  e.preventDefault();
+                  navigator.clipboard.readText().then((text) => {
+                    if (text) pasteAtSelection(text);
+                  }).catch(() => {});
+                }
+              }}
+            >
               {activeSheet.columns.length === 0 ? (
                 <div className="flex-1 flex items-center justify-center h-full text-muted-foreground">
                   <div className="text-center">
                     <Table2 className="h-10 w-10 mx-auto mb-3 text-muted-foreground/40" />
-                    <p className="text-sm font-medium">No columns yet</p>
-                    <p className="text-xs mt-1">Add a column to get started.</p>
+                    <p className="text-sm font-medium mb-2">No columns yet</p>
+                    {addingColumn ? (
+                      <div className="flex items-center gap-1.5 justify-center">
+                        <input
+                          ref={colNameRef}
+                          className="h-7 px-2 text-xs border border-border rounded-md bg-background outline-none focus:ring-1 focus:ring-primary/40 w-32"
+                          placeholder="Column name"
+                          value={newColName}
+                          onChange={(e) => setNewColName(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") submitNewColumn();
+                            if (e.key === "Escape") setAddingColumn(false);
+                          }}
+                        />
+                        <Button variant="outline" size="sm" className="h-7 text-xs" onClick={submitNewColumn}>Add</Button>
+                      </div>
+                    ) : (
+                      <Button variant="outline" size="sm" className="gap-1" onClick={() => { setAddingColumn(true); setNewColName(""); setNewColType("text"); }}>
+                        <Plus className="h-3 w-3" />
+                        Add Column
+                      </Button>
+                    )}
                   </div>
                 </div>
               ) : (
-                <table className="w-full border-collapse text-sm">
+                <table className="w-full border-collapse text-sm select-none" onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp}>
                   <thead>
                     <tr>
                       <th className="border border-border bg-muted px-2 py-1.5 text-left text-xs font-medium text-muted-foreground w-10">#</th>
@@ -506,7 +726,31 @@ export function SheetsPage() {
                           </div>
                         </th>
                       ))}
-                      <th className="border border-border bg-muted w-8" />
+                      <th className="border border-border bg-muted px-1 py-1 min-w-[120px]">
+                        {addingColumn ? (
+                          <div className="flex items-center gap-1">
+                            <input
+                              ref={colNameRef}
+                              className="h-6 flex-1 px-1.5 text-xs border border-border rounded bg-background outline-none focus:ring-1 focus:ring-primary/40"
+                              placeholder="Name"
+                              value={newColName}
+                              onChange={(e) => setNewColName(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") submitNewColumn();
+                                if (e.key === "Escape") setAddingColumn(false);
+                              }}
+                              onBlur={() => { if (!newColName.trim()) setAddingColumn(false); }}
+                            />
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => { setAddingColumn(true); setNewColName(""); setNewColType("text"); }}
+                            className="w-full flex items-center justify-center text-muted-foreground/50 hover:text-primary transition-colors"
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -520,6 +764,7 @@ export function SheetsPage() {
                           const colType = activeSheet.columns[ci]?.type ?? "text";
                           const justFilled = ci === aiFillCol && aiFilledRows.has(ri);
                           const fillError = ci === aiFillCol && aiFillErrors.has(ri);
+                          const selected = !isEditing && isCellSelected(ri, ci);
                           return (
                             <td
                               key={ci}
@@ -527,23 +772,28 @@ export function SheetsPage() {
                                 "border border-border p-0 min-w-[120px]",
                                 isEditing && "ring-2 ring-primary/40 ring-inset",
                                 isEditing && cellError && "ring-destructive/60",
+                                selected && "bg-primary/10",
                                 justFilled && "bg-green-500/10",
                                 fillError && "bg-destructive/10"
                               )}
-                              onClick={() => {
+                              onMouseDown={(e) => {
                                 if (!isEditing) {
-                                  if (colType === "boolean") {
-                                    // Toggle on click
-                                    const next = cell.toLowerCase() === "true" ? "false" : "true";
-                                    axios.put(`${API_BASE}/sheets/${activeSheet.id}/cell`, {
-                                      row_index: ri, col_index: ci, value: next,
-                                    }).then((res) => updateSheet(res.data)).catch(() => {});
-                                  } else {
-                                    startEditing(ri, ci, cell);
-                                  }
+                                  e.preventDefault();
+                                  handleCellMouseDown(ri, ci, e);
                                 }
                               }}
-                              onDoubleClick={() => { if (colType !== "boolean") startEditing(ri, ci, cell); }}
+                              onMouseEnter={() => handleCellMouseEnter(ri, ci)}
+                              onDoubleClick={() => {
+                                setSelection(null);
+                                if (colType === "boolean") {
+                                  const next = cell.toLowerCase() === "true" ? "false" : "true";
+                                  axios.put(`${API_BASE}/sheets/${activeSheet.id}/cell`, {
+                                    row_index: ri, col_index: ci, value: next,
+                                  }).then((res) => updateSheet(res.data)).catch(() => {});
+                                } else {
+                                  startEditing(ri, ci, cell);
+                                }
+                              }}
                             >
                               {isEditing ? (
                                 <div className="relative">
@@ -622,50 +872,165 @@ export function SheetsPage() {
           <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground">
             <Table2 className="h-10 w-10 mb-3 text-muted-foreground/40" />
             <p className="text-sm font-medium">No sheet selected</p>
-            <p className="text-xs mt-1 mb-4">Create a new sheet or generate one with AI.</p>
-            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setAiGenOpen(true)}>
-              <Sparkles className="h-3.5 w-3.5" />
-              Generate with AI
-            </Button>
+            <p className="text-xs mt-1 mb-4">Create a new sheet from a template or generate with AI.</p>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setTemplatePickerOpen(true)}>
+                <LayoutTemplate className="h-3.5 w-3.5" />
+                From Template
+              </Button>
+              <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setAiGenOpen(true)}>
+                <Sparkles className="h-3.5 w-3.5" />
+                Generate with AI
+              </Button>
+            </div>
           </div>
         )}
       </div>
 
-      {/* AI Generate overlay */}
-      {aiGenOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => { if (!aiGenLoading) { setAiGenOpen(false); setAiGenError(null); } }}>
-          <div className="bg-background border rounded-lg shadow-lg w-[420px] p-4" onClick={(e) => e.stopPropagation()}>
+      {/* Template picker overlay */}
+      {templatePickerOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setTemplatePickerOpen(false)}>
+          <div className="bg-background border rounded-lg shadow-lg w-[480px] p-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center gap-2 mb-3">
-              <Sparkles className="h-4 w-4 text-primary" />
-              <h3 className="text-sm font-medium">Generate Table with AI</h3>
+              <LayoutTemplate className="h-4 w-4 text-primary" />
+              <h3 className="text-sm font-medium">Create from Template</h3>
             </div>
-            <p className="text-xs text-muted-foreground mb-3">
-              Describe the table you need and AI will create columns, types, and example data.
-            </p>
-            <input
-              ref={aiGenRef}
-              className="w-full h-8 px-3 text-sm border border-border rounded-md bg-background outline-none focus:ring-1 focus:ring-primary/40 mb-2"
-              placeholder='e.g. "CRM for small business" or "weekly meal planner"'
-              value={aiGenPrompt}
-              onChange={(e) => { setAiGenPrompt(e.target.value); setAiGenError(null); }}
-              onKeyDown={(e) => { if (e.key === "Enter" && !aiGenLoading) generateSheet(); if (e.key === "Escape" && !aiGenLoading) setAiGenOpen(false); }}
-              disabled={aiGenLoading}
-            />
-            {aiGenError && (
-              <p className="text-xs text-destructive flex items-center gap-1 mb-2">
-                <AlertCircle className="h-3 w-3 shrink-0" />
-                {aiGenError}
-              </p>
-            )}
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => { setAiGenOpen(false); setAiGenError(null); }} disabled={aiGenLoading}>
+            <div className="grid grid-cols-2 gap-2">
+              {SHEET_TEMPLATES.map((t) => {
+                const Icon = t.icon;
+                return (
+                  <button
+                    key={t.id}
+                    onClick={() => createFromTemplate(t)}
+                    className="flex items-start gap-3 p-3 rounded-md border border-border hover:border-primary/40 hover:bg-primary/5 text-left transition-colors"
+                  >
+                    <Icon className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-foreground">{t.name}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{t.description}</p>
+                      {t.columns.length > 0 && (
+                        <p className="text-[10px] text-muted-foreground/60 mt-1 truncate">
+                          {t.columns.map((c) => c.name).join(" · ")}
+                        </p>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="flex justify-end mt-3">
+              <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setTemplatePickerOpen(false)}>
                 Cancel
               </Button>
-              <Button variant="default" size="sm" className="h-7 text-xs gap-1" onClick={generateSheet} disabled={!aiGenPrompt.trim() || aiGenLoading}>
-                {aiGenLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
-                {aiGenLoading ? "Generating..." : "Generate"}
-              </Button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* AI Generate overlay — two-phase: prompt → preview → create */}
+      {aiGenOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => { if (!aiGenLoading) { setAiGenOpen(false); setAiGenError(null); setAiGenPreview(null); } }}>
+          <div className="bg-background border rounded-lg shadow-lg w-[480px] p-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-2 mb-3">
+              <Sparkles className="h-4 w-4 text-primary" />
+              <h3 className="text-sm font-medium">
+                {aiGenPreview ? "Review Table Schema" : "Generate Table with AI"}
+              </h3>
+            </div>
+
+            {!aiGenPreview ? (
+              <>
+                <p className="text-xs text-muted-foreground mb-3">
+                  Describe the table you need. AI will suggest a name and columns for your review.
+                </p>
+                <input
+                  ref={aiGenRef}
+                  className="w-full h-8 px-3 text-sm border border-border rounded-md bg-background outline-none focus:ring-1 focus:ring-primary/40 mb-2"
+                  placeholder='e.g. "CRM for small business" or "weekly meal planner"'
+                  value={aiGenPrompt}
+                  onChange={(e) => { setAiGenPrompt(e.target.value); setAiGenError(null); }}
+                  onKeyDown={(e) => { if (e.key === "Enter" && !aiGenLoading) generateSchema(); if (e.key === "Escape" && !aiGenLoading) setAiGenOpen(false); }}
+                  disabled={aiGenLoading}
+                />
+                {aiGenError && (
+                  <p className="text-xs text-destructive flex items-center gap-1 mb-2">
+                    <AlertCircle className="h-3 w-3 shrink-0" />
+                    {aiGenError}
+                  </p>
+                )}
+                <div className="flex justify-end gap-2">
+                  <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => { setAiGenOpen(false); setAiGenError(null); }} disabled={aiGenLoading}>
+                    Cancel
+                  </Button>
+                  <Button variant="default" size="sm" className="h-7 text-xs gap-1" onClick={generateSchema} disabled={!aiGenPrompt.trim() || aiGenLoading}>
+                    {aiGenLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                    {aiGenLoading ? "Generating..." : "Generate"}
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <>
+                {/* Preview phase: editable title + columns */}
+                <div className="mb-3">
+                  <label className="text-xs text-muted-foreground mb-1 block">Table name</label>
+                  <input
+                    className="w-full h-8 px-3 text-sm border border-border rounded-md bg-background outline-none focus:ring-1 focus:ring-primary/40"
+                    value={aiGenPreview.title}
+                    onChange={(e) => setAiGenPreview({ ...aiGenPreview, title: e.target.value })}
+                  />
+                </div>
+
+                <label className="text-xs text-muted-foreground mb-1 block">Columns</label>
+                <div className="border border-border rounded-md mb-3 max-h-[240px] overflow-auto">
+                  {aiGenPreview.columns.map((col, i) => (
+                    <div key={i} className="flex items-center gap-1.5 px-2 py-1.5 border-b border-border last:border-b-0">
+                      <input
+                        className="flex-1 h-6 px-1.5 text-xs border border-border rounded bg-background outline-none focus:ring-1 focus:ring-primary/40"
+                        value={col.name}
+                        onChange={(e) => aiGenUpdateCol(i, "name", e.target.value)}
+                      />
+                      <select
+                        className="h-6 px-1 text-xs border border-border rounded bg-background outline-none"
+                        value={col.type}
+                        onChange={(e) => aiGenUpdateCol(i, "type", e.target.value)}
+                      >
+                        <option value="text">text</option>
+                        <option value="number">number</option>
+                        <option value="boolean">boolean</option>
+                        <option value="date">date</option>
+                      </select>
+                      <button onClick={() => aiGenRemoveCol(i)} className="text-muted-foreground hover:text-destructive">
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    onClick={aiGenAddCol}
+                    className="w-full px-2 py-1.5 text-xs text-muted-foreground hover:text-primary flex items-center gap-1 justify-center"
+                  >
+                    <Plus className="h-3 w-3" /> Add column
+                  </button>
+                </div>
+
+                <div className="flex justify-between">
+                  <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setAiGenPreview(null)}>
+                    Back
+                  </Button>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => { setAiGenOpen(false); setAiGenPreview(null); }}>
+                      Cancel
+                    </Button>
+                    <Button
+                      variant="default" size="sm" className="h-7 text-xs gap-1"
+                      onClick={confirmAiGenCreate}
+                      disabled={aiGenPreview.columns.length === 0 || aiGenPreview.columns.some((c) => !c.name.trim())}
+                    >
+                      Create Table
+                    </Button>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

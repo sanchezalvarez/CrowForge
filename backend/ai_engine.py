@@ -28,52 +28,47 @@ class AIEngine(ABC):
         pass
 
 class MockAIEngine(AIEngine):
-    MOCK_CONCEPTS = json.dumps({"schema_version": "v1", "concepts": [
-        {"concept_name": "Mock Concept 1", "rationale": "Mock Rationale 1", "target_audience": "Young professionals aged 25-35", "key_message": "Innovation starts here"},
-        {"concept_name": "Mock Concept 2", "rationale": "Mock Rationale 2", "target_audience": "Tech-savvy early adopters", "key_message": "Built for the future"},
-        {"concept_name": "Mock Concept 3", "rationale": "Mock Rationale 3", "target_audience": "Small business owners", "key_message": "Grow smarter, not harder"}
-    ]})
+    """Fallback engine when no real LLM is configured. Returns prompt-appropriate mock data."""
 
-    MOCK_CHAT = "This is a mock AI response. The mock engine is active — connect a real LLM engine to get actual responses."
+    _MOCK_NAMES = ["Alice", "Bob", "Charlie", "Diana", "Eve", "Frank", "Grace", "Hank", "Iris", "Jack"]
 
-    # Mock responses for sheet operations
-    MOCK_SHEET_TABLE = json.dumps({
-        "title": "Mock Table",
-        "columns": [
-            {"name": "Name", "type": "text"},
-            {"name": "Value", "type": "number"},
-            {"name": "Active", "type": "boolean"},
-            {"name": "Date", "type": "date"}
-        ],
-        "rows": [
-            ["Alice", "100", "true", "2025-01-15"],
-            ["Bob", "200", "false", "2025-02-20"],
-            ["Charlie", "150", "true", "2025-03-10"],
-        ]
-    })
+    def _build_response(self, system_prompt: str, user_prompt: str) -> str:
+        import re
+        combined = (system_prompt + " " + user_prompt).lower()
 
-    def _pick_response(self, system_prompt: str, user_prompt: str, json_mode: bool) -> str:
-        """Choose a mock response based on prompt context."""
-        combined = (system_prompt + user_prompt).lower()
-        # Sheet AI Fill — expects a JSON array of values
-        if "json array" in combined and ("fill" in combined or "generate exactly" in combined):
-            # Try to extract count from prompt
-            import re
-            m = re.search(r'exactly\s+(\d+)\s+values', combined)
-            count = int(m.group(1)) if m else 3
-            mock_names = ["Alice", "Bob", "Charlie", "Diana", "Eve", "Frank", "Grace", "Hank", "Iris", "Jack"]
-            values = [mock_names[i % len(mock_names)] for i in range(count)]
+        # --- EXCEL LITE: AI Fill — "generate exactly N values" ---
+        m = re.search(r'exactly\s+(\d+)\s+values', combined)
+        if m and "spreadsheet" in combined:
+            count = int(m.group(1))
+            # Pick mock data based on column type hint in prompt
+            if "number" in combined:
+                values = [str(10 + i * 7) for i in range(count)]
+            elif "boolean" in combined:
+                values = ["true" if i % 2 == 0 else "false" for i in range(count)]
+            elif "date" in combined:
+                values = [f"2025-{(i % 12) + 1:02d}-{(i % 28) + 1:02d}" for i in range(count)]
+            else:
+                values = [self._MOCK_NAMES[i % len(self._MOCK_NAMES)] for i in range(count)]
             return json.dumps(values)
-        # Sheet AI Generate — expects table JSON
-        if "table" in combined and "columns" in combined and "rows" in combined:
-            return self.MOCK_SHEET_TABLE
-        # Document AI — expects HTML
-        if "html" in combined and ("<h1>" in combined or "<p>" in combined or "semantic html" in combined):
-            return "<h2>Mock Heading</h2><p>This is a mock AI-generated paragraph. Connect a real LLM for actual content.</p>"
-        # Default
-        if json_mode:
-            return self.MOCK_CONCEPTS
-        return self.MOCK_CHAT
+
+        # --- EXCEL LITE: AI Schema (no rows) ---
+        if "schema designer" in combined or "table schema" in combined:
+            return json.dumps({
+                "title": "Mock Table",
+                "columns": [
+                    {"name": "Name", "type": "text"},
+                    {"name": "Value", "type": "number"},
+                    {"name": "Active", "type": "boolean"},
+                    {"name": "Date", "type": "date"}
+                ]
+            })
+
+        # --- DOCUMENT AI: semantic HTML ---
+        if "html" in combined or "semantic" in combined:
+            return "<h2>Mock Heading</h2><p>This is mock content. Connect a real LLM engine for actual results.</p>"
+
+        # --- GENERIC FALLBACK: plain text, never marketing objects ---
+        return "This is a mock response. Connect a real LLM engine (Settings > AI Engine) to get actual results."
 
     async def generate_stream(
         self, system_prompt: str, user_prompt: str, *,
@@ -81,7 +76,7 @@ class MockAIEngine(AIEngine):
         max_tokens: int = 1024, seed: int | None = None,
         json_mode: bool = True,
     ) -> AsyncGenerator[str, None]:
-        response_text = self._pick_response(system_prompt, user_prompt, json_mode)
+        response_text = self._build_response(system_prompt, user_prompt)
         for i in range(0, len(response_text), 4):
             yield response_text[i:i+4]
             await asyncio.sleep(0.01)

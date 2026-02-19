@@ -31,7 +31,8 @@
       "Bash(pip install:*)",
       "Bash(where:*)",
       "Bash(npm uninstall:*)",
-      "Bash(cargo check:*)"
+      "Bash(cargo check:*)",
+      "Bash(cd:*)"
     ]
   }
 }

@@ -1062,6 +1062,25 @@ async def delete_sheet(sheet_id: str):
     sheet_repo.delete(sheet_id)
     return {"ok": True}
 
+@app.post("/sheets/{sheet_id}/duplicate", response_model=Sheet)
+async def duplicate_sheet(sheet_id: str):
+    sheet = sheet_repo.duplicate(sheet_id)
+    if not sheet:
+        raise HTTPException(status_code=404, detail="Sheet not found")
+    return sheet
+
+@app.put("/sheets/{sheet_id}/data", response_model=Sheet)
+async def restore_sheet_data(sheet_id: str, body: dict):
+    """Wholesale replace columns + rows (undo/redo)."""
+    columns = body.get("columns", [])
+    rows = body.get("rows", [])
+    from backend.models import SheetColumn
+    cols = [SheetColumn(**c) for c in columns]
+    sheet = sheet_repo.restore_data(sheet_id, cols, rows)
+    if not sheet:
+        raise HTTPException(status_code=404, detail="Sheet not found")
+    return sheet
+
 @app.put("/sheets/{sheet_id}/title")
 async def update_sheet_title(sheet_id: str, body: dict):
     title = body.get("title")
@@ -1077,6 +1096,22 @@ async def add_sheet_row(sheet_id: str):
     sheet = sheet_repo.add_row(sheet_id)
     if not sheet:
         raise HTTPException(status_code=404, detail="Sheet not found")
+    return sheet
+
+@app.post("/sheets/{sheet_id}/rows/insert", response_model=Sheet)
+async def insert_sheet_row(sheet_id: str, req: dict):
+    row_index = req.get("row_index", 0)
+    sheet = sheet_repo.insert_row_at(sheet_id, row_index)
+    if not sheet:
+        raise HTTPException(status_code=404, detail="Sheet not found")
+    return sheet
+
+@app.post("/sheets/{sheet_id}/rows/duplicate", response_model=Sheet)
+async def duplicate_sheet_row(sheet_id: str, req: dict):
+    row_index = req.get("row_index", 0)
+    sheet = sheet_repo.duplicate_row(sheet_id, row_index)
+    if not sheet:
+        raise HTTPException(status_code=404, detail="Sheet not found or invalid row")
     return sheet
 
 @app.post("/sheets/{sheet_id}/columns", response_model=Sheet)
@@ -1149,6 +1184,35 @@ async def delete_sheet_column(sheet_id: str, req: SheetDeleteColumn):
         raise HTTPException(status_code=404, detail="Sheet not found or invalid column index")
     return sheet
 
+@app.put("/sheets/{sheet_id}/columns/rename", response_model=Sheet)
+async def rename_sheet_column(sheet_id: str, req: dict):
+    col_index = req.get("col_index", 0)
+    name = req.get("name", "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Name is required")
+    sheet = sheet_repo.rename_column(sheet_id, col_index, name)
+    if not sheet:
+        raise HTTPException(status_code=404, detail="Sheet not found or invalid column index")
+    return sheet
+
+@app.put("/sheets/{sheet_id}/columns/move", response_model=Sheet)
+async def move_sheet_column(sheet_id: str, req: dict):
+    from_index = req.get("from_index", 0)
+    to_index = req.get("to_index", 0)
+    sheet = sheet_repo.move_column(sheet_id, from_index, to_index)
+    if not sheet:
+        raise HTTPException(status_code=404, detail="Sheet not found or invalid indices")
+    return sheet
+
+@app.put("/sheets/{sheet_id}/columns/sort", response_model=Sheet)
+async def sort_sheet_column(sheet_id: str, req: dict):
+    col_index = req.get("col_index", 0)
+    ascending = req.get("ascending", True)
+    sheet = sheet_repo.sort_by_column(sheet_id, col_index, ascending)
+    if not sheet:
+        raise HTTPException(status_code=404, detail="Sheet not found or invalid column")
+    return sheet
+
 
 @app.get("/sheets/{sheet_id}/ai-fill")
 async def ai_fill_column(sheet_id: str, request: Request, col_index: int, instruction: str):
@@ -1160,6 +1224,7 @@ async def ai_fill_column(sheet_id: str, request: Request, col_index: int, instru
         raise HTTPException(status_code=400, detail="Invalid column index")
 
     target_col = sheet.columns[col_index]
+    other_cols = [(i, c) for i, c in enumerate(sheet.columns) if i != col_index]
 
     # Find which rows need filling
     empty_row_indices = []
@@ -1173,7 +1238,29 @@ async def ai_fill_column(sheet_id: str, request: Request, col_index: int, instru
             yield {"data": "[DONE]"}
         return EventSourceResponse(no_work())
 
-    # --- EXCEL LITE DEDICATED PROMPT (never reuse marketing/concept prompts) ---
+    # --- Build row context: all other column values for each empty row ---
+    row_context_lines = []
+    for idx, ri in enumerate(empty_row_indices):
+        row = sheet.rows[ri] if ri < len(sheet.rows) else []
+        parts = []
+        for ci, col in other_cols:
+            val = row[ci] if ci < len(row) else ""
+            if val.strip():
+                parts.append(f"{col.name}={val}")
+        ctx = ", ".join(parts) if parts else "(empty row)"
+        row_context_lines.append(f"  Row {idx}: {ctx}")
+    row_context = "\n".join(row_context_lines)
+
+    # --- Type constraint string ---
+    TYPE_RULES = {
+        "number": "Return ONLY numeric values (integer or decimal). Example: \"42\", \"3.14\".",
+        "boolean": "Return ONLY \"true\" or \"false\" (lowercase).",
+        "date": "Return ONLY dates in YYYY-MM-DD format. Example: \"2025-06-15\".",
+        "text": "Return short plain-text strings. No JSON, no objects.",
+    }
+    type_rule = TYPE_RULES.get(target_col.type, TYPE_RULES["text"])
+
+    # --- EXCEL LITE DEDICATED PROMPT ---
     count = len(empty_row_indices)
     system_prompt = (
         "You are a spreadsheet data assistant.\n"
@@ -1184,85 +1271,128 @@ async def ai_fill_column(sheet_id: str, request: Request, col_index: int, instru
         "- NEVER return objects, dicts, or nested JSON.\n"
         "- NEVER include keys like concept_name, rationale, target_audience, key_message.\n"
         "- NEVER include explanations, labels, or markdown.\n"
+        f"- Column type is \"{target_col.type}\". {type_rule}\n"
+        "- Use the row context below to produce values that make sense for each row.\n"
         "- Just the raw JSON array, nothing else."
     )
     user_prompt = (
         f"Column: \"{target_col.name}\" (type: {target_col.type})\n"
-        f"Instruction: {instruction}\n"
-        f"Generate exactly {count} values. Respond with ONLY a JSON array of {count} strings."
+        f"Instruction: {instruction}\n\n"
+        f"Row context (other columns for each row that needs a value):\n{row_context}\n\n"
+        f"Generate exactly {count} values — one per row above, in order.\n"
+        f"Respond with ONLY a JSON array of {count} strings."
     )
 
-    async def event_generator():
-        full_response = ""
-        try:
-            async with asyncio.timeout(GENERATION_TIMEOUT):
-                # json_mode=False to prevent OpenAI from wrapping in an object
-                async for chunk in engine_manager.get_active().generate_stream(
-                    system_prompt, user_prompt, temperature=0.5, json_mode=False
-                ):
-                    if await request.is_disconnected():
-                        return
-                    full_response += chunk
-        except (TimeoutError, asyncio.TimeoutError):
-            yield {"data": json.dumps({"type": "error", "row": -1, "error": "AI timed out"})}
-            yield {"data": "[DONE]"}
-            return
-        except Exception as e:
-            yield {"data": json.dumps({"type": "error", "row": -1, "error": str(e)})}
-            yield {"data": "[DONE]"}
-            return
+    MAX_RETRIES = 2
 
-        # Parse JSON array from response
-        import re
-        raw = full_response.strip()
-        raw = re.sub(r'^```(?:json)?\s*\n?', '', raw)
-        raw = re.sub(r'\n?```\s*$', '', raw)
+    async def _call_ai(sys_p: str, usr_p: str) -> str:
+        """Call the AI engine and accumulate the full response."""
+        full = ""
+        async with asyncio.timeout(GENERATION_TIMEOUT):
+            async for chunk in engine_manager.get_active().generate_stream(
+                sys_p, usr_p, temperature=0.5, json_mode=False
+            ):
+                full += chunk
+        return full
+
+    def _parse_array(raw_text: str) -> list | str:
+        """Parse a JSON array from raw AI output. Returns list on success, error string on failure."""
+        import re as _re
+        raw = raw_text.strip()
+        raw = _re.sub(r'^```(?:json)?\s*\n?', '', raw)
+        raw = _re.sub(r'\n?```\s*$', '', raw)
         start = raw.find('[')
         end = raw.rfind(']')
         if start == -1 or end == -1:
-            yield {"data": json.dumps({"type": "error", "row": -1, "error": "AI did not return a valid array"})}
-            yield {"data": "[DONE]"}
-            return
-
+            return "AI did not return a valid array"
         try:
             values = json.loads(raw[start:end + 1])
         except json.JSONDecodeError:
-            yield {"data": json.dumps({"type": "error", "row": -1, "error": "AI returned invalid JSON"})}
-            yield {"data": "[DONE]"}
-            return
-
+            return "AI returned invalid JSON"
         if not isinstance(values, list):
-            yield {"data": json.dumps({"type": "error", "row": -1, "error": "AI did not return an array"})}
+            return "AI did not return an array"
+        return values
+
+    def _validate_item(item, col_type: str, col_name: str, ri: int) -> str | None:
+        """Validate a single AI output item. Returns cleaned string or None on rejection."""
+        if isinstance(item, (dict, list)):
+            print(f"[AI_EXCEL] column={col_name}, row={ri}, REJECTED structured output: {type(item).__name__}")
+            return None
+        value = str(item).strip().strip('"').strip("'")
+        if value and (value[0] in ('{', '[') or '\n' in value):
+            print(f"[AI_EXCEL] column={col_name}, row={ri}, REJECTED blob: {value[:80]}")
+            return None
+        validation_error = sheet_repo.validate_cell(value, col_type)
+        if validation_error:
+            print(f"[AI_EXCEL] column={col_name}, row={ri}, value={value}, valid=false ({validation_error})")
+            return None
+        return value
+
+    async def event_generator():
+        # Initial AI call
+        values = None
+        last_error = ""
+        for attempt in range(1 + MAX_RETRIES):
+            try:
+                if await request.is_disconnected():
+                    return
+                full_response = await _call_ai(system_prompt, user_prompt)
+                result = _parse_array(full_response)
+                if isinstance(result, str):
+                    last_error = result
+                    print(f"[AI_EXCEL] attempt {attempt + 1}: parse error — {result}")
+                    continue
+                values = result
+                break
+            except (TimeoutError, asyncio.TimeoutError):
+                last_error = "AI timed out"
+                print(f"[AI_EXCEL] attempt {attempt + 1}: timed out")
+                continue
+            except Exception as e:
+                last_error = str(e)
+                print(f"[AI_EXCEL] attempt {attempt + 1}: error — {e}")
+                continue
+
+        if values is None:
+            yield {"data": json.dumps({"type": "error", "row": -1, "error": last_error})}
             yield {"data": "[DONE]"}
             return
 
-        # Stream each value into its cell
+        # Stream each value into its cell, retry individual failures
         for i, ri in enumerate(empty_row_indices):
             if await request.is_disconnected():
                 return
             if i >= len(values):
                 break
 
-            item = values[i]
+            value = _validate_item(values[i], target_col.type, target_col.name, ri)
 
-            # HARD BLOCK: reject dicts/lists/objects — only scalars allowed
-            if isinstance(item, (dict, list)):
-                print(f"[AI_EXCEL] column={target_col.name}, row={ri}, REJECTED structured output: {type(item).__name__}")
-                yield {"data": json.dumps({"type": "error", "row": ri, "error": "AI returned structured data instead of a scalar value"})}
-                continue
+            # Auto-retry individual cell on validation failure
+            if value is None:
+                row = sheet.rows[ri] if ri < len(sheet.rows) else []
+                ctx_parts = [f"{c.name}={row[ci]}" for ci, c in other_cols if ci < len(row) and row[ci].strip()]
+                retry_ctx = ", ".join(ctx_parts) if ctx_parts else "(empty row)"
+                retry_prompt = (
+                    f"Column: \"{target_col.name}\" (type: {target_col.type})\n"
+                    f"Row context: {retry_ctx}\n"
+                    f"Instruction: {instruction}\n"
+                    f"Generate exactly 1 value. {type_rule}\n"
+                    f"Respond with ONLY a JSON array of 1 string."
+                )
+                for retry in range(MAX_RETRIES):
+                    try:
+                        retry_resp = await _call_ai(system_prompt, retry_prompt)
+                        retry_arr = _parse_array(retry_resp)
+                        if isinstance(retry_arr, list) and len(retry_arr) > 0:
+                            value = _validate_item(retry_arr[0], target_col.type, target_col.name, ri)
+                            if value is not None:
+                                print(f"[AI_EXCEL] column={target_col.name}, row={ri}, retry {retry + 1} succeeded")
+                                break
+                    except Exception:
+                        continue
 
-            value = str(item).strip().strip('"').strip("'")
-
-            # HARD BLOCK: reject if value looks like a JSON object/multi-line blob
-            if value and (value[0] == '{' or value[0] == '[' or '\n' in value):
-                print(f"[AI_EXCEL] column={target_col.name}, row={ri}, REJECTED blob: {value[:80]}")
-                yield {"data": json.dumps({"type": "error", "row": ri, "error": "AI returned structured data instead of a scalar value"})}
-                continue
-
-            validation_error = sheet_repo.validate_cell(value, target_col.type)
-            if validation_error:
-                print(f"[AI_EXCEL] column={target_col.name}, row={ri}, value={value}, valid=false ({validation_error})")
-                yield {"data": json.dumps({"type": "error", "row": ri, "error": validation_error})}
+            if value is None:
+                yield {"data": json.dumps({"type": "error", "row": ri, "error": "Invalid output after retries"})}
                 continue
 
             try:

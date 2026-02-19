@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import axios from "axios";
-import { PlusCircle, Table2, Trash2, Plus, X, AlertCircle, Sparkles, Square, Loader2, LayoutTemplate, FileSpreadsheet, ListTodo, FileText } from "lucide-react";
+import { PlusCircle, Table2, Trash2, Plus, X, AlertCircle, Sparkles, Square, Loader2, LayoutTemplate, FileSpreadsheet, ListTodo, FileText, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Copy, Pencil, Filter, Eraser, Tags, ListChecks, Undo2, Redo2 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { ScrollArea } from "../components/ui/scroll-area";
 import { cn } from "../lib/utils";
@@ -98,19 +98,60 @@ interface Sheet {
   updated_at: string;
 }
 
+const ROW_WARN_THRESHOLD = 5000;   // show warning banner
+const ROW_AI_LIMIT = 10000;        // disable AI actions
+const ROW_RENDER_LIMIT = 500;      // max rows rendered at once (virtual window)
+
 export function SheetsPage() {
   const [sheets, setSheets] = useState<Sheet[]>([]);
   const [activeSheetId, setActiveSheetId] = useState<string | null>(null);
   const activeSheet = sheets.find((s) => s.id === activeSheetId) ?? null;
+  const [dismissedWarning, setDismissedWarning] = useState<string | null>(null);
+
+  // Virtual scroll for large tables
+  const gridRef = useRef<HTMLDivElement>(null);
+  const [scrollRowStart, setScrollRowStart] = useState(0);
   const [editingCell, setEditingCell] = useState<{ row: number; col: number } | null>(null);
   const [editValue, setEditValue] = useState("");
   const cellInputRef = useRef<HTMLInputElement>(null);
   const [cellError, setCellError] = useState<string | null>(null);
 
+  // Undo / Redo — per-sheet snapshot stacks (local only, max 50)
+  const MAX_HISTORY = 50;
+  type SheetSnapshot = { columns: SheetColumn[]; rows: string[][] };
+  const undoStacks = useRef<Map<string, SheetSnapshot[]>>(new Map());
+  const redoStacks = useRef<Map<string, SheetSnapshot[]>>(new Map());
+  const [canUndo, setCanUndo] = useState(false);
+  const [canRedo, setCanRedo] = useState(false);
+  const skipHistory = useRef(false); // flag to skip pushing history during undo/redo restore
+
   // Multi-cell selection: normalized rectangle {r1<=r2, c1<=c2}
-  const [selection, setSelection] = useState<{ r1: number; c1: number; r2: number; c2: number } | null>(null);
-  const [selAnchor, setSelAnchor] = useState<{ row: number; col: number } | null>(null);
+  // Per-table selection preservation
+  type SelectionRect = { r1: number; c1: number; r2: number; c2: number };
+  type AnchorPoint = { row: number; col: number };
+  const selectionMap = useRef<Map<string, { sel: SelectionRect | null; anchor: AnchorPoint | null }>>(new Map());
+  const [selection, setSelection] = useState<SelectionRect | null>(null);
+  const [selAnchor, setSelAnchor] = useState<AnchorPoint | null>(null);
+  const selMoving = useRef<AnchorPoint | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  // Context menus
+  const [rowMenu, setRowMenu] = useState<{ rowIndex: number; x: number; y: number } | null>(null);
+  const [colMenu, setColMenu] = useState<{ colIndex: number; x: number; y: number } | null>(null);
+  const [sheetMenu, setSheetMenu] = useState<{ sheetId: string; x: number; y: number } | null>(null);
+  const [renamingSheet, setRenamingSheet] = useState<string | null>(null);
+  const [renameSheetValue, setRenameSheetValue] = useState("");
+  const renameSheetRef = useRef<HTMLInputElement>(null);
+  const [renamingCol, setRenamingCol] = useState<number | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const renameRef = useRef<HTMLInputElement>(null);
+
+  // Filters: per-column filter config (client-side)
+  type ColFilter = { operator: string; value: string };
+  const [filters, setFilters] = useState<Map<number, ColFilter>>(new Map());
+  const [filterEditCol, setFilterEditCol] = useState<number | null>(null);
+  const [filterOp, setFilterOp] = useState("contains");
+  const [filterVal, setFilterVal] = useState("");
+
   const [addingColumn, setAddingColumn] = useState(false);
   const [newColName, setNewColName] = useState("");
   const [newColType, setNewColType] = useState("text");
@@ -138,6 +179,22 @@ export function SheetsPage() {
   const aiFillRef = useRef<EventSource | null>(null);
   const aiFillInstructionRef = useRef<HTMLInputElement>(null);
 
+  // Auto-focus sheet rename input
+  useEffect(() => {
+    if (renamingSheet && renameSheetRef.current) {
+      renameSheetRef.current.focus();
+      renameSheetRef.current.select();
+    }
+  }, [renamingSheet]);
+
+  // Auto-focus column rename input
+  useEffect(() => {
+    if (renamingCol !== null && renameRef.current) {
+      renameRef.current.focus();
+      renameRef.current.select();
+    }
+  }, [renamingCol]);
+
   // Auto-focus when editing starts
   useEffect(() => {
     if (editingCell && cellInputRef.current) {
@@ -164,14 +221,36 @@ export function SheetsPage() {
     }
   }, [aiFillOpen]);
 
-  // Clear editing state when switching sheets
+  // Save/restore selection when switching sheets
+  const prevSheetId = useRef<string | null>(null);
   useEffect(() => {
+    // Save selection of previous sheet
+    if (prevSheetId.current) {
+      selectionMap.current.set(prevSheetId.current, { sel: selection, anchor: selAnchor });
+    }
+    prevSheetId.current = activeSheetId;
+
     setEditingCell(null);
     setAddingColumn(false);
     cancelAiFill();
     setAiFillOpen(false);
-    setSelection(null);
-    setSelAnchor(null);
+    setFilters(new Map());
+    setFilterEditCol(null);
+
+    // Restore selection for new sheet
+    const saved = activeSheetId ? selectionMap.current.get(activeSheetId) : null;
+    if (saved) {
+      setSelection(saved.sel);
+      setSelAnchor(saved.anchor);
+      selMoving.current = saved.anchor;
+    } else {
+      setSelection(null);
+      setSelAnchor(null);
+      selMoving.current = null;
+    }
+
+    // Sync undo/redo indicators
+    if (activeSheetId) syncUndoRedoState(activeSheetId);
   }, [activeSheetId]);
 
   const startEditing = useCallback((ri: number, ci: number, currentValue: string) => {
@@ -231,6 +310,7 @@ export function SheetsPage() {
     } else {
       // Start new selection
       setSelAnchor({ row: ri, col: ci });
+      selMoving.current = { row: ri, col: ci };
       setSelection({ r1: ri, c1: ci, r2: ri, c2: ci });
       setIsDragging(true);
     }
@@ -291,6 +371,204 @@ export function SheetsPage() {
     } catch { /* ignore */ }
   }, [selection, activeSheet]);
 
+  // Row context menu operations
+  async function rowInsertAbove(ri: number) {
+    if (!activeSheet) return;
+    try {
+      const res = await axios.post(`${API_BASE}/sheets/${activeSheet.id}/rows/insert`, { row_index: ri });
+      updateSheet(res.data);
+    } catch { /* ignore */ }
+    setRowMenu(null);
+  }
+  async function rowInsertBelow(ri: number) {
+    if (!activeSheet) return;
+    try {
+      const res = await axios.post(`${API_BASE}/sheets/${activeSheet.id}/rows/insert`, { row_index: ri + 1 });
+      updateSheet(res.data);
+    } catch { /* ignore */ }
+    setRowMenu(null);
+  }
+  async function rowDuplicate(ri: number) {
+    if (!activeSheet) return;
+    try {
+      const res = await axios.post(`${API_BASE}/sheets/${activeSheet.id}/rows/duplicate`, { row_index: ri });
+      updateSheet(res.data);
+    } catch { /* ignore */ }
+    setRowMenu(null);
+  }
+  async function rowDelete(ri: number) {
+    if (!activeSheet) return;
+    try {
+      const res = await axios.delete(`${API_BASE}/sheets/${activeSheet.id}/rows`, { data: { row_index: ri } });
+      updateSheet(res.data);
+    } catch { /* ignore */ }
+    setRowMenu(null);
+  }
+
+  // Close row menu on outside click
+  useEffect(() => {
+    if (!rowMenu) return;
+    const close = () => setRowMenu(null);
+    document.addEventListener("click", close);
+    return () => document.removeEventListener("click", close);
+  }, [rowMenu]);
+
+  // Column context menu operations
+  async function colRenameStart(ci: number) {
+    if (!activeSheet) return;
+    setRenamingCol(ci);
+    setRenameValue(activeSheet.columns[ci].name);
+    setColMenu(null);
+  }
+  async function colRenameCommit() {
+    if (renamingCol === null || !activeSheet || !renameValue.trim()) {
+      setRenamingCol(null);
+      return;
+    }
+    try {
+      const res = await axios.put(`${API_BASE}/sheets/${activeSheet.id}/columns/rename`, {
+        col_index: renamingCol, name: renameValue.trim(),
+      });
+      updateSheet(res.data);
+    } catch { /* ignore */ }
+    setRenamingCol(null);
+  }
+  async function colMoveLeft(ci: number) {
+    if (!activeSheet || ci <= 0) return;
+    try {
+      const res = await axios.put(`${API_BASE}/sheets/${activeSheet.id}/columns/move`, {
+        from_index: ci, to_index: ci - 1,
+      });
+      updateSheet(res.data);
+    } catch { /* ignore */ }
+    setColMenu(null);
+  }
+  async function colMoveRight(ci: number) {
+    if (!activeSheet || ci >= activeSheet.columns.length - 1) return;
+    try {
+      const res = await axios.put(`${API_BASE}/sheets/${activeSheet.id}/columns/move`, {
+        from_index: ci, to_index: ci + 1,
+      });
+      updateSheet(res.data);
+    } catch { /* ignore */ }
+    setColMenu(null);
+  }
+  async function colDelete(ci: number) {
+    if (!activeSheet) return;
+    try {
+      const res = await axios.delete(`${API_BASE}/sheets/${activeSheet.id}/columns`, {
+        data: { col_index: ci },
+      });
+      updateSheet(res.data);
+    } catch { /* ignore */ }
+    setColMenu(null);
+  }
+
+  // Sort column (server-side, persists)
+  async function colSort(ci: number, ascending: boolean) {
+    if (!activeSheet) return;
+    try {
+      const res = await axios.put(`${API_BASE}/sheets/${activeSheet.id}/columns/sort`, {
+        col_index: ci, ascending,
+      });
+      updateSheet(res.data);
+    } catch { /* ignore */ }
+    setColMenu(null);
+  }
+
+  // Filter helpers
+  function applyFilter(ci: number) {
+    if (!filterVal.trim()) {
+      removeFilter(ci);
+      return;
+    }
+    setFilters((prev) => new Map(prev).set(ci, { operator: filterOp, value: filterVal }));
+    setFilterEditCol(null);
+    setColMenu(null);
+  }
+  function removeFilter(ci: number) {
+    setFilters((prev) => { const m = new Map(prev); m.delete(ci); return m; });
+    setFilterEditCol(null);
+    setColMenu(null);
+  }
+  function openFilterEditor(ci: number) {
+    const existing = filters.get(ci);
+    setFilterOp(existing?.operator ?? "contains");
+    setFilterVal(existing?.value ?? "");
+    setFilterEditCol(ci);
+    setColMenu(null);
+  }
+
+  // Compute filtered row indices
+  const filteredRowIndices: number[] = (() => {
+    if (!activeSheet || filters.size === 0) return activeSheet?.rows.map((_, i) => i) ?? [];
+    return activeSheet.rows.reduce<number[]>((acc, row, ri) => {
+      for (const [ci, f] of filters) {
+        const cell = (row[ci] ?? "").toLowerCase();
+        const fv = f.value.toLowerCase();
+        const colType = activeSheet.columns[ci]?.type ?? "text";
+        if (colType === "number") {
+          const num = parseFloat(cell);
+          const fnum = parseFloat(fv);
+          if (isNaN(num) || isNaN(fnum)) return acc;
+          if (f.operator === ">" && !(num > fnum)) return acc;
+          if (f.operator === "<" && !(num < fnum)) return acc;
+          if (f.operator === "=" && !(num === fnum)) return acc;
+          if (f.operator === "contains" && !cell.includes(fv)) return acc;
+        } else {
+          if (f.operator === "contains" && !cell.includes(fv)) return acc;
+          if (f.operator === "=" && cell !== fv) return acc;
+          if (f.operator === ">" && !(cell > fv)) return acc;
+          if (f.operator === "<" && !(cell < fv)) return acc;
+        }
+      }
+      acc.push(ri);
+      return acc;
+    }, []);
+  })();
+
+  // Performance safeguards
+  const totalRows = activeSheet?.rows.length ?? 0;
+  const isLargeTable = totalRows > ROW_WARN_THRESHOLD;
+  const aiDisabled = totalRows > ROW_AI_LIMIT;
+
+  // Virtual window: only render ROW_RENDER_LIMIT rows around scroll position
+  const visibleRowIndices = filteredRowIndices.length > ROW_RENDER_LIMIT
+    ? filteredRowIndices.slice(scrollRowStart, scrollRowStart + ROW_RENDER_LIMIT)
+    : filteredRowIndices;
+
+  const handleGridScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    if (filteredRowIndices.length <= ROW_RENDER_LIMIT) return;
+    const el = e.currentTarget;
+    const rowHeight = 29; // approximate row height in px
+    const scrollTop = el.scrollTop;
+    const newStart = Math.max(0, Math.floor(scrollTop / rowHeight) - 20); // 20-row buffer above
+    if (Math.abs(newStart - scrollRowStart) > 10) {
+      setScrollRowStart(Math.min(newStart, filteredRowIndices.length - ROW_RENDER_LIMIT));
+    }
+  }, [filteredRowIndices.length, scrollRowStart]);
+
+  // Reset scroll position when switching sheets or filter changes
+  useEffect(() => {
+    setScrollRowStart(0);
+  }, [activeSheetId, filters]);
+
+  // Close sheet menu on outside click
+  useEffect(() => {
+    if (!sheetMenu) return;
+    const close = () => setSheetMenu(null);
+    document.addEventListener("click", close);
+    return () => document.removeEventListener("click", close);
+  }, [sheetMenu]);
+
+  // Close column menu on outside click
+  useEffect(() => {
+    if (!colMenu) return;
+    const close = () => setColMenu(null);
+    document.addEventListener("click", close);
+    return () => document.removeEventListener("click", close);
+  }, [colMenu]);
+
   useEffect(() => {
     loadSheets();
   }, []);
@@ -332,6 +610,32 @@ export function SheetsPage() {
     }
   }
 
+  async function duplicateSheet(id: string) {
+    try {
+      const res = await axios.post(`${API_BASE}/sheets/${id}/duplicate`);
+      const sheet: Sheet = res.data;
+      setSheets((prev) => [sheet, ...prev]);
+      setActiveSheetId(sheet.id);
+    } catch { /* ignore */ }
+  }
+
+  function sheetRenameStart(id: string) {
+    const sheet = sheets.find((s) => s.id === id);
+    if (!sheet) return;
+    setRenamingSheet(id);
+    setRenameSheetValue(sheet.title);
+    setSheetMenu(null);
+  }
+
+  async function sheetRenameCommit() {
+    if (!renamingSheet || !renameSheetValue.trim()) {
+      setRenamingSheet(null);
+      return;
+    }
+    await updateTitle(renamingSheet, renameSheetValue.trim());
+    setRenamingSheet(null);
+  }
+
   async function updateTitle(id: string, title: string) {
     try {
       const res = await axios.put(`${API_BASE}/sheets/${id}/title`, { title });
@@ -341,8 +645,72 @@ export function SheetsPage() {
     }
   }
 
+  function syncUndoRedoState(sheetId: string) {
+    setCanUndo((undoStacks.current.get(sheetId)?.length ?? 0) > 0);
+    setCanRedo((redoStacks.current.get(sheetId)?.length ?? 0) > 0);
+  }
+
   function updateSheet(updated: Sheet) {
+    // Push previous state to undo stack (unless we're restoring from undo/redo)
+    if (!skipHistory.current) {
+      const prev = sheets.find((s) => s.id === updated.id);
+      if (prev) {
+        const stack = undoStacks.current.get(updated.id) ?? [];
+        stack.push({ columns: prev.columns, rows: prev.rows });
+        if (stack.length > MAX_HISTORY) stack.shift();
+        undoStacks.current.set(updated.id, stack);
+        // Clear redo on new action
+        redoStacks.current.set(updated.id, []);
+        syncUndoRedoState(updated.id);
+      }
+    }
     setSheets((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+  }
+
+  async function undoSheet() {
+    if (!activeSheet) return;
+    const stack = undoStacks.current.get(activeSheet.id);
+    if (!stack || stack.length === 0) return;
+    const snapshot = stack.pop()!;
+    // Push current state to redo
+    const redoStack = redoStacks.current.get(activeSheet.id) ?? [];
+    redoStack.push({ columns: activeSheet.columns, rows: activeSheet.rows });
+    if (redoStack.length > MAX_HISTORY) redoStack.shift();
+    redoStacks.current.set(activeSheet.id, redoStack);
+    // Restore via API
+    skipHistory.current = true;
+    try {
+      const res = await axios.put(`${API_BASE}/sheets/${activeSheet.id}/data`, {
+        columns: snapshot.columns,
+        rows: snapshot.rows,
+      });
+      updateSheet(res.data);
+    } catch { /* ignore */ }
+    skipHistory.current = false;
+    syncUndoRedoState(activeSheet.id);
+  }
+
+  async function redoSheet() {
+    if (!activeSheet) return;
+    const stack = redoStacks.current.get(activeSheet.id);
+    if (!stack || stack.length === 0) return;
+    const snapshot = stack.pop()!;
+    // Push current state to undo
+    const undoStack = undoStacks.current.get(activeSheet.id) ?? [];
+    undoStack.push({ columns: activeSheet.columns, rows: activeSheet.rows });
+    if (undoStack.length > MAX_HISTORY) undoStack.shift();
+    undoStacks.current.set(activeSheet.id, undoStack);
+    // Restore via API
+    skipHistory.current = true;
+    try {
+      const res = await axios.put(`${API_BASE}/sheets/${activeSheet.id}/data`, {
+        columns: snapshot.columns,
+        rows: snapshot.rows,
+      });
+      updateSheet(res.data);
+    } catch { /* ignore */ }
+    skipHistory.current = false;
+    syncUndoRedoState(activeSheet.id);
   }
 
   async function addColumn(id: string, name: string, type: string) {
@@ -352,14 +720,6 @@ export function SheetsPage() {
     } catch { /* ignore */ }
   }
 
-  async function deleteColumn(id: string, colIndex: number) {
-    try {
-      const res = await axios.delete(`${API_BASE}/sheets/${id}/columns`, {
-        data: { col_index: colIndex },
-      });
-      updateSheet(res.data);
-    } catch { /* ignore */ }
-  }
 
   async function addRow(id: string) {
     try {
@@ -437,16 +797,23 @@ export function SheetsPage() {
     setAiGenPreview({ ...aiGenPreview, columns: [...aiGenPreview.columns, { name: "New Column", type: "text" }] });
   }
 
-  function startAiFill() {
-    if (!activeSheet || !aiFillInstruction.trim()) return;
+  function runAiFillStream(colIndex: number, instruction: string, label?: string) {
+    if (!activeSheet || aiDisabled) return;
+    // Push snapshot before AI fill modifies cells (AI fill bypasses updateSheet)
+    const stack = undoStacks.current.get(activeSheet.id) ?? [];
+    stack.push({ columns: activeSheet.columns, rows: activeSheet.rows });
+    if (stack.length > MAX_HISTORY) stack.shift();
+    undoStacks.current.set(activeSheet.id, stack);
+    redoStacks.current.set(activeSheet.id, []);
+    syncUndoRedoState(activeSheet.id);
     setAiFilling(true);
     setAiFillProgress("Starting...");
     setAiFillErrors(new Map());
     setAiFilledRows(new Set());
 
     const params = new URLSearchParams({
-      col_index: String(aiFillCol),
-      instruction: aiFillInstruction.trim(),
+      col_index: String(colIndex),
+      instruction,
     });
     const es = new EventSource(`${API_BASE}/sheets/${activeSheet.id}/ai-fill?${params}`);
     aiFillRef.current = es;
@@ -459,16 +826,15 @@ export function SheetsPage() {
         es.close();
         aiFillRef.current = null;
         setAiFilling(false);
-        setAiFillProgress(`Done — filled ${filledCount} cells`);
+        setAiFillProgress(`Done — ${label ? label.toLowerCase() + ": " : "filled "}${filledCount} cells`);
         return;
       }
       try {
         const msg = JSON.parse(data);
         if (msg.type === "cell") {
           filledCount++;
-          setAiFillProgress(`Filling row ${msg.row + 1}...`);
+          setAiFillProgress(`${label ?? "Filling"} row ${msg.row + 1}...`);
           setAiFilledRows((prev) => new Set(prev).add(msg.row));
-          // Update the cell in local state
           setSheets((prev) =>
             prev.map((s) => {
               if (s.id !== activeSheet.id) return s;
@@ -493,6 +859,42 @@ export function SheetsPage() {
       setAiFilling(false);
       setAiFillProgress("Connection lost");
     };
+  }
+
+  function startAiFill() {
+    if (!aiFillInstruction.trim()) return;
+    runAiFillStream(aiFillCol, aiFillInstruction.trim());
+  }
+
+  // AI Column Tools — predefined instructions
+  function colToolClean(ci: number) {
+    if (!activeSheet) return;
+    const col = activeSheet.columns[ci];
+    setColMenu(null);
+    runAiFillStream(ci,
+      `Clean the existing value in column "${col.name}": trim whitespace, fix capitalization (proper Title Case for names, sentence case for text), fix obvious typos. Return ONLY the cleaned value. If already clean, return unchanged.`,
+      "Cleaning"
+    );
+  }
+  function colToolNormalize(ci: number) {
+    if (!activeSheet) return;
+    const col = activeSheet.columns[ci];
+    const existing = activeSheet.rows.map((r) => r[ci] ?? "").filter(Boolean);
+    const unique = [...new Set(existing)].slice(0, 20).join(", ");
+    setColMenu(null);
+    runAiFillStream(ci,
+      `Normalize the value in column "${col.name}". Existing values in this column: [${unique}]. Map similar/variant values to a single canonical form (e.g. "in progress"/"In Progress"/"WIP" → "In Progress"). Return ONLY the normalized value.`,
+      "Normalizing"
+    );
+  }
+  function colToolCategorize(ci: number) {
+    if (!activeSheet) return;
+    const col = activeSheet.columns[ci];
+    setColMenu(null);
+    runAiFillStream(ci,
+      `Categorize the value in column "${col.name}" into a short category label (1-3 words). Analyze the free text and assign a concise category. Return ONLY the category label, nothing else.`,
+      "Categorizing"
+    );
   }
 
   function cancelAiFill() {
@@ -532,18 +934,28 @@ export function SheetsPage() {
                     : "text-muted-foreground hover:bg-muted hover:text-foreground"
                 )}
                 onClick={() => setActiveSheetId(sheet.id)}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  setSheetMenu({ sheetId: sheet.id, x: e.clientX, y: e.clientY });
+                }}
               >
                 <Table2 className="h-3.5 w-3.5 shrink-0" />
-                <span className="flex-1 truncate">{sheet.title}</span>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    deleteSheet(sheet.id);
-                  }}
-                  className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
+                {renamingSheet === sheet.id ? (
+                  <input
+                    ref={renameSheetRef}
+                    className="flex-1 min-w-0 h-5 px-1 text-xs border border-primary/40 rounded bg-background outline-none"
+                    value={renameSheetValue}
+                    onChange={(e) => setRenameSheetValue(e.target.value)}
+                    onClick={(e) => e.stopPropagation()}
+                    onBlur={sheetRenameCommit}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") sheetRenameCommit();
+                      if (e.key === "Escape") setRenamingSheet(null);
+                    }}
+                  />
+                ) : (
+                  <span className="flex-1 truncate">{sheet.title}</span>
+                )}
               </div>
             ))}
             {sheets.length === 0 && (
@@ -576,17 +988,34 @@ export function SheetsPage() {
                 placeholder="Untitled sheet"
               />
               <span className="text-xs text-muted-foreground">
-                {activeSheet.columns.length} cols, {activeSheet.rows.length} rows
-                {selection && (selection.r1 !== selection.r2 || selection.c1 !== selection.c2) && (
-                  <span className="ml-2 text-primary">
-                    {(selection.r2 - selection.r1 + 1) * (selection.c2 - selection.c1 + 1)} cells selected
-                  </span>
-                )}
+                {activeSheet.columns.length} cols, {filters.size > 0 ? `${filteredRowIndices.length}/${activeSheet.rows.length}` : activeSheet.rows.length} rows
               </span>
             </div>
 
+            {/* Large table warning */}
+            {isLargeTable && dismissedWarning !== activeSheet.id && (
+              <div className="border-b px-4 py-1.5 bg-orange-500/10 flex items-center gap-2 text-xs text-orange-600 dark:text-orange-400">
+                <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                <span className="flex-1">
+                  Large table ({totalRows.toLocaleString()} rows).
+                  {aiDisabled ? " AI actions are disabled." : " Performance may be affected."}
+                  {filteredRowIndices.length > ROW_RENDER_LIMIT && ` Showing ${ROW_RENDER_LIMIT} of ${filteredRowIndices.length} rows.`}
+                </span>
+                <button onClick={() => setDismissedWarning(activeSheet.id)} className="text-orange-600/60 hover:text-orange-600">
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            )}
+
             {/* Toolbar */}
             <div className="border-b px-4 py-1.5 flex items-center gap-2">
+              <Button variant="outline" size="sm" className="h-7 w-7 p-0" onClick={undoSheet} disabled={!canUndo} title="Undo (Ctrl+Z)">
+                <Undo2 className="h-3.5 w-3.5" />
+              </Button>
+              <Button variant="outline" size="sm" className="h-7 w-7 p-0" onClick={redoSheet} disabled={!canRedo} title="Redo (Ctrl+Y)">
+                <Redo2 className="h-3.5 w-3.5" />
+              </Button>
+              <div className="w-px h-5 bg-border mx-1" />
               <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={() => addRow(activeSheet.id)}>
                 <Plus className="h-3 w-3" />
                 Row
@@ -599,6 +1028,8 @@ export function SheetsPage() {
                     size="sm"
                     className="h-7 text-xs gap-1"
                     onClick={() => { setAiFillOpen(!aiFillOpen); if (aiFillOpen) cancelAiFill(); }}
+                    disabled={aiDisabled}
+                    title={aiDisabled ? `AI disabled for tables > ${ROW_AI_LIMIT.toLocaleString()} rows` : undefined}
                   >
                     <Sparkles className="h-3 w-3" />
                     AI Fill
@@ -650,28 +1081,112 @@ export function SheetsPage() {
               </div>
             )}
 
+            {/* AI Tool progress bar (shown when tool runs without AI Fill panel) */}
+            {aiFilling && !aiFillOpen && (
+              <div className="border-b px-4 py-1.5 bg-muted/30 flex items-center gap-2">
+                <Sparkles className="h-3 w-3 text-primary shrink-0" />
+                <span className="text-xs text-muted-foreground flex items-center gap-1 flex-1">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  {aiFillProgress}
+                </span>
+                <Button variant="destructive" size="sm" className="h-6 text-xs gap-1" onClick={cancelAiFill}>
+                  <Square className="h-2.5 w-2.5" />
+                  Cancel
+                </Button>
+              </div>
+            )}
+            {/* AI Tool done message (shown briefly after tool finishes) */}
+            {!aiFilling && !aiFillOpen && aiFillProgress && (
+              <div className="border-b px-4 py-1.5 bg-muted/30 flex items-center gap-2">
+                <Sparkles className="h-3 w-3 text-primary shrink-0" />
+                <span className="text-xs text-muted-foreground flex-1">{aiFillProgress}</span>
+                <button className="text-muted-foreground hover:text-foreground" onClick={() => setAiFillProgress(null)}>
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            )}
+
             {/* Grid */}
             <div
+              ref={gridRef}
               className="flex-1 overflow-auto"
               tabIndex={-1}
+              onScroll={handleGridScroll}
               onKeyDown={(e) => {
-                if (e.key === "Escape" && selection && !editingCell) {
+                if (editingCell) return; // let cell input handle its own keys
+
+                // Undo / Redo
+                if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) {
+                  e.preventDefault();
+                  undoSheet();
+                  return;
+                }
+                if ((e.ctrlKey || e.metaKey) && (e.key === "y" || (e.key === "z" && e.shiftKey))) {
+                  e.preventDefault();
+                  redoSheet();
+                  return;
+                }
+                const maxRow = (activeSheet?.rows.length ?? 1) - 1;
+                const maxCol = (activeSheet?.columns.length ?? 1) - 1;
+
+                // Arrow / Enter / Tab navigation
+                const isArrow = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key);
+                const isNav = isArrow || e.key === "Enter" || e.key === "Tab";
+                if (isNav && activeSheet && maxRow >= 0 && maxCol >= 0) {
+                  e.preventDefault();
+                  const anchor = selAnchor ?? { row: 0, col: 0 };
+                  let nr = anchor.row;
+                  let nc = anchor.col;
+
+                  if (e.key === "ArrowUp") nr = Math.max(0, nr - 1);
+                  else if (e.key === "ArrowDown" || e.key === "Enter") nr = Math.min(maxRow, nr + 1);
+                  else if (e.key === "ArrowLeft") nc = Math.max(0, nc - 1);
+                  else if (e.key === "ArrowRight") nc = Math.min(maxCol, nc + 1);
+                  else if (e.key === "Tab") {
+                    if (e.shiftKey) { nc--; if (nc < 0) { nc = maxCol; nr = Math.max(0, nr - 1); } }
+                    else { nc++; if (nc > maxCol) { nc = 0; nr = Math.min(maxRow, nr + 1); } }
+                  }
+
+                  if (e.shiftKey && isArrow) {
+                    // Extend selection: anchor stays fixed, moving end shifts
+                    const mov = selMoving.current ?? { ...anchor };
+                    if (e.key === "ArrowUp") mov.row = Math.max(0, mov.row - 1);
+                    else if (e.key === "ArrowDown") mov.row = Math.min(maxRow, mov.row + 1);
+                    else if (e.key === "ArrowLeft") mov.col = Math.max(0, mov.col - 1);
+                    else if (e.key === "ArrowRight") mov.col = Math.min(maxCol, mov.col + 1);
+                    selMoving.current = { ...mov };
+                    setSelection(makeRect(anchor, mov));
+                  } else {
+                    // Move single-cell selection
+                    setSelAnchor({ row: nr, col: nc });
+                    selMoving.current = { row: nr, col: nc };
+                    setSelection({ r1: nr, c1: nc, r2: nr, c2: nc });
+                  }
+                  return;
+                }
+
+                if (e.key === "Escape" && selection) {
                   setSelection(null);
                   setSelAnchor(null);
                 }
-                if ((e.key === "Delete" || e.key === "Backspace") && selection && !editingCell) {
+                if ((e.key === "Delete" || e.key === "Backspace") && selection) {
                   e.preventDefault();
                   clearSelectedCells();
                 }
-                if ((e.ctrlKey || e.metaKey) && e.key === "c" && selection && !editingCell) {
+                if ((e.ctrlKey || e.metaKey) && e.key === "c" && selection) {
                   e.preventDefault();
                   copySelection();
                 }
-                if ((e.ctrlKey || e.metaKey) && e.key === "v" && !editingCell) {
+                if ((e.ctrlKey || e.metaKey) && e.key === "v") {
                   e.preventDefault();
                   navigator.clipboard.readText().then((text) => {
                     if (text) pasteAtSelection(text);
                   }).catch(() => {});
+                }
+                // Start editing on printable character
+                if (selection && !e.ctrlKey && !e.metaKey && !e.altKey && e.key.length === 1) {
+                  startEditing(selection.r1, selection.c1, "");
+                  // Let the character propagate to the new input
                 }
               }}
             >
@@ -709,21 +1224,39 @@ export function SheetsPage() {
                     <tr>
                       <th className="border border-border bg-muted px-2 py-1.5 text-left text-xs font-medium text-muted-foreground w-10">#</th>
                       {activeSheet.columns.map((col, ci) => (
-                        <th key={ci} className="group border border-border bg-muted px-2 py-1.5 text-left text-xs font-medium text-muted-foreground min-w-[120px]">
-                          <div className="flex items-center justify-between gap-1">
-                            <span className="truncate">{col.name}</span>
-                            {col.type !== "text" && (
-                              <span className="text-[10px] px-1 py-0 rounded bg-muted-foreground/10 text-muted-foreground/60 shrink-0">
-                                {col.type}
+                        <th
+                          key={ci}
+                          className="group border border-border bg-muted px-2 py-1.5 text-left text-xs font-medium text-muted-foreground min-w-[120px] cursor-context-menu"
+                          onContextMenu={(e) => {
+                            e.preventDefault();
+                            setColMenu({ colIndex: ci, x: e.clientX, y: e.clientY });
+                          }}
+                        >
+                          {renamingCol === ci ? (
+                            <input
+                              ref={renameRef}
+                              className="w-full h-5 px-1 text-xs border border-primary/40 rounded bg-background outline-none"
+                              value={renameValue}
+                              onChange={(e) => setRenameValue(e.target.value)}
+                              onBlur={colRenameCommit}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") colRenameCommit();
+                                if (e.key === "Escape") setRenamingCol(null);
+                              }}
+                            />
+                          ) : (
+                            <div className="flex items-center justify-between gap-1">
+                              <span className="truncate">{col.name}</span>
+                              <span className="flex items-center gap-0.5 shrink-0">
+                                {filters.has(ci) && <Filter className="h-3 w-3 text-primary" />}
+                                {col.type !== "text" && (
+                                  <span className="text-[10px] px-1 py-0 rounded bg-muted-foreground/10 text-muted-foreground/60">
+                                    {col.type}
+                                  </span>
+                                )}
                               </span>
-                            )}
-                            <button
-                              onClick={() => deleteColumn(activeSheet.id, ci)}
-                              className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity ml-1 shrink-0"
-                            >
-                              <X className="h-3 w-3" />
-                            </button>
-                          </div>
+                            </div>
+                          )}
                         </th>
                       ))}
                       <th className="border border-border bg-muted px-1 py-1 min-w-[120px]">
@@ -754,9 +1287,21 @@ export function SheetsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {activeSheet.rows.map((row, ri) => (
+                    {/* Virtual scroll spacer top */}
+                    {filteredRowIndices.length > ROW_RENDER_LIMIT && scrollRowStart > 0 && (
+                      <tr><td colSpan={activeSheet.columns.length + 2} style={{ height: scrollRowStart * 29, padding: 0, border: "none" }} /></tr>
+                    )}
+                    {visibleRowIndices.map((ri) => {
+                      const row = activeSheet.rows[ri];
+                      return (
                       <tr key={ri}>
-                        <td className="border border-border bg-muted/50 px-2 py-1 text-xs text-muted-foreground text-center">
+                        <td
+                          className="border border-border bg-muted/50 px-2 py-1 text-xs text-muted-foreground text-center cursor-context-menu select-none"
+                          onContextMenu={(e) => {
+                            e.preventDefault();
+                            setRowMenu({ rowIndex: ri, x: e.clientX, y: e.clientY });
+                          }}
+                        >
                           {ri + 1}
                         </td>
                         {row.map((cell, ci) => {
@@ -855,16 +1400,44 @@ export function SheetsPage() {
                           </button>
                         </td>
                       </tr>
-                    ))}
-                    {activeSheet.rows.length === 0 && (
+                      );
+                    })}
+                    {/* Virtual scroll spacer bottom */}
+                    {filteredRowIndices.length > ROW_RENDER_LIMIT && (scrollRowStart + ROW_RENDER_LIMIT) < filteredRowIndices.length && (
+                      <tr><td colSpan={activeSheet.columns.length + 2} style={{ height: (filteredRowIndices.length - scrollRowStart - ROW_RENDER_LIMIT) * 29, padding: 0, border: "none" }} /></tr>
+                    )}
+                    {filteredRowIndices.length === 0 && (
                       <tr>
                         <td colSpan={activeSheet.columns.length + 2} className="border border-border px-4 py-6 text-center text-xs text-muted-foreground">
-                          No rows yet. Click "+ Row" to add one.
+                          {activeSheet.rows.length === 0
+                            ? 'No rows yet. Click "+ Row" to add one.'
+                            : `All ${activeSheet.rows.length} rows hidden by filters.`}
                         </td>
                       </tr>
                     )}
                   </tbody>
                 </table>
+              )}
+            </div>
+
+            {/* Status bar */}
+            <div className="border-t px-4 py-1 flex items-center gap-4 text-[11px] text-muted-foreground bg-muted/30 shrink-0">
+              <span>{activeSheet.rows.length} rows</span>
+              <span>{activeSheet.columns.length} columns</span>
+              {selection && (() => {
+                const count = (selection.r2 - selection.r1 + 1) * (selection.c2 - selection.c1 + 1);
+                return count > 1 ? <span className="text-primary font-medium">{count} cells selected</span> : null;
+              })()}
+              {selection && selection.r1 === selection.r2 && selection.c1 === selection.c2 && activeSheet.columns[selection.c1] && (
+                <span>Type: {activeSheet.columns[selection.c1].type}</span>
+              )}
+              {selection && selection.r1 === selection.r2 && selection.c1 === selection.c2 && (
+                <span className="text-muted-foreground/60">
+                  Cell {String.fromCharCode(65 + Math.min(selection.c1, 25))}{selection.r1 + 1}
+                </span>
+              )}
+              {filters.size > 0 && (
+                <span className="ml-auto">Filtered: {filteredRowIndices.length}/{activeSheet.rows.length}</span>
               )}
             </div>
           </>
@@ -886,6 +1459,219 @@ export function SheetsPage() {
           </div>
         )}
       </div>
+
+      {/* Sheet sidebar context menu */}
+      {sheetMenu && (
+        <div
+          className="fixed z-50 bg-background border border-border rounded-md shadow-lg py-1 min-w-[150px] text-sm"
+          style={{ left: sheetMenu.x, top: sheetMenu.y }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2"
+            onClick={() => { sheetRenameStart(sheetMenu.sheetId); setSheetMenu(null); }}
+          >
+            <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+            Rename
+          </button>
+          <button
+            className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2"
+            onClick={() => { duplicateSheet(sheetMenu.sheetId); setSheetMenu(null); }}
+          >
+            <Copy className="h-3.5 w-3.5 text-muted-foreground" />
+            Duplicate
+          </button>
+          <div className="border-t border-border my-1" />
+          <button
+            className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2 text-destructive"
+            onClick={() => { deleteSheet(sheetMenu.sheetId); setSheetMenu(null); }}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            Delete
+          </button>
+        </div>
+      )}
+
+      {/* Column context menu */}
+      {colMenu && (
+        <div
+          className="fixed z-50 bg-background border border-border rounded-md shadow-lg py-1 min-w-[170px] text-sm"
+          style={{ left: colMenu.x, top: colMenu.y }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2"
+            onClick={() => colRenameStart(colMenu.colIndex)}
+          >
+            <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+            Rename column
+          </button>
+          <div className="border-t border-border my-1" />
+          <button
+            className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2 disabled:opacity-40 disabled:cursor-default"
+            onClick={() => colMoveLeft(colMenu.colIndex)}
+            disabled={colMenu.colIndex === 0}
+          >
+            <ArrowLeft className="h-3.5 w-3.5 text-muted-foreground" />
+            Move left
+          </button>
+          <button
+            className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2 disabled:opacity-40 disabled:cursor-default"
+            onClick={() => colMoveRight(colMenu.colIndex)}
+            disabled={!activeSheet || colMenu.colIndex >= activeSheet.columns.length - 1}
+          >
+            <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
+            Move right
+          </button>
+          <div className="border-t border-border my-1" />
+          <button
+            className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2"
+            onClick={() => colSort(colMenu.colIndex, true)}
+          >
+            <ArrowUp className="h-3.5 w-3.5 text-muted-foreground" />
+            Sort ascending
+          </button>
+          <button
+            className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2"
+            onClick={() => colSort(colMenu.colIndex, false)}
+          >
+            <ArrowDown className="h-3.5 w-3.5 text-muted-foreground" />
+            Sort descending
+          </button>
+          <div className="border-t border-border my-1" />
+          <button
+            className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2"
+            onClick={() => openFilterEditor(colMenu.colIndex)}
+          >
+            <Filter className="h-3.5 w-3.5 text-muted-foreground" />
+            {filters.has(colMenu.colIndex) ? "Edit filter" : "Filter column"}
+          </button>
+          {filters.has(colMenu.colIndex) && (
+            <button
+              className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2 text-orange-500"
+              onClick={() => removeFilter(colMenu.colIndex)}
+            >
+              <X className="h-3.5 w-3.5" />
+              Remove filter
+            </button>
+          )}
+          <div className="border-t border-border my-1" />
+          <div className="px-3 py-1 text-[10px] text-muted-foreground/60 uppercase tracking-wider">AI Tools</div>
+          {aiDisabled ? (
+            <div className="px-3 py-1.5 text-xs text-muted-foreground/50">Disabled for large tables</div>
+          ) : (
+            <>
+              <button
+                className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2 disabled:opacity-40"
+                onClick={() => colToolClean(colMenu.colIndex)}
+                disabled={aiFilling}
+              >
+                <Eraser className="h-3.5 w-3.5 text-muted-foreground" />
+                Clean data
+              </button>
+              <button
+                className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2 disabled:opacity-40"
+                onClick={() => colToolNormalize(colMenu.colIndex)}
+                disabled={aiFilling}
+              >
+                <ListChecks className="h-3.5 w-3.5 text-muted-foreground" />
+                Normalize values
+              </button>
+              <button
+                className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2 disabled:opacity-40"
+                onClick={() => colToolCategorize(colMenu.colIndex)}
+                disabled={aiFilling}
+              >
+                <Tags className="h-3.5 w-3.5 text-muted-foreground" />
+                Categorize
+              </button>
+            </>
+          )}
+          <div className="border-t border-border my-1" />
+          <button
+            className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2 text-destructive"
+            onClick={() => colDelete(colMenu.colIndex)}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            Delete column
+          </button>
+        </div>
+      )}
+
+      {/* Filter editor popup */}
+      {filterEditCol !== null && activeSheet && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setFilterEditCol(null)}>
+          <div className="bg-background border rounded-lg shadow-lg w-[320px] p-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-2 mb-3">
+              <Filter className="h-4 w-4 text-primary" />
+              <h3 className="text-sm font-medium">Filter: {activeSheet.columns[filterEditCol]?.name}</h3>
+            </div>
+            <div className="flex gap-2 mb-3">
+              <select
+                className="h-8 px-2 text-sm border border-border rounded-md bg-background outline-none"
+                value={filterOp}
+                onChange={(e) => setFilterOp(e.target.value)}
+              >
+                <option value="contains">Contains</option>
+                <option value="=">=</option>
+                <option value=">">&gt;</option>
+                <option value="<">&lt;</option>
+              </select>
+              <input
+                className="flex-1 h-8 px-2 text-sm border border-border rounded-md bg-background outline-none focus:ring-1 focus:ring-primary/40"
+                placeholder="Value..."
+                value={filterVal}
+                onChange={(e) => setFilterVal(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") applyFilter(filterEditCol); if (e.key === "Escape") setFilterEditCol(null); }}
+                autoFocus
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setFilterEditCol(null)}>Cancel</Button>
+              <Button variant="default" size="sm" className="h-7 text-xs" onClick={() => applyFilter(filterEditCol)}>Apply</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Row context menu */}
+      {rowMenu && (
+        <div
+          className="fixed z-50 bg-background border border-border rounded-md shadow-lg py-1 min-w-[160px] text-sm"
+          style={{ left: rowMenu.x, top: rowMenu.y }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2"
+            onClick={() => rowInsertAbove(rowMenu.rowIndex)}
+          >
+            <ArrowUp className="h-3.5 w-3.5 text-muted-foreground" />
+            Insert row above
+          </button>
+          <button
+            className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2"
+            onClick={() => rowInsertBelow(rowMenu.rowIndex)}
+          >
+            <ArrowDown className="h-3.5 w-3.5 text-muted-foreground" />
+            Insert row below
+          </button>
+          <button
+            className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2"
+            onClick={() => rowDuplicate(rowMenu.rowIndex)}
+          >
+            <Copy className="h-3.5 w-3.5 text-muted-foreground" />
+            Duplicate row
+          </button>
+          <div className="border-t border-border my-1" />
+          <button
+            className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2 text-destructive"
+            onClick={() => rowDelete(rowMenu.rowIndex)}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            Delete row
+          </button>
+        </div>
+      )}
 
       {/* Template picker overlay */}
       {templatePickerOpen && (

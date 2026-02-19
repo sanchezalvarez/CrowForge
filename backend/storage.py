@@ -514,6 +514,27 @@ class SheetRepository:
             self._save(conn, sheet_id, sheet.columns, sheet.rows)
             return self.get_by_id(sheet_id)
 
+    def insert_row_at(self, sheet_id: str, row_index: int) -> Optional[Sheet]:
+        with self.db.get_connection() as conn:
+            sheet = self.get_by_id(sheet_id)
+            if not sheet:
+                return None
+            idx = max(0, min(row_index, len(sheet.rows)))
+            sheet.rows.insert(idx, [""] * len(sheet.columns))
+            self._save(conn, sheet_id, sheet.columns, sheet.rows)
+            return self.get_by_id(sheet_id)
+
+    def duplicate_row(self, sheet_id: str, row_index: int) -> Optional[Sheet]:
+        with self.db.get_connection() as conn:
+            sheet = self.get_by_id(sheet_id)
+            if not sheet:
+                return None
+            if row_index < 0 or row_index >= len(sheet.rows):
+                return None
+            sheet.rows.insert(row_index + 1, list(sheet.rows[row_index]))
+            self._save(conn, sheet_id, sheet.columns, sheet.rows)
+            return self.get_by_id(sheet_id)
+
     def add_column(self, sheet_id: str, name: str, col_type: str = "text") -> Optional[Sheet]:
         with self.db.get_connection() as conn:
             sheet = self.get_by_id(sheet_id)
@@ -586,11 +607,78 @@ class SheetRepository:
             self._save(conn, sheet_id, sheet.columns, sheet.rows)
             return self.get_by_id(sheet_id)
 
+    def sort_by_column(self, sheet_id: str, col_index: int, ascending: bool = True) -> Optional[Sheet]:
+        with self.db.get_connection() as conn:
+            sheet = self.get_by_id(sheet_id)
+            if not sheet or col_index < 0 or col_index >= len(sheet.columns):
+                return None
+            col_type = sheet.columns[col_index].type
+
+            def sort_key(row):
+                val = row[col_index] if col_index < len(row) else ""
+                if not val:
+                    return (1, "")  # empty last
+                if col_type == "number":
+                    try:
+                        return (0, float(val))
+                    except ValueError:
+                        return (1, val)
+                return (0, val.lower())
+
+            sheet.rows.sort(key=sort_key, reverse=not ascending)
+            self._save(conn, sheet_id, sheet.columns, sheet.rows)
+            return self.get_by_id(sheet_id)
+
+    def rename_column(self, sheet_id: str, col_index: int, name: str) -> Optional[Sheet]:
+        with self.db.get_connection() as conn:
+            sheet = self.get_by_id(sheet_id)
+            if not sheet or col_index < 0 or col_index >= len(sheet.columns):
+                return None
+            sheet.columns[col_index] = SheetColumn(name=name, type=sheet.columns[col_index].type)
+            self._save(conn, sheet_id, sheet.columns, sheet.rows)
+            return self.get_by_id(sheet_id)
+
+    def move_column(self, sheet_id: str, from_index: int, to_index: int) -> Optional[Sheet]:
+        with self.db.get_connection() as conn:
+            sheet = self.get_by_id(sheet_id)
+            if not sheet:
+                return None
+            n = len(sheet.columns)
+            if from_index < 0 or from_index >= n or to_index < 0 or to_index >= n:
+                return None
+            col = sheet.columns.pop(from_index)
+            sheet.columns.insert(to_index, col)
+            for row in sheet.rows:
+                if from_index < len(row):
+                    val = row.pop(from_index)
+                    row.insert(to_index, val)
+            self._save(conn, sheet_id, sheet.columns, sheet.rows)
+            return self.get_by_id(sheet_id)
+
     def update_title(self, sheet_id: str, title: str) -> Optional[Sheet]:
         with self.db.get_connection() as conn:
             conn.execute("UPDATE sheets SET title = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (title, sheet_id))
             conn.commit()
             return self.get_by_id(sheet_id)
+
+    def restore_data(self, sheet_id: str, columns: List[SheetColumn], rows: List[List[str]]) -> Optional[Sheet]:
+        """Wholesale replace columns and rows (used by undo/redo)."""
+        with self.db.get_connection() as conn:
+            existing = conn.execute("SELECT id FROM sheets WHERE id = ?", (sheet_id,)).fetchone()
+            if not existing:
+                return None
+            self._save(conn, sheet_id, columns, rows)
+            return self.get_by_id(sheet_id)
+
+    def duplicate(self, sheet_id: str) -> Optional[Sheet]:
+        sheet = self.get_by_id(sheet_id)
+        if not sheet:
+            return None
+        return self.create(
+            title=f"{sheet.title} (copy)",
+            columns=[SheetColumn(**c.model_dump()) for c in sheet.columns],
+            rows=[list(row) for row in sheet.rows],
+        )
 
     def delete(self, sheet_id: str) -> bool:
         with self.db.get_connection() as conn:

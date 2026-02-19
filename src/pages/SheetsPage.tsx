@@ -1204,6 +1204,7 @@ export function SheetsPage() {
                           value={newColName}
                           onChange={(e) => setNewColName(e.target.value)}
                           onKeyDown={(e) => {
+                            e.stopPropagation();
                             if (e.key === "Enter") submitNewColumn();
                             if (e.key === "Escape") setAddingColumn(false);
                           }}
@@ -1269,6 +1270,7 @@ export function SheetsPage() {
                               value={newColName}
                               onChange={(e) => setNewColName(e.target.value)}
                               onKeyDown={(e) => {
+                                e.stopPropagation();
                                 if (e.key === "Enter") submitNewColumn();
                                 if (e.key === "Escape") setAddingColumn(false);
                               }}

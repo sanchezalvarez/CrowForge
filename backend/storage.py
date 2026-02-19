@@ -163,6 +163,17 @@ class CampaignRepository:
             campaign_data['ideas'] = ideas
             return Campaign(**campaign_data)
 
+    def get_all(self) -> List[Campaign]:
+        with self.db.get_connection() as conn:
+            rows = conn.execute("SELECT * FROM campaigns ORDER BY id DESC").fetchall()
+            campaigns = []
+            for row in rows:
+                c_dict = dict(row)
+                ideas_rows = conn.execute("SELECT * FROM campaign_ideas WHERE campaign_id = ?", (c_dict['id'],)).fetchall()
+                c_dict['ideas'] = [dict(r) for r in ideas_rows]
+                campaigns.append(Campaign(**c_dict))
+            return campaigns
+
     def get_by_client(self, client_id: int) -> List[Campaign]:
         with self.db.get_connection() as conn:
             rows = conn.execute("SELECT * FROM campaigns WHERE client_id = ?", (client_id,)).fetchall()

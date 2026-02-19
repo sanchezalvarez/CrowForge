@@ -180,6 +180,10 @@ async def list_clients():
 async def create_client(client: Client):
     return client_repo.create(client, client.brand_profile)
 
+@app.get("/campaigns", response_model=List[Campaign])
+async def list_all_campaigns():
+    return campaign_repo.get_all()
+
 @app.get("/campaigns/{campaign_id}", response_model=Campaign)
 async def get_campaign(campaign_id: int):
     try:

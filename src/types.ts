@@ -1,22 +1,8 @@
-export interface BrandProfile {
-    tone_of_voice: string;
-    brand_values: string;
-    target_audience: string;
-}
-
-export interface Client {
-    id?: number;
-    name: string;
-    industry: string;
-    website?: string;
-    brand_profile?: BrandProfile;
-}
-
 export type ProjectType = 'campaign' | 'website';
 
 export interface Campaign {
     id?: number;
-    client_id: number;
+    client_id?: number;
     name: string;
     brief: string;
     status: 'draft' | 'generating' | 'completed';

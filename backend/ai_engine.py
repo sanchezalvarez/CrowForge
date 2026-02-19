@@ -6,7 +6,6 @@ import httpx
 from abc import ABC, abstractmethod
 from typing import AsyncGenerator
 from dotenv import load_dotenv
-from backend.prompts import CONCEPT_SCHEMA_V1
 
 load_dotenv()
 
@@ -216,10 +215,7 @@ class LocalLLAMAEngine(AIEngine):
                 stream=True,
             )
             if json_mode:
-                kwargs["response_format"] = {
-                    "type": "json_object",
-                    "schema": CONCEPT_SCHEMA_V1
-                }
+                kwargs["response_format"] = {"type": "json_object"}
             if seed is not None:
                 kwargs["seed"] = seed
 

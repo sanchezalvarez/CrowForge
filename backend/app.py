@@ -986,7 +986,7 @@ async def ai_generate_schema(req: dict):
         "- 3-8 columns appropriate to the domain\n"
         "- Allowed types: text, number, boolean, date\n"
         "- Do NOT include rows, data, or example values\n"
-        "- Do NOT include concept_name, rationale, target_audience, or key_message\n"
+        "- Return ONLY column definitions, no extra metadata fields\n"
         "- Column names should be short and descriptive"
     )
     user_prompt = f"Design a table schema for: {prompt}"
@@ -1021,14 +1021,11 @@ async def ai_generate_schema(req: dict):
     title = data.get("title", "AI Generated Sheet")
     columns_raw = data.get("columns", [])
 
-    # Validate: must be a list of objects with name+type, reject any marketing keys
-    BLOCKED_KEYS = {"concept_name", "rationale", "target_audience", "key_message"}
+    # Validate: must be a list of objects with name+type
     columns = []
     for c in columns_raw:
         if not isinstance(c, dict):
             continue
-        if BLOCKED_KEYS & set(c.keys()):
-            raise HTTPException(status_code=500, detail="AI returned marketing data instead of a table schema")
         name = str(c.get("name", "Column")).strip()
         if not name:
             continue
@@ -1273,7 +1270,7 @@ async def ai_fill_column(sheet_id: str, request: Request, col_index: int, instru
         "- Return ONLY a JSON array of plain scalar strings. Example: [\"Alice\",\"Bob\",\"Charlie\"]\n"
         "- Each element is ONE cell value — a simple scalar (word, name, number, date).\n"
         "- NEVER return objects, dicts, or nested JSON.\n"
-        "- NEVER include keys like concept_name, rationale, target_audience, key_message.\n"
+        "- NEVER return objects, dicts, or nested structures as cell values.\n"
         "- NEVER include explanations, labels, or markdown.\n"
         f"- Column type is \"{target_col.type}\". {type_rule}\n"
         "- Use the row context below to produce values that make sense for each row.\n"

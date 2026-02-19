@@ -286,7 +286,7 @@ SEED_TEMPLATES = [
         "description": "Improve, expand, or shorten a single text field.",
         "version": 1,
         "system_prompt": (
-            'You are a marketing copywriter. '
+            'You are a skilled editor. '
             '{{action_instruction}} '
             'Keep the same tone and intent. '
             "Context: the project goal is '{{project_goal}}'. "

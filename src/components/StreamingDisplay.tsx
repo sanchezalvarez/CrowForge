@@ -16,7 +16,7 @@ export function StreamingDisplay({ streamedText }: StreamingDisplayProps) {
         <div className="flex items-center gap-2.5 mb-5">
           <Loader2 className="h-4 w-4 text-primary animate-spin" />
           <span className="text-sm font-medium text-foreground">
-            Generating concepts...
+            Generating...
           </span>
         </div>
 

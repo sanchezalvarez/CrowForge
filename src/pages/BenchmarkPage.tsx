@@ -1,10 +1,7 @@
-/**
- * LEGACY — Model benchmark/comparison tool for the marketing generator.
- * Retained while the new workspace modules (Chat, Documents, Sheets) are built.
- */
+/** Model benchmark — compare AI engines and models side-by-side. */
 import { useState, useEffect, useRef } from "react";
 import axios from "axios";
-import { Play, Loader2, AlertCircle, Check, Zap, FileText, ChevronDown, ChevronRight, History, RotateCcw, CheckCircle2, XCircle, Trash2, Info } from "lucide-react";
+import { Play, Loader2, Check, Zap, FileText, ChevronDown, ChevronRight, History, RotateCcw, CheckCircle2, XCircle, Trash2, Info } from "lucide-react";
 import { Card, CardContent } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { Label } from "../components/ui/label";
@@ -51,7 +48,7 @@ interface ModelInfo {
 
 export function BenchmarkPage() {
   const [inputText, setInputText] = useState(
-    "Generate 3 creative marketing concepts for a new eco-friendly water bottle brand."
+    "Summarize the key differences between REST and GraphQL APIs in 3 bullet points."
   );
   const [temperature, setTemperature] = useState(0.7);
   const [maxTokens, setMaxTokens] = useState(1024);
@@ -768,44 +765,11 @@ export function BenchmarkPage() {
                                   if (startIdx === -1 || endIdx === -1) throw new Error("no json");
                                   const parsed = JSON.parse(trimmed.slice(startIdx, endIdx + 1));
                                   // Find array of concepts — could be under various keys or top-level
-                                  const items: any[] =
-                                    parsed.concepts || parsed.ideas || parsed.items ||
-                                    (Array.isArray(parsed) ? parsed : null);
-                                  if (!items || items.length === 0) throw new Error("no items");
+                                  // Render parsed JSON as formatted code
                                   return (
-                                    <div className="space-y-2">
-                                      {items.map((item: any, i: number) => (
-                                        <div key={i} className="bg-background rounded border px-3 py-2.5 space-y-1.5">
-                                          <div className="flex items-baseline gap-2">
-                                            <span className="text-[10px] font-medium text-muted-foreground shrink-0">
-                                              #{i + 1}
-                                            </span>
-                                            <span className="text-sm font-semibold text-foreground">
-                                              {item.concept_name || item.name || item.title || `Concept ${i + 1}`}
-                                            </span>
-                                          </div>
-                                          {(item.rationale || item.description) && (
-                                            <p className="text-xs text-muted-foreground leading-relaxed">
-                                              {item.rationale || item.description}
-                                            </p>
-                                          )}
-                                          <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px]">
-                                            {item.target_audience && (
-                                              <span>
-                                                <span className="text-muted-foreground/60">Audience:</span>{" "}
-                                                <span className="text-foreground">{item.target_audience}</span>
-                                              </span>
-                                            )}
-                                            {item.key_message && (
-                                              <span>
-                                                <span className="text-muted-foreground/60">Message:</span>{" "}
-                                                <span className="text-foreground italic">"{item.key_message}"</span>
-                                              </span>
-                                            )}
-                                          </div>
-                                        </div>
-                                      ))}
-                                    </div>
+                                    <pre className="text-xs font-mono bg-background rounded border px-3 py-2 max-h-72 overflow-y-auto whitespace-pre-wrap break-words leading-relaxed">
+                                      {JSON.stringify(parsed, null, 2)}
+                                    </pre>
                                   );
                                 } catch {
                                   // Fallback: raw text

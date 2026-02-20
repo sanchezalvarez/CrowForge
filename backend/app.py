@@ -593,9 +593,18 @@ async def restore_sheet_data(sheet_id: str, body: dict):
     columns = body.get("columns", [])
     rows = body.get("rows", [])
     formulas = body.get("formulas", None)
+    sizes = body.get("sizes", None)
     from backend.models import SheetColumn
     cols = [SheetColumn(**c) for c in columns]
-    sheet = sheet_repo.restore_data(sheet_id, cols, rows, formulas)
+    sheet = sheet_repo.restore_data(sheet_id, cols, rows, formulas, sizes)
+    if not sheet:
+        raise HTTPException(status_code=404, detail="Sheet not found")
+    return sheet
+
+@app.put("/sheets/{sheet_id}/sizes")
+async def update_sheet_sizes(sheet_id: str, body: dict):
+    sizes = {"colWidths": body.get("colWidths", {}), "rowHeights": body.get("rowHeights", {})}
+    sheet = sheet_repo.update_sizes(sheet_id, sizes)
     if not sheet:
         raise HTTPException(status_code=404, detail="Sheet not found")
     return sheet

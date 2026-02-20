@@ -89,15 +89,26 @@ interface SheetColumn {
   type: string;
 }
 
+interface SheetSizes {
+  colWidths?: Record<number, number>;
+  rowHeights?: Record<number, number>;
+}
+
 interface Sheet {
   id: string;
   title: string;
   columns: SheetColumn[];
   rows: string[][];
   formulas: Record<string, string>; // {"row,col": "=A1+B2"}
+  sizes: SheetSizes;
   created_at: string;
   updated_at: string;
 }
+
+const DEFAULT_COL_WIDTH = 120;
+const DEFAULT_ROW_HEIGHT = 28;
+const MIN_COL_WIDTH = 50;
+const MIN_ROW_HEIGHT = 20;
 
 // Parse cell references from a formula string (e.g. "=A1+B2" → ["0,0", "1,1"])
 function parseFormulaRefs(formula: string, numRows: number, numCols: number): string[] {
@@ -154,7 +165,7 @@ export function SheetsPage() {
 
   // Undo / Redo — per-sheet snapshot stacks (local only, max 50)
   const MAX_HISTORY = 50;
-  type SheetSnapshot = { columns: SheetColumn[]; rows: string[][]; formulas: Record<string, string> };
+  type SheetSnapshot = { columns: SheetColumn[]; rows: string[][]; formulas: Record<string, string>; sizes: SheetSizes };
   const undoStacks = useRef<Map<string, SheetSnapshot[]>>(new Map());
   const redoStacks = useRef<Map<string, SheetSnapshot[]>>(new Map());
   const [canUndo, setCanUndo] = useState(false);
@@ -217,6 +228,51 @@ export function SheetsPage() {
   const [aiFilledRows, setAiFilledRows] = useState<Set<number>>(new Set());
   const aiFillRef = useRef<EventSource | null>(null);
   const aiFillInstructionRef = useRef<HTMLInputElement>(null);
+
+  // Column/row resize state
+  const [colWidths, setColWidths] = useState<Record<number, number>>({});
+  const [rowHeights, setRowHeights] = useState<Record<number, number>>({});
+  const [resizing, setResizing] = useState<{ type: 'col' | 'row'; index: number; startPos: number; startSize: number } | null>(null);
+
+  // Sync sizes from activeSheet when switching sheets
+  useEffect(() => {
+    if (activeSheet) {
+      setColWidths(activeSheet.sizes?.colWidths ?? {});
+      setRowHeights(activeSheet.sizes?.rowHeights ?? {});
+    } else {
+      setColWidths({});
+      setRowHeights({});
+    }
+  }, [activeSheetId]);
+
+  // Global mousemove/mouseup for resize dragging
+  useEffect(() => {
+    if (!resizing) return;
+    const onMove = (e: MouseEvent) => {
+      if (resizing.type === 'col') {
+        const newW = Math.max(MIN_COL_WIDTH, resizing.startSize + (e.clientX - resizing.startPos));
+        setColWidths(prev => ({ ...prev, [resizing.index]: newW }));
+      } else {
+        const newH = Math.max(MIN_ROW_HEIGHT, resizing.startSize + (e.clientY - resizing.startPos));
+        setRowHeights(prev => ({ ...prev, [resizing.index]: newH }));
+      }
+    };
+    const onUp = () => {
+      // Persist sizes to backend
+      if (activeSheet) {
+        const sizes = { colWidths: resizing.type === 'col' ? { ...colWidths } : colWidths, rowHeights: resizing.type === 'row' ? { ...rowHeights } : rowHeights };
+        // Read latest from state via closure — we need to grab current values
+        axios.put(`${API_BASE}/sheets/${activeSheet.id}/sizes`, sizes).catch(() => {});
+      }
+      setResizing(null);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+    return () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+  }, [resizing, activeSheet, colWidths, rowHeights]);
 
   // Auto-focus sheet rename input
   useEffect(() => {
@@ -744,7 +800,7 @@ export function SheetsPage() {
       const prev = sheets.find((s) => s.id === updated.id);
       if (prev) {
         const stack = undoStacks.current.get(updated.id) ?? [];
-        stack.push({ columns: prev.columns, rows: prev.rows, formulas: prev.formulas ?? {} });
+        stack.push({ columns: prev.columns, rows: prev.rows, formulas: prev.formulas ?? {}, sizes: prev.sizes ?? {} });
         if (stack.length > MAX_HISTORY) stack.shift();
         undoStacks.current.set(updated.id, stack);
         // Clear redo on new action
@@ -762,7 +818,7 @@ export function SheetsPage() {
     const snapshot = stack.pop()!;
     // Push current state to redo
     const redoStack = redoStacks.current.get(activeSheet.id) ?? [];
-    redoStack.push({ columns: activeSheet.columns, rows: activeSheet.rows, formulas: activeSheet.formulas ?? {} });
+    redoStack.push({ columns: activeSheet.columns, rows: activeSheet.rows, formulas: activeSheet.formulas ?? {}, sizes: activeSheet.sizes ?? {} });
     if (redoStack.length > MAX_HISTORY) redoStack.shift();
     redoStacks.current.set(activeSheet.id, redoStack);
     // Restore via API
@@ -772,8 +828,11 @@ export function SheetsPage() {
         columns: snapshot.columns,
         rows: snapshot.rows,
         formulas: snapshot.formulas,
+        sizes: snapshot.sizes,
       });
       updateSheet(res.data);
+      setColWidths(snapshot.sizes?.colWidths ?? {});
+      setRowHeights(snapshot.sizes?.rowHeights ?? {});
     } catch { /* ignore */ }
     skipHistory.current = false;
     syncUndoRedoState(activeSheet.id);
@@ -786,7 +845,7 @@ export function SheetsPage() {
     const snapshot = stack.pop()!;
     // Push current state to undo
     const undoStack = undoStacks.current.get(activeSheet.id) ?? [];
-    undoStack.push({ columns: activeSheet.columns, rows: activeSheet.rows, formulas: activeSheet.formulas ?? {} });
+    undoStack.push({ columns: activeSheet.columns, rows: activeSheet.rows, formulas: activeSheet.formulas ?? {}, sizes: activeSheet.sizes ?? {} });
     if (undoStack.length > MAX_HISTORY) undoStack.shift();
     undoStacks.current.set(activeSheet.id, undoStack);
     // Restore via API
@@ -796,8 +855,11 @@ export function SheetsPage() {
         columns: snapshot.columns,
         rows: snapshot.rows,
         formulas: snapshot.formulas,
+        sizes: snapshot.sizes,
       });
       updateSheet(res.data);
+      setColWidths(snapshot.sizes?.colWidths ?? {});
+      setRowHeights(snapshot.sizes?.rowHeights ?? {});
     } catch { /* ignore */ }
     skipHistory.current = false;
     syncUndoRedoState(activeSheet.id);
@@ -891,7 +953,7 @@ export function SheetsPage() {
     if (!activeSheet || aiDisabled) return;
     // Push snapshot before AI fill modifies cells (AI fill bypasses updateSheet)
     const stack = undoStacks.current.get(activeSheet.id) ?? [];
-    stack.push({ columns: activeSheet.columns, rows: activeSheet.rows, formulas: activeSheet.formulas ?? {} });
+    stack.push({ columns: activeSheet.columns, rows: activeSheet.rows, formulas: activeSheet.formulas ?? {}, sizes: activeSheet.sizes ?? {} });
     if (stack.length > MAX_HISTORY) stack.shift();
     undoStacks.current.set(activeSheet.id, stack);
     redoStacks.current.set(activeSheet.id, []);
@@ -1334,14 +1396,15 @@ export function SheetsPage() {
                   </div>
                 </div>
               ) : (
-                <table className="w-full border-collapse text-sm select-none" onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp}>
+                <table className="w-max border-collapse text-sm select-none" onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp}>
                   <thead>
                     <tr>
                       <th className="border border-border bg-muted px-2 py-1.5 text-left text-xs font-medium text-muted-foreground w-10">#</th>
                       {activeSheet.columns.map((col, ci) => (
                         <th
                           key={ci}
-                          className="group border border-border bg-muted px-2 py-1.5 text-left text-xs font-medium text-muted-foreground min-w-[120px] cursor-context-menu"
+                          className="group border border-border bg-muted px-2 py-1.5 text-left text-xs font-medium text-muted-foreground cursor-context-menu relative"
+                          style={{ width: colWidths[ci] ?? DEFAULT_COL_WIDTH, minWidth: MIN_COL_WIDTH }}
                           onContextMenu={(e) => {
                             e.preventDefault();
                             setColMenu({ colIndex: ci, x: e.clientX, y: e.clientY });
@@ -1372,6 +1435,15 @@ export function SheetsPage() {
                               </span>
                             </div>
                           )}
+                          {/* Column resize handle */}
+                          <div
+                            className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-primary/40 z-10"
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setResizing({ type: 'col', index: ci, startPos: e.clientX, startSize: colWidths[ci] ?? DEFAULT_COL_WIDTH });
+                            }}
+                          />
                         </th>
                       ))}
                       <th className="border border-border bg-muted px-1 py-1 min-w-[120px]">
@@ -1405,7 +1477,7 @@ export function SheetsPage() {
                   <tbody>
                     {/* Virtual scroll spacer top */}
                     {filteredRowIndices.length > ROW_RENDER_LIMIT && scrollRowStart > 0 && (
-                      <tr><td colSpan={activeSheet.columns.length + 2} style={{ height: scrollRowStart * 29, padding: 0, border: "none" }} /></tr>
+                      <tr><td colSpan={activeSheet.columns.length + 2} style={{ height: filteredRowIndices.slice(0, scrollRowStart).reduce((sum, ri) => sum + (rowHeights[ri] ?? DEFAULT_ROW_HEIGHT) + 1, 0), padding: 0, border: "none" }} /></tr>
                     )}
                     {/* Compute formula ref highlights once per render */}
                     {(() => {
@@ -1419,13 +1491,23 @@ export function SheetsPage() {
                       return (
                       <tr key={ri}>
                         <td
-                          className="border border-border bg-muted/50 px-2 py-1 text-xs text-muted-foreground text-center cursor-context-menu select-none"
+                          className="border border-border bg-muted/50 px-2 py-1 text-xs text-muted-foreground text-center cursor-context-menu select-none relative"
+                          style={{ height: rowHeights[ri] ?? DEFAULT_ROW_HEIGHT }}
                           onContextMenu={(e) => {
                             e.preventDefault();
                             setRowMenu({ rowIndex: ri, x: e.clientX, y: e.clientY });
                           }}
                         >
                           {ri + 1}
+                          {/* Row resize handle */}
+                          <div
+                            className="absolute bottom-0 left-0 w-full h-1 cursor-row-resize hover:bg-primary/40 z-10"
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setResizing({ type: 'row', index: ri, startPos: e.clientY, startSize: rowHeights[ri] ?? DEFAULT_ROW_HEIGHT });
+                            }}
+                          />
                         </td>
                         {row.map((cell, ci) => {
                           const isEditing = editingCell?.row === ri && editingCell?.col === ci;
@@ -1440,7 +1522,7 @@ export function SheetsPage() {
                             <td
                               key={ci}
                               className={cn(
-                                "border border-border p-0 min-w-[120px]",
+                                "border border-border p-0",
                                 isEditing && "ring-2 ring-primary/40 ring-inset",
                                 isEditing && cellError && "ring-destructive/60",
                                 selected && "bg-primary/10",
@@ -1511,7 +1593,10 @@ export function SheetsPage() {
                                   )}
                                 </div>
                               ) : (
-                                <div className="px-2 py-1 text-sm min-h-[28px] cursor-text select-none truncate">
+                                <div className="px-2 py-1 text-sm min-h-[28px] cursor-text select-none truncate flex items-center gap-1">
+                                  {hasFormula && !isErrorValue && (
+                                    <span className="text-[9px] font-mono text-muted-foreground/40 shrink-0 leading-none">fx</span>
+                                  )}
                                   {colType === "boolean" ? (
                                     <span className={cell.toLowerCase() === "true" ? "text-green-500" : "text-muted-foreground/50"}>
                                       {cell.toLowerCase() === "true" ? "Yes" : "No"}
@@ -1519,7 +1604,7 @@ export function SheetsPage() {
                                   ) : isErrorValue ? (
                                     <span className="text-destructive font-mono text-xs">{cell}</span>
                                   ) : (
-                                    cell || <span className="text-muted-foreground/30">&nbsp;</span>
+                                    <span className="truncate">{cell || <span className="text-muted-foreground/30">&nbsp;</span>}</span>
                                   )}
                                 </div>
                               )}
@@ -1540,7 +1625,7 @@ export function SheetsPage() {
                     })()}
                     {/* Virtual scroll spacer bottom */}
                     {filteredRowIndices.length > ROW_RENDER_LIMIT && (scrollRowStart + ROW_RENDER_LIMIT) < filteredRowIndices.length && (
-                      <tr><td colSpan={activeSheet.columns.length + 2} style={{ height: (filteredRowIndices.length - scrollRowStart - ROW_RENDER_LIMIT) * 29, padding: 0, border: "none" }} /></tr>
+                      <tr><td colSpan={activeSheet.columns.length + 2} style={{ height: filteredRowIndices.slice(scrollRowStart + ROW_RENDER_LIMIT).reduce((sum, ri) => sum + (rowHeights[ri] ?? DEFAULT_ROW_HEIGHT) + 1, 0), padding: 0, border: "none" }} /></tr>
                     )}
                     {filteredRowIndices.length === 0 && (
                       <tr>

@@ -72,6 +72,7 @@ class Sheet(BaseModel):
     columns: List[SheetColumn] = Field(default_factory=list)
     rows: List[List[str]] = Field(default_factory=list)
     formulas: dict = Field(default_factory=dict)  # {"row,col": "=A1+B2"}
+    sizes: dict = Field(default_factory=dict)  # {colWidths: {col: px}, rowHeights: {row: px}}
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
 

@@ -1,7 +1,7 @@
 """Formula engine for Excel Lite sheets.
 
 Supports: =, +, -, *, /, parentheses, cell refs (A1), ranges (A1:B3),
-SUM(range), AVG(range), COUNT(range).
+SUM(range), AVERAGE(range), AVG(range), COUNT(range), MIN(range), MAX(range).
 
 Error codes written to cells:
   #ERROR  — syntax error or unsupported formula
@@ -42,7 +42,7 @@ class CycleError(FormulaError):
 
 _CELL_REF_RE = re.compile(r'^([A-Za-z]{1,3})(\d{1,7})$')
 _FUNC_RE = re.compile(
-    r'(SUM|AVG|COUNT)\(\s*([A-Za-z]{1,3}\d{1,7})\s*:\s*([A-Za-z]{1,3}\d{1,7})\s*\)',
+    r'(SUM|AVG|AVERAGE|COUNT|MIN|MAX)\(\s*([A-Za-z]{1,3}\d{1,7})\s*:\s*([A-Za-z]{1,3}\d{1,7})\s*\)',
     re.IGNORECASE,
 )
 _BARE_REF_RE = re.compile(r'[A-Za-z]{1,3}\d{1,7}')
@@ -427,13 +427,23 @@ def evaluate(formula: str, resolve_cell, has_content, *, num_rows: int = 0, num_
             _bounds_check(r, c, range_str)
         if name == 'SUM':
             return str(sum(resolve_cell(r, c) for r, c in cells))
-        if name == 'AVG':
+        if name in ('AVG', 'AVERAGE'):
             vals = [resolve_cell(r, c) for r, c in cells]
             if not vals:
                 return '0'
             return str(sum(vals) / len(vals))
         if name == 'COUNT':
             return str(sum(1 for r, c in cells if has_content(r, c)))
+        if name == 'MIN':
+            vals = [resolve_cell(r, c) for r, c in cells]
+            if not vals:
+                return '0'
+            return str(min(vals))
+        if name == 'MAX':
+            vals = [resolve_cell(r, c) for r, c in cells]
+            if not vals:
+                return '0'
+            return str(max(vals))
         raise FormulaSyntaxError(f"Unknown function: {name}")
 
     expr = _FUNC_RE.sub(_func_sub, expr)

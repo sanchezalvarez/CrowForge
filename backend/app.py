@@ -589,12 +589,13 @@ async def duplicate_sheet(sheet_id: str):
 
 @app.put("/sheets/{sheet_id}/data", response_model=Sheet)
 async def restore_sheet_data(sheet_id: str, body: dict):
-    """Wholesale replace columns + rows (undo/redo)."""
+    """Wholesale replace columns + rows + formulas (undo/redo)."""
     columns = body.get("columns", [])
     rows = body.get("rows", [])
+    formulas = body.get("formulas", None)
     from backend.models import SheetColumn
     cols = [SheetColumn(**c) for c in columns]
-    sheet = sheet_repo.restore_data(sheet_id, cols, rows)
+    sheet = sheet_repo.restore_data(sheet_id, cols, rows, formulas)
     if not sheet:
         raise HTTPException(status_code=404, detail="Sheet not found")
     return sheet
@@ -646,12 +647,14 @@ async def clear_cell_range(sheet_id: str, req: dict):
     sheet = sheet_repo.get_by_id(sheet_id)
     if not sheet:
         raise HTTPException(status_code=404, detail="Sheet not found")
+    formulas = dict(sheet.formulas)
     with sheet_repo.db.get_connection() as conn:
         for ri in range(r1, r2 + 1):
             for ci in range(c1, c2 + 1):
                 if ri < len(sheet.rows) and ci < len(sheet.rows[ri]):
                     sheet.rows[ri][ci] = ""
-        sheet_repo._save(conn, sheet_id, sheet.columns, sheet.rows)
+                formulas.pop(f"{ri},{ci}", None)
+        sheet_repo._save(conn, sheet_id, sheet.columns, sheet.rows, formulas)
     return sheet_repo.get_by_id(sheet_id)
 
 @app.put("/sheets/{sheet_id}/paste", response_model=Sheet)
@@ -664,6 +667,7 @@ async def paste_cells(sheet_id: str, req: dict):
     if not sheet:
         raise HTTPException(status_code=404, detail="Sheet not found")
     num_cols = len(sheet.columns)
+    formulas = dict(sheet.formulas)
     with sheet_repo.db.get_connection() as conn:
         for dr, row_vals in enumerate(data):
             ri = start_row + dr
@@ -674,8 +678,15 @@ async def paste_cells(sheet_id: str, req: dict):
                 ci = start_col + dc
                 if ci >= num_cols:
                     continue
-                sheet.rows[ri][ci] = str(val)
-        sheet_repo._save(conn, sheet_id, sheet.columns, sheet.rows)
+                val_str = str(val)
+                key = f"{ri},{ci}"
+                if val_str.startswith('='):
+                    formulas[key] = val_str
+                    sheet.rows[ri][ci] = ""
+                else:
+                    formulas.pop(key, None)
+                    sheet.rows[ri][ci] = val_str
+        sheet_repo._save(conn, sheet_id, sheet.columns, sheet.rows, formulas)
     return sheet_repo.get_by_id(sheet_id)
 
 @app.put("/sheets/{sheet_id}/cell", response_model=Sheet)

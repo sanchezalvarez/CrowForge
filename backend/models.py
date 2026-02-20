@@ -71,6 +71,7 @@ class Sheet(BaseModel):
     title: str = "Untitled Sheet"
     columns: List[SheetColumn] = Field(default_factory=list)
     rows: List[List[str]] = Field(default_factory=list)
+    formulas: dict = Field(default_factory=dict)  # {"row,col": "=A1+B2"}
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
 

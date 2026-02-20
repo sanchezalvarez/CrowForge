@@ -57,6 +57,7 @@ CREATE TABLE IF NOT EXISTS sheets (
     title TEXT NOT NULL DEFAULT 'Untitled Sheet',
     columns_json TEXT NOT NULL DEFAULT '[]',
     rows_json TEXT NOT NULL DEFAULT '[]',
+    formulas_json TEXT NOT NULL DEFAULT '{}',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );

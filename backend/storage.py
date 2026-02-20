@@ -73,6 +73,10 @@ class DatabaseManager:
             conn.execute("ALTER TABLE sheets ADD COLUMN formulas_json TEXT NOT NULL DEFAULT '{}'")
         if "sizes_json" not in sheets_cols:
             conn.execute("ALTER TABLE sheets ADD COLUMN sizes_json TEXT NOT NULL DEFAULT '{}'")
+        if "alignments_json" not in sheets_cols:
+            conn.execute("ALTER TABLE sheets ADD COLUMN alignments_json TEXT NOT NULL DEFAULT '{}'")
+        if "formats_json" not in sheets_cols:
+            conn.execute("ALTER TABLE sheets ADD COLUMN formats_json TEXT NOT NULL DEFAULT '{}'")
 
         # Ensure documents table exists
         conn.execute("""CREATE TABLE IF NOT EXISTS documents (
@@ -250,12 +254,16 @@ class SheetRepository:
         rows_raw = json.loads(d.pop("rows_json", "[]"))
         formulas = json.loads(d.pop("formulas_json", "{}"))
         sizes = json.loads(d.pop("sizes_json", "{}"))
+        alignments = json.loads(d.pop("alignments_json", "{}"))
+        formats = json.loads(d.pop("formats_json", "{}"))
         return Sheet(
             **d,
             columns=[SheetColumn(**c) if isinstance(c, dict) else SheetColumn(name=str(c)) for c in columns_raw],
             rows=rows_raw,
             formulas=formulas,
             sizes=sizes,
+            alignments=alignments,
+            formats=formats,
         )
 
     def create(self, title: str = "Untitled Sheet", columns: List[SheetColumn] = None,
@@ -269,9 +277,9 @@ class SheetRepository:
             recalculate(row_data, form_data)
         with self.db.get_connection() as conn:
             conn.execute(
-                "INSERT INTO sheets (id, title, columns_json, rows_json, formulas_json, sizes_json) VALUES (?, ?, ?, ?, ?, ?)",
+                "INSERT INTO sheets (id, title, columns_json, rows_json, formulas_json, sizes_json, alignments_json, formats_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                 (sheet_id, title, json.dumps([c.model_dump() for c in cols]),
-                 json.dumps(row_data), json.dumps(form_data), '{}'),
+                 json.dumps(row_data), json.dumps(form_data), '{}', '{}', '{}'),
             )
             conn.commit()
         return self.get_by_id(sheet_id)
@@ -528,6 +536,24 @@ class SheetRepository:
             self._save(conn, sheet_id, sheet.columns, sheet.rows, new_formulas)
             return self.get_by_id(sheet_id)
 
+    def update_formats(self, sheet_id: str, formats: dict) -> Optional[Sheet]:
+        with self.db.get_connection() as conn:
+            conn.execute(
+                "UPDATE sheets SET formats_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (json.dumps(formats), sheet_id),
+            )
+            conn.commit()
+            return self.get_by_id(sheet_id)
+
+    def update_alignments(self, sheet_id: str, alignments: dict) -> Optional[Sheet]:
+        with self.db.get_connection() as conn:
+            conn.execute(
+                "UPDATE sheets SET alignments_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (json.dumps(alignments), sheet_id),
+            )
+            conn.commit()
+            return self.get_by_id(sheet_id)
+
     def update_sizes(self, sheet_id: str, sizes: dict) -> Optional[Sheet]:
         with self.db.get_connection() as conn:
             conn.execute(
@@ -545,7 +571,8 @@ class SheetRepository:
 
     def restore_data(self, sheet_id: str, columns: List[SheetColumn],
                      rows: List[List[str]], formulas: dict = None,
-                     sizes: dict = None) -> Optional[Sheet]:
+                     sizes: dict = None, alignments: dict = None,
+                     formats: dict = None) -> Optional[Sheet]:
         """Wholesale replace columns, rows, and formulas (used by undo/redo)."""
         with self.db.get_connection() as conn:
             existing = conn.execute("SELECT id FROM sheets WHERE id = ?", (sheet_id,)).fetchone()
@@ -555,11 +582,20 @@ class SheetRepository:
                 sheet = self.get_by_id(sheet_id)
                 formulas = sheet.formulas if sheet else {}
             self._save(conn, sheet_id, columns, rows, formulas)
+            updates = []
+            params = []
             if sizes is not None:
-                conn.execute(
-                    "UPDATE sheets SET sizes_json = ? WHERE id = ?",
-                    (json.dumps(sizes), sheet_id),
-                )
+                updates.append("sizes_json = ?")
+                params.append(json.dumps(sizes))
+            if alignments is not None:
+                updates.append("alignments_json = ?")
+                params.append(json.dumps(alignments))
+            if formats is not None:
+                updates.append("formats_json = ?")
+                params.append(json.dumps(formats))
+            if updates:
+                params.append(sheet_id)
+                conn.execute(f"UPDATE sheets SET {', '.join(updates)} WHERE id = ?", params)
                 conn.commit()
             return self.get_by_id(sheet_id)
 

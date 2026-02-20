@@ -73,6 +73,8 @@ class Sheet(BaseModel):
     rows: List[List[str]] = Field(default_factory=list)
     formulas: dict = Field(default_factory=dict)  # {"row,col": "=A1+B2"}
     sizes: dict = Field(default_factory=dict)  # {colWidths: {col: px}, rowHeights: {row: px}}
+    alignments: dict = Field(default_factory=dict)  # {"row,col": "center,middle"}
+    formats: dict = Field(default_factory=dict)  # {"row,col": {"b":true,"i":true,"tc":"#hex","bg":"#hex","wrap":false}}
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
 

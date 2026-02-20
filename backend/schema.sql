@@ -59,6 +59,8 @@ CREATE TABLE IF NOT EXISTS sheets (
     rows_json TEXT NOT NULL DEFAULT '[]',
     formulas_json TEXT NOT NULL DEFAULT '{}',
     sizes_json TEXT NOT NULL DEFAULT '{}',
+    alignments_json TEXT NOT NULL DEFAULT '{}',
+    formats_json TEXT NOT NULL DEFAULT '{}',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );

@@ -594,9 +594,27 @@ async def restore_sheet_data(sheet_id: str, body: dict):
     rows = body.get("rows", [])
     formulas = body.get("formulas", None)
     sizes = body.get("sizes", None)
+    alignments = body.get("alignments", None)
+    formats = body.get("formats", None)
     from backend.models import SheetColumn
     cols = [SheetColumn(**c) for c in columns]
-    sheet = sheet_repo.restore_data(sheet_id, cols, rows, formulas, sizes)
+    sheet = sheet_repo.restore_data(sheet_id, cols, rows, formulas, sizes, alignments, formats)
+    if not sheet:
+        raise HTTPException(status_code=404, detail="Sheet not found")
+    return sheet
+
+@app.put("/sheets/{sheet_id}/formats")
+async def update_sheet_formats(sheet_id: str, body: dict):
+    formats = body.get("formats", {})
+    sheet = sheet_repo.update_formats(sheet_id, formats)
+    if not sheet:
+        raise HTTPException(status_code=404, detail="Sheet not found")
+    return sheet
+
+@app.put("/sheets/{sheet_id}/alignments")
+async def update_sheet_alignments(sheet_id: str, body: dict):
+    alignments = body.get("alignments", {})
+    sheet = sheet_repo.update_alignments(sheet_id, alignments)
     if not sheet:
         raise HTTPException(status_code=404, detail="Sheet not found")
     return sheet
@@ -695,6 +713,15 @@ async def paste_cells(sheet_id: str, req: dict):
     row_delta = (start_row - source_row) if source_row is not None else 0
     col_delta = (start_col - source_col) if source_col is not None else 0
 
+    # Determine if we need to expand columns
+    max_paste_col = start_col + max((len(r) for r in data), default=0) - 1
+    if max_paste_col >= num_cols:
+        for ci in range(num_cols, max_paste_col + 1):
+            sheet.columns.append(SheetColumn(name=f"Column {ci + 1}", type="text"))
+            for row in sheet.rows:
+                row.append("")
+        num_cols = len(sheet.columns)
+
     with sheet_repo.db.get_connection() as conn:
         for dr, row_vals in enumerate(data):
             ri = start_row + dr
@@ -703,8 +730,6 @@ async def paste_cells(sheet_id: str, req: dict):
                 sheet.rows.append([""] * num_cols)
             for dc, val in enumerate(row_vals):
                 ci = start_col + dc
-                if ci >= num_cols:
-                    continue
                 val_str = str(val)
                 key = f"{ri},{ci}"
                 changed.add(key)

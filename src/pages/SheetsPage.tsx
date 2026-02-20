@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import axios from "axios";
-import { PlusCircle, Table2, Trash2, Plus, X, AlertCircle, Sparkles, Square, Loader2, LayoutTemplate, FileSpreadsheet, ListTodo, FileText, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Copy, Pencil, Filter, Eraser, Tags, ListChecks, Undo2, Redo2 } from "lucide-react";
+import { PlusCircle, Table2, Trash2, Plus, X, AlertCircle, Sparkles, Square, Loader2, LayoutTemplate, FileSpreadsheet, ListTodo, FileText, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Copy, Pencil, Filter, Eraser, Tags, ListChecks, Undo2, Redo2, AlignLeft, AlignCenter, AlignRight, AlignVerticalJustifyStart, AlignVerticalJustifyCenter, AlignVerticalJustifyEnd, Bold, Italic, Paintbrush, Type, WrapText, RotateCcw } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { ScrollArea } from "../components/ui/scroll-area";
 import { cn } from "../lib/utils";
@@ -94,6 +94,14 @@ interface SheetSizes {
   rowHeights?: Record<number, number>;
 }
 
+interface CellFormat {
+  b?: boolean;   // bold
+  i?: boolean;   // italic
+  tc?: string;   // text color hex
+  bg?: string;   // background color hex
+  wrap?: boolean; // false = nowrap (default true = wrap)
+}
+
 interface Sheet {
   id: string;
   title: string;
@@ -101,6 +109,8 @@ interface Sheet {
   rows: string[][];
   formulas: Record<string, string>; // {"row,col": "=A1+B2"}
   sizes: SheetSizes;
+  alignments: Record<string, string>; // {"row,col": "center,middle"}
+  formats: Record<string, CellFormat>; // {"row,col": {b,i,tc,bg,wrap}}
   created_at: string;
   updated_at: string;
 }
@@ -110,31 +120,48 @@ const DEFAULT_ROW_HEIGHT = 28;
 const MIN_COL_WIDTH = 50;
 const MIN_ROW_HEIGHT = 20;
 
-// Parse cell references from a formula string (e.g. "=A1+B2" → ["0,0", "1,1"])
-function parseFormulaRefs(formula: string, numRows: number, numCols: number): string[] {
+// Colors for formula reference highlighting (per-range, cycled)
+const REF_COLORS = [
+  { bg: 'rgba(59,130,246,0.12)', border: 'rgba(59,130,246,0.5)', text: '#3b82f6' },   // blue
+  { bg: 'rgba(239,68,68,0.12)', border: 'rgba(239,68,68,0.5)', text: '#ef4444' },      // red
+  { bg: 'rgba(34,197,94,0.12)', border: 'rgba(34,197,94,0.5)', text: '#22c55e' },      // green
+  { bg: 'rgba(168,85,247,0.12)', border: 'rgba(168,85,247,0.5)', text: '#a855f7' },    // purple
+  { bg: 'rgba(249,115,22,0.12)', border: 'rgba(249,115,22,0.5)', text: '#f97316' },    // orange
+  { bg: 'rgba(236,72,153,0.12)', border: 'rgba(236,72,153,0.5)', text: '#ec4899' },    // pink
+];
+
+type RefGroup = { cells: string[]; colorIdx: number; token: string; start: number; end: number };
+
+// Parse formula refs into groups with color indices and token positions
+function parseFormulaRefGroups(formula: string, numRows: number, numCols: number): RefGroup[] {
   if (!formula.startsWith("=")) return [];
-  const refs: string[] = [];
+  const groups: RefGroup[] = [];
   const re = /([A-Z]{1,2})(\d+)(?::([A-Z]{1,2})(\d+))?/gi;
   let m: RegExpExecArray | null;
+  let colorIdx = 0;
   while ((m = re.exec(formula)) !== null) {
+    const cells: string[] = [];
     const colStart = colLetterToIndex(m[1]);
     const rowStart = parseInt(m[2], 10) - 1;
     if (m[3] && m[4]) {
-      // Range ref
       const colEnd = colLetterToIndex(m[3]);
       const rowEnd = parseInt(m[4], 10) - 1;
       for (let r = Math.min(rowStart, rowEnd); r <= Math.max(rowStart, rowEnd); r++) {
         for (let c = Math.min(colStart, colEnd); c <= Math.max(colStart, colEnd); c++) {
-          if (r >= 0 && r < numRows && c >= 0 && c < numCols) refs.push(`${r},${c}`);
+          if (r >= 0 && r < numRows && c >= 0 && c < numCols) cells.push(`${r},${c}`);
         }
       }
     } else {
       if (rowStart >= 0 && rowStart < numRows && colStart >= 0 && colStart < numCols) {
-        refs.push(`${rowStart},${colStart}`);
+        cells.push(`${rowStart},${colStart}`);
       }
     }
+    if (cells.length > 0) {
+      groups.push({ cells, colorIdx: colorIdx % REF_COLORS.length, token: m[0], start: m.index, end: m.index + m[0].length });
+      colorIdx++;
+    }
   }
-  return refs;
+  return groups;
 }
 
 function colLetterToIndex(letters: string): number {
@@ -165,7 +192,7 @@ export function SheetsPage() {
 
   // Undo / Redo — per-sheet snapshot stacks (local only, max 50)
   const MAX_HISTORY = 50;
-  type SheetSnapshot = { columns: SheetColumn[]; rows: string[][]; formulas: Record<string, string>; sizes: SheetSizes };
+  type SheetSnapshot = { columns: SheetColumn[]; rows: string[][]; formulas: Record<string, string>; sizes: SheetSizes; alignments: Record<string, string>; formats: Record<string, CellFormat> };
   const undoStacks = useRef<Map<string, SheetSnapshot[]>>(new Map());
   const redoStacks = useRef<Map<string, SheetSnapshot[]>>(new Map());
   const [canUndo, setCanUndo] = useState(false);
@@ -423,6 +450,14 @@ export function SheetsPage() {
     setIsDragging(false);
   }, []);
 
+  // Global mouseup to end drag even when mouse leaves the table
+  useEffect(() => {
+    if (!isDragging) return;
+    const onUp = () => setIsDragging(false);
+    document.addEventListener("mouseup", onUp);
+    return () => document.removeEventListener("mouseup", onUp);
+  }, [isDragging]);
+
   // Track copy origin for relative formula adjustment
   const copyOrigin = useRef<{ r1: number; c1: number } | null>(null);
 
@@ -442,6 +477,17 @@ export function SheetsPage() {
     }
     navigator.clipboard.writeText(rows.join("\n"));
   }, [selection, activeSheet]);
+
+  const cutSelection = useCallback(async () => {
+    if (!selection || !activeSheet) return;
+    copySelection();
+    try {
+      const res = await axios.put(`${API_BASE}/sheets/${activeSheet.id}/clear-range`, {
+        r1: selection.r1, c1: selection.c1, r2: selection.r2, c2: selection.c2,
+      });
+      updateSheet(res.data);
+    } catch { /* ignore */ }
+  }, [selection, activeSheet, copySelection]);
 
   const pasteAtSelection = useCallback(async (clipText: string) => {
     if (!activeSheet) return;
@@ -800,7 +846,7 @@ export function SheetsPage() {
       const prev = sheets.find((s) => s.id === updated.id);
       if (prev) {
         const stack = undoStacks.current.get(updated.id) ?? [];
-        stack.push({ columns: prev.columns, rows: prev.rows, formulas: prev.formulas ?? {}, sizes: prev.sizes ?? {} });
+        stack.push({ columns: prev.columns, rows: prev.rows, formulas: prev.formulas ?? {}, sizes: prev.sizes ?? {}, alignments: prev.alignments ?? {}, formats: prev.formats ?? {} });
         if (stack.length > MAX_HISTORY) stack.shift();
         undoStacks.current.set(updated.id, stack);
         // Clear redo on new action
@@ -818,7 +864,7 @@ export function SheetsPage() {
     const snapshot = stack.pop()!;
     // Push current state to redo
     const redoStack = redoStacks.current.get(activeSheet.id) ?? [];
-    redoStack.push({ columns: activeSheet.columns, rows: activeSheet.rows, formulas: activeSheet.formulas ?? {}, sizes: activeSheet.sizes ?? {} });
+    redoStack.push({ columns: activeSheet.columns, rows: activeSheet.rows, formulas: activeSheet.formulas ?? {}, sizes: activeSheet.sizes ?? {}, alignments: activeSheet.alignments ?? {}, formats: activeSheet.formats ?? {} });
     if (redoStack.length > MAX_HISTORY) redoStack.shift();
     redoStacks.current.set(activeSheet.id, redoStack);
     // Restore via API
@@ -829,6 +875,8 @@ export function SheetsPage() {
         rows: snapshot.rows,
         formulas: snapshot.formulas,
         sizes: snapshot.sizes,
+        alignments: snapshot.alignments,
+        formats: snapshot.formats,
       });
       updateSheet(res.data);
       setColWidths(snapshot.sizes?.colWidths ?? {});
@@ -845,7 +893,7 @@ export function SheetsPage() {
     const snapshot = stack.pop()!;
     // Push current state to undo
     const undoStack = undoStacks.current.get(activeSheet.id) ?? [];
-    undoStack.push({ columns: activeSheet.columns, rows: activeSheet.rows, formulas: activeSheet.formulas ?? {}, sizes: activeSheet.sizes ?? {} });
+    undoStack.push({ columns: activeSheet.columns, rows: activeSheet.rows, formulas: activeSheet.formulas ?? {}, sizes: activeSheet.sizes ?? {}, alignments: activeSheet.alignments ?? {}, formats: activeSheet.formats ?? {} });
     if (undoStack.length > MAX_HISTORY) undoStack.shift();
     undoStacks.current.set(activeSheet.id, undoStack);
     // Restore via API
@@ -856,6 +904,8 @@ export function SheetsPage() {
         rows: snapshot.rows,
         formulas: snapshot.formulas,
         sizes: snapshot.sizes,
+        alignments: snapshot.alignments,
+        formats: snapshot.formats,
       });
       updateSheet(res.data);
       setColWidths(snapshot.sizes?.colWidths ?? {});
@@ -953,7 +1003,7 @@ export function SheetsPage() {
     if (!activeSheet || aiDisabled) return;
     // Push snapshot before AI fill modifies cells (AI fill bypasses updateSheet)
     const stack = undoStacks.current.get(activeSheet.id) ?? [];
-    stack.push({ columns: activeSheet.columns, rows: activeSheet.rows, formulas: activeSheet.formulas ?? {}, sizes: activeSheet.sizes ?? {} });
+    stack.push({ columns: activeSheet.columns, rows: activeSheet.rows, formulas: activeSheet.formulas ?? {}, sizes: activeSheet.sizes ?? {}, alignments: activeSheet.alignments ?? {}, formats: activeSheet.formats ?? {} });
     if (stack.length > MAX_HISTORY) stack.shift();
     undoStacks.current.set(activeSheet.id, stack);
     redoStacks.current.set(activeSheet.id, []);
@@ -1059,6 +1109,99 @@ export function SheetsPage() {
     setAiFillErrors(new Map());
     setAiFilledRows(new Set());
   }
+
+  // ── Alignment helpers ──────────────────────────────────────────
+  function getSelectionAlignment(): { h: string; v: string } {
+    if (!activeSheet || !selection) return { h: 'left', v: 'top' };
+    const key = `${selection.r1},${selection.c1}`;
+    const val = activeSheet.alignments?.[key];
+    if (!val) return { h: 'left', v: 'top' };
+    const [h, v] = val.split(',');
+    return { h: h || 'left', v: v || 'top' };
+  }
+
+  async function applyAlignment(axis: 'h' | 'v', value: string) {
+    if (!activeSheet || !selection) return;
+    const newAlignments = { ...(activeSheet.alignments ?? {}) };
+    for (let r = selection.r1; r <= selection.r2; r++) {
+      for (let c = selection.c1; c <= selection.c2; c++) {
+        const key = `${r},${c}`;
+        const existing = newAlignments[key] || 'left,top';
+        const [h, v] = existing.split(',');
+        if (axis === 'h') {
+          const newVal = `${value},${v || 'top'}`;
+          if (newVal === 'left,top') delete newAlignments[key];
+          else newAlignments[key] = newVal;
+        } else {
+          const newVal = `${h || 'left'},${value}`;
+          if (newVal === 'left,top') delete newAlignments[key];
+          else newAlignments[key] = newVal;
+        }
+      }
+    }
+    try {
+      const res = await axios.put(`${API_BASE}/sheets/${activeSheet.id}/alignments`, { alignments: newAlignments });
+      updateSheet(res.data);
+    } catch { /* ignore */ }
+  }
+
+  // ── Cell formatting helpers ────────────────────────────────────
+  function getSelectionFormat(): CellFormat {
+    if (!activeSheet || !selection) return {};
+    const key = `${selection.r1},${selection.c1}`;
+    return activeSheet.formats?.[key] ?? {};
+  }
+
+  async function applyFormat(patch: Partial<CellFormat>) {
+    if (!activeSheet || !selection) return;
+    const newFormats = { ...(activeSheet.formats ?? {}) };
+    for (let r = selection.r1; r <= selection.r2; r++) {
+      for (let c = selection.c1; c <= selection.c2; c++) {
+        const key = `${r},${c}`;
+        const existing: CellFormat = { ...(newFormats[key] ?? {}) };
+        Object.assign(existing, patch);
+        // Clean up falsy/default values
+        if (!existing.b) delete existing.b;
+        if (!existing.i) delete existing.i;
+        if (!existing.tc) delete existing.tc;
+        if (!existing.bg) delete existing.bg;
+        if (existing.wrap !== false) delete existing.wrap;
+        if (Object.keys(existing).length === 0) delete newFormats[key];
+        else newFormats[key] = existing;
+      }
+    }
+    try {
+      const res = await axios.put(`${API_BASE}/sheets/${activeSheet.id}/formats`, { formats: newFormats });
+      updateSheet(res.data);
+    } catch { /* ignore */ }
+  }
+
+  function toggleBold() {
+    const cur = getSelectionFormat();
+    applyFormat({ b: !cur.b });
+  }
+
+  function toggleItalic() {
+    const cur = getSelectionFormat();
+    applyFormat({ i: !cur.i });
+  }
+
+  function toggleWrap() {
+    const cur = getSelectionFormat();
+    // wrap defaults to true (normal), toggling sets to false (nowrap)
+    applyFormat({ wrap: cur.wrap === false ? undefined : false });
+  }
+
+  // Color picker state
+  const [colorPickerOpen, setColorPickerOpen] = useState<'tc' | 'bg' | null>(null);
+
+  // Close color picker on outside click
+  useEffect(() => {
+    if (!colorPickerOpen) return;
+    const close = () => setColorPickerOpen(null);
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [colorPickerOpen]);
 
   return (
     <div className="flex h-full">
@@ -1172,6 +1315,60 @@ export function SheetsPage() {
                 <Plus className="h-3 w-3" />
                 Row
               </Button>
+              {selection && (
+                <>
+                  <div className="w-px h-5 bg-border mx-1" />
+                  <Button variant={getSelectionFormat().b ? "default" : "outline"} size="sm" className="h-7 w-7 p-0" onClick={toggleBold} title="Bold (Ctrl+B)">
+                    <Bold className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button variant={getSelectionFormat().i ? "default" : "outline"} size="sm" className="h-7 w-7 p-0" onClick={toggleItalic} title="Italic (Ctrl+I)">
+                    <Italic className="h-3.5 w-3.5" />
+                  </Button>
+                  <div className="relative">
+                    <Button variant="outline" size="sm" className="h-7 w-7 p-0" onClick={() => setColorPickerOpen(colorPickerOpen === 'tc' ? null : 'tc')} title="Text color">
+                      <Type className="h-3.5 w-3.5" />
+                      {getSelectionFormat().tc && <div className="absolute bottom-0.5 left-1 right-1 h-0.5 rounded" style={{ backgroundColor: getSelectionFormat().tc }} />}
+                    </Button>
+                    {colorPickerOpen === 'tc' && (
+                      <div className="absolute top-full left-0 mt-1 z-50 bg-background border border-border rounded-md shadow-lg p-2 grid grid-cols-6 gap-1 w-[156px]" onClick={(e) => e.stopPropagation()}>
+                        {['#000000','#ef4444','#f97316','#eab308','#22c55e','#3b82f6','#8b5cf6','#ec4899','#6b7280','#ffffff','#991b1b','#9a3412'].map(c => (
+                          <button key={c} className="w-5 h-5 rounded border border-border hover:scale-110 transition-transform" style={{ backgroundColor: c }} onClick={() => { applyFormat({ tc: c }); setColorPickerOpen(null); }} />
+                        ))}
+                        <button className="col-span-6 text-[10px] text-muted-foreground hover:text-foreground mt-0.5" onClick={() => { applyFormat({ tc: undefined }); setColorPickerOpen(null); }}>Reset</button>
+                      </div>
+                    )}
+                  </div>
+                  <div className="relative">
+                    <Button variant="outline" size="sm" className="h-7 w-7 p-0" onClick={() => setColorPickerOpen(colorPickerOpen === 'bg' ? null : 'bg')} title="Background color">
+                      <Paintbrush className="h-3.5 w-3.5" />
+                      {getSelectionFormat().bg && <div className="absolute bottom-0.5 left-1 right-1 h-0.5 rounded" style={{ backgroundColor: getSelectionFormat().bg }} />}
+                    </Button>
+                    {colorPickerOpen === 'bg' && (
+                      <div className="absolute top-full left-0 mt-1 z-50 bg-background border border-border rounded-md shadow-lg p-2 grid grid-cols-6 gap-1 w-[156px]" onClick={(e) => e.stopPropagation()}>
+                        {['#fef2f2','#fff7ed','#fefce8','#f0fdf4','#eff6ff','#f5f3ff','#fdf2f8','#f9fafb','#fecaca','#fed7aa','#fde68a','#bbf7d0'].map(c => (
+                          <button key={c} className="w-5 h-5 rounded border border-border hover:scale-110 transition-transform" style={{ backgroundColor: c }} onClick={() => { applyFormat({ bg: c }); setColorPickerOpen(null); }} />
+                        ))}
+                        <button className="col-span-6 text-[10px] text-muted-foreground hover:text-foreground mt-0.5" onClick={() => { applyFormat({ bg: undefined }); setColorPickerOpen(null); }}>Reset</button>
+                      </div>
+                    )}
+                  </div>
+                  <Button variant={getSelectionFormat().wrap === false ? "default" : "outline"} size="sm" className="h-7 w-7 p-0" onClick={toggleWrap} title="Toggle text wrap">
+                    <WrapText className="h-3.5 w-3.5" />
+                  </Button>
+                  <div className="w-px h-5 bg-border mx-0.5" />
+                  {([['left', AlignLeft], ['center', AlignCenter], ['right', AlignRight]] as const).map(([val, Icon]) => (
+                    <Button key={val} variant={getSelectionAlignment().h === val ? "default" : "outline"} size="sm" className="h-7 w-7 p-0" onClick={() => applyAlignment('h', val)} title={`Align ${val}`}>
+                      <Icon className="h-3.5 w-3.5" />
+                    </Button>
+                  ))}
+                  <div className="w-px h-5 bg-border mx-0.5" />
+                  {([['top', AlignVerticalJustifyStart], ['middle', AlignVerticalJustifyCenter], ['bottom', AlignVerticalJustifyEnd]] as const).map(([val, Icon]) => (
+                    <Button key={val} variant={getSelectionAlignment().v === val ? "default" : "outline"} size="sm" className="h-7 w-7 p-0" onClick={() => applyAlignment('v', val)} title={`Align ${val}`}>
+                      <Icon className="h-3.5 w-3.5" />
+                    </Button>
+                  ))}
+                </>
+              )}
               {activeSheet.columns.length > 0 && (
                 <>
                   <div className="w-px h-5 bg-border mx-1" />
@@ -1263,6 +1460,7 @@ export function SheetsPage() {
               const singleSel = selection && selection.r1 === selection.r2 && selection.c1 === selection.c2;
               const selKey = singleSel ? `${selection!.r1},${selection!.c1}` : null;
               const selFormula = selKey ? activeSheet.formulas?.[selKey] : null;
+              const selError = selKey && selFormula && typeof (activeSheet.rows[selection!.r1]?.[selection!.c1]) === 'string' && activeSheet.rows[selection!.r1]?.[selection!.c1]?.startsWith("#");
               const showBar = editingCell || selFormula;
               if (!showBar) return null;
               const displayLabel = editingCell
@@ -1273,11 +1471,34 @@ export function SheetsPage() {
               const displayValue = editingCell
                 ? editValue
                 : selFormula ?? "";
+
+              // Build colored formula segments
+              let formulaSpans: React.ReactNode = displayValue;
+              try {
+                if (displayValue.startsWith("=")) {
+                  const groups = parseFormulaRefGroups(displayValue, activeSheet.rows.length, activeSheet.columns.length);
+                  if (groups.length > 0) {
+                    const parts: React.ReactNode[] = [];
+                    let last = 0;
+                    for (const g of groups) {
+                      if (g.start > last) parts.push(<span key={`t${last}`}>{displayValue.slice(last, g.start)}</span>);
+                      parts.push(<span key={`r${g.start}`} style={{ color: REF_COLORS[g.colorIdx].text, fontWeight: 600 }}>{g.token}</span>);
+                      last = g.end;
+                    }
+                    if (last < displayValue.length) parts.push(<span key={`t${last}`}>{displayValue.slice(last)}</span>);
+                    formulaSpans = parts;
+                  }
+                }
+              } catch { /* safe */ }
+
               return (
                 <div className="border-b px-4 py-1 flex items-center gap-2 bg-muted/20 shrink-0">
                   <span className="text-[11px] font-mono text-muted-foreground w-8 text-center shrink-0">{displayLabel}</span>
                   <div className="w-px h-4 bg-border" />
-                  <span className="text-xs font-mono text-foreground truncate flex-1">{displayValue}</span>
+                  <span className="text-xs font-mono text-foreground truncate flex-1">{formulaSpans}</span>
+                  {selError && !editingCell && (
+                    <span className="text-[10px] font-mono text-destructive shrink-0">{activeSheet.rows[selection!.r1]?.[selection!.c1]}</span>
+                  )}
                 </div>
               );
             })()}
@@ -1290,6 +1511,18 @@ export function SheetsPage() {
               onScroll={handleGridScroll}
               onKeyDown={(e) => {
                 if (editingCell) return; // let cell input handle its own keys
+
+                // Bold / Italic
+                if ((e.ctrlKey || e.metaKey) && e.key === "b") {
+                  e.preventDefault();
+                  toggleBold();
+                  return;
+                }
+                if ((e.ctrlKey || e.metaKey) && e.key === "i") {
+                  e.preventDefault();
+                  toggleItalic();
+                  return;
+                }
 
                 // Undo / Redo
                 if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) {
@@ -1353,6 +1586,10 @@ export function SheetsPage() {
                   e.preventDefault();
                   copySelection();
                 }
+                if ((e.ctrlKey || e.metaKey) && e.key === "x" && selection) {
+                  e.preventDefault();
+                  cutSelection();
+                }
                 if ((e.ctrlKey || e.metaKey) && e.key === "v") {
                   e.preventDefault();
                   navigator.clipboard.readText().then((text) => {
@@ -1396,7 +1633,7 @@ export function SheetsPage() {
                   </div>
                 </div>
               ) : (
-                <table className="w-max border-collapse text-sm select-none" onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp}>
+                <table className="border-collapse text-sm select-none" style={{ tableLayout: 'fixed', width: 'max-content' }} onMouseUp={handleMouseUp}>
                   <thead>
                     <tr>
                       <th className="border border-border bg-muted px-2 py-1.5 text-left text-xs font-medium text-muted-foreground w-10">#</th>
@@ -1481,18 +1718,25 @@ export function SheetsPage() {
                     )}
                     {/* Compute formula ref highlights once per render */}
                     {(() => {
-                      const formulaRefSet = new Set<string>();
-                      if (editingCell && editValue.startsWith("=")) {
-                        parseFormulaRefs(editValue, activeSheet.rows.length, activeSheet.columns.length)
-                          .forEach((k) => formulaRefSet.add(k));
-                      }
+                      const formulaRefMap = new Map<string, number>();
+                      let refGroups: RefGroup[] = [];
+                      try {
+                        if (editingCell && editValue.startsWith("=")) {
+                          refGroups = parseFormulaRefGroups(editValue, activeSheet.rows.length, activeSheet.columns.length);
+                          for (const g of refGroups) {
+                            for (const k of g.cells) {
+                              if (!formulaRefMap.has(k)) formulaRefMap.set(k, g.colorIdx);
+                            }
+                          }
+                        }
+                      } catch { /* never crash rendering */ }
                       return visibleRowIndices.map((ri) => {
                       const row = activeSheet.rows[ri];
                       return (
                       <tr key={ri}>
                         <td
                           className="border border-border bg-muted/50 px-2 py-1 text-xs text-muted-foreground text-center cursor-context-menu select-none relative"
-                          style={{ height: rowHeights[ri] ?? DEFAULT_ROW_HEIGHT }}
+                          style={ri in rowHeights ? { height: rowHeights[ri] } : { minHeight: DEFAULT_ROW_HEIGHT }}
                           onContextMenu={(e) => {
                             e.preventDefault();
                             setRowMenu({ rowIndex: ri, x: e.clientX, y: e.clientY });
@@ -1515,21 +1759,28 @@ export function SheetsPage() {
                           const justFilled = ci === aiFillCol && aiFilledRows.has(ri);
                           const fillError = ci === aiFillCol && aiFillErrors.has(ri);
                           const selected = !isEditing && isCellSelected(ri, ci);
-                          const isFormulaRef = formulaRefSet.has(`${ri},${ci}`);
+                          const refColorIdx = formulaRefMap.get(`${ri},${ci}`);
+                          const isFormulaRef = refColorIdx !== undefined;
                           const hasFormula = !!activeSheet.formulas?.[`${ri},${ci}`];
-                          const isErrorValue = hasFormula && cell.startsWith("#");
+                          const isErrorValue = hasFormula && typeof cell === 'string' && cell.startsWith("#");
+                          const refColor = isFormulaRef ? REF_COLORS[refColorIdx] : null;
                           return (
                             <td
                               key={ci}
                               className={cn(
-                                "border border-border p-0",
+                                "border p-0 overflow-hidden",
+                                !isFormulaRef && "border-border",
                                 isEditing && "ring-2 ring-primary/40 ring-inset",
                                 isEditing && cellError && "ring-destructive/60",
-                                selected && "bg-primary/10",
-                                isFormulaRef && !isEditing && "bg-blue-500/10 border-blue-400/40",
+                                selected && !isFormulaRef && "bg-primary/10",
                                 justFilled && "bg-green-500/10",
                                 fillError && "bg-destructive/10"
                               )}
+                              style={{
+                                width: colWidths[ci] ?? DEFAULT_COL_WIDTH,
+                                minWidth: MIN_COL_WIDTH,
+                                ...(isFormulaRef && !isEditing ? { backgroundColor: refColor!.bg, borderColor: refColor!.border } : {}),
+                              }}
                               onContextMenu={(e) => {
                                 if (hasFormula) {
                                   e.preventDefault();
@@ -1593,7 +1844,7 @@ export function SheetsPage() {
                                   )}
                                 </div>
                               ) : (
-                                <div className="px-2 py-1 text-sm min-h-[28px] cursor-text select-none truncate flex items-center gap-1">
+                                <div className="px-2 py-1 text-sm cursor-text select-none flex gap-1" style={(() => { const a = activeSheet.alignments?.[`${ri},${ci}`]; const [h, v] = a ? a.split(',') : ['left', 'top']; const fmt: CellFormat = activeSheet.formats?.[`${ri},${ci}`] ?? {}; const noWrap = fmt.wrap === false; const manualH = ri in rowHeights; return { ...(manualH ? { height: rowHeights[ri], overflow: 'hidden' as const } : { minHeight: DEFAULT_ROW_HEIGHT }), whiteSpace: noWrap ? 'nowrap' as const : 'normal' as const, wordBreak: noWrap ? undefined : 'break-word' as const, lineBreak: noWrap ? undefined : 'anywhere' as const, ...(noWrap ? { overflow: 'hidden' as const, textOverflow: 'ellipsis' as const } : {}), textAlign: (h || 'left') as any, justifyContent: h === 'center' ? 'center' : h === 'right' ? 'flex-end' : 'flex-start', alignItems: v === 'middle' ? 'center' : v === 'bottom' ? 'flex-end' : 'flex-start', fontWeight: fmt.b ? 700 : undefined, fontStyle: fmt.i ? 'italic' as const : undefined, color: fmt.tc || undefined, backgroundColor: fmt.bg || undefined }; })()}>
                                   {hasFormula && !isErrorValue && (
                                     <span className="text-[9px] font-mono text-muted-foreground/40 shrink-0 leading-none">fx</span>
                                   )}
@@ -1602,9 +1853,9 @@ export function SheetsPage() {
                                       {cell.toLowerCase() === "true" ? "Yes" : "No"}
                                     </span>
                                   ) : isErrorValue ? (
-                                    <span className="text-destructive font-mono text-xs">{cell}</span>
+                                    <span className="text-destructive font-mono text-xs cursor-help" title={`${cell}\nFormula: ${activeSheet.formulas[`${ri},${ci}`]}`}>{cell}</span>
                                   ) : (
-                                    <span className="truncate">{cell || <span className="text-muted-foreground/30">&nbsp;</span>}</span>
+                                    <span>{cell || <span className="text-muted-foreground/30">&nbsp;</span>}</span>
                                   )}
                                 </div>
                               )}
@@ -1935,6 +2186,24 @@ export function SheetsPage() {
             <Copy className="h-3.5 w-3.5 text-muted-foreground" />
             Duplicate row
           </button>
+          {rowMenu.rowIndex in rowHeights && (
+            <button
+              className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2"
+              onClick={() => {
+                const next = { ...rowHeights };
+                delete next[rowMenu.rowIndex];
+                setRowHeights(next);
+                const sizes = activeSheet!.sizes ?? {};
+                const updated = { ...sizes, colWidths: sizes.colWidths ?? {}, rowHeights: next };
+                activeSheet!.sizes = updated;
+                axios.put(`${API_BASE}/sheets/${activeSheetId}/sizes`, updated);
+                setRowMenu(null);
+              }}
+            >
+              <RotateCcw className="h-3.5 w-3.5 text-muted-foreground" />
+              Reset row height
+            </button>
+          )}
           <div className="border-t border-border my-1" />
           <button
             className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2 text-destructive"

@@ -663,9 +663,17 @@ async def clear_cell_range(sheet_id: str, req: dict):
 
 @app.put("/sheets/{sheet_id}/paste", response_model=Sheet)
 async def paste_cells(sheet_id: str, req: dict):
-    """Paste a 2D array of values starting at (start_row, start_col)."""
+    """Paste a 2D array of values starting at (start_row, start_col).
+
+    If source_row/source_col are provided, formula references are shifted
+    by the delta between source and target positions (relative copy).
+    """
+    from backend.formula import shift_refs
+
     start_row = req.get("start_row", 0)
     start_col = req.get("start_col", 0)
+    source_row = req.get("source_row")
+    source_col = req.get("source_col")
     data: list = req.get("data", [])
     sheet = sheet_repo.get_by_id(sheet_id)
     if not sheet:
@@ -673,6 +681,11 @@ async def paste_cells(sheet_id: str, req: dict):
     num_cols = len(sheet.columns)
     formulas = dict(sheet.formulas)
     changed = set()
+
+    # Compute deltas for relative formula shifting
+    row_delta = (start_row - source_row) if source_row is not None else 0
+    col_delta = (start_col - source_col) if source_col is not None else 0
+
     with sheet_repo.db.get_connection() as conn:
         for dr, row_vals in enumerate(data):
             ri = start_row + dr
@@ -687,6 +700,9 @@ async def paste_cells(sheet_id: str, req: dict):
                 key = f"{ri},{ci}"
                 changed.add(key)
                 if val_str.startswith('='):
+                    # Shift formula references relatively
+                    if row_delta or col_delta:
+                        val_str = shift_refs(val_str, row_delta, col_delta)
                     formulas[key] = val_str
                     sheet.rows[ri][ci] = ""
                 else:
@@ -705,6 +721,47 @@ async def update_sheet_cell(sheet_id: str, req: SheetUpdateCell):
     if not sheet:
         raise HTTPException(status_code=404, detail="Sheet not found or invalid indices")
     return sheet
+
+@app.post("/sheets/{sheet_id}/explain-formula")
+async def explain_formula(sheet_id: str, req: dict):
+    """Ask the LLM to explain a formula in plain language."""
+    row_index = req.get("row_index", 0)
+    col_index = req.get("col_index", 0)
+    sheet = sheet_repo.get_by_id(sheet_id)
+    if not sheet:
+        raise HTTPException(status_code=404, detail="Sheet not found")
+    key = f"{row_index},{col_index}"
+    formula = sheet.formulas.get(key)
+    if not formula:
+        raise HTTPException(status_code=422, detail="Cell does not contain a formula")
+    computed = sheet.rows[row_index][col_index] if row_index < len(sheet.rows) and col_index < len(sheet.rows[row_index]) else ""
+    col_name = sheet.columns[col_index].name if col_index < len(sheet.columns) else f"Column {col_index}"
+    system_prompt = (
+        "You are a spreadsheet assistant. Explain the given formula in one or two short, "
+        "plain-language sentences. Do NOT return JSON, code blocks, or markdown. "
+        "Just a brief human-readable explanation."
+    )
+    user_prompt = (
+        f'Column: "{col_name}"\n'
+        f"Formula: {formula}\n"
+        f"Current result: {computed}\n"
+        f"Explain what this formula does."
+    )
+    full_response = ""
+    try:
+        async for chunk in engine_manager.get_active().generate_stream(
+            system_prompt, user_prompt,
+            temperature=0.3, max_tokens=256,
+            json_mode=False,
+        ):
+            full_response += chunk
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"AI generation failed: {e}")
+    text = full_response.strip()
+    if not text:
+        text = "Could not generate an explanation."
+    return {"explanation": text}
+
 
 @app.delete("/sheets/{sheet_id}/rows", response_model=Sheet)
 async def delete_sheet_row(sheet_id: str, req: SheetDeleteRow):

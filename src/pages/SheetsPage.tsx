@@ -94,8 +94,44 @@ interface Sheet {
   title: string;
   columns: SheetColumn[];
   rows: string[][];
+  formulas: Record<string, string>; // {"row,col": "=A1+B2"}
   created_at: string;
   updated_at: string;
+}
+
+// Parse cell references from a formula string (e.g. "=A1+B2" → ["0,0", "1,1"])
+function parseFormulaRefs(formula: string, numRows: number, numCols: number): string[] {
+  if (!formula.startsWith("=")) return [];
+  const refs: string[] = [];
+  const re = /([A-Z]{1,2})(\d+)(?::([A-Z]{1,2})(\d+))?/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(formula)) !== null) {
+    const colStart = colLetterToIndex(m[1]);
+    const rowStart = parseInt(m[2], 10) - 1;
+    if (m[3] && m[4]) {
+      // Range ref
+      const colEnd = colLetterToIndex(m[3]);
+      const rowEnd = parseInt(m[4], 10) - 1;
+      for (let r = Math.min(rowStart, rowEnd); r <= Math.max(rowStart, rowEnd); r++) {
+        for (let c = Math.min(colStart, colEnd); c <= Math.max(colStart, colEnd); c++) {
+          if (r >= 0 && r < numRows && c >= 0 && c < numCols) refs.push(`${r},${c}`);
+        }
+      }
+    } else {
+      if (rowStart >= 0 && rowStart < numRows && colStart >= 0 && colStart < numCols) {
+        refs.push(`${rowStart},${colStart}`);
+      }
+    }
+  }
+  return refs;
+}
+
+function colLetterToIndex(letters: string): number {
+  let idx = 0;
+  for (let i = 0; i < letters.length; i++) {
+    idx = idx * 26 + (letters.toUpperCase().charCodeAt(i) - 64);
+  }
+  return idx - 1;
 }
 
 const ROW_WARN_THRESHOLD = 5000;   // show warning banner
@@ -118,7 +154,7 @@ export function SheetsPage() {
 
   // Undo / Redo — per-sheet snapshot stacks (local only, max 50)
   const MAX_HISTORY = 50;
-  type SheetSnapshot = { columns: SheetColumn[]; rows: string[][] };
+  type SheetSnapshot = { columns: SheetColumn[]; rows: string[][]; formulas: Record<string, string> };
   const undoStacks = useRef<Map<string, SheetSnapshot[]>>(new Map());
   const redoStacks = useRef<Map<string, SheetSnapshot[]>>(new Map());
   const [canUndo, setCanUndo] = useState(false);
@@ -138,6 +174,9 @@ export function SheetsPage() {
   const [rowMenu, setRowMenu] = useState<{ rowIndex: number; x: number; y: number } | null>(null);
   const [colMenu, setColMenu] = useState<{ colIndex: number; x: number; y: number } | null>(null);
   const [sheetMenu, setSheetMenu] = useState<{ sheetId: string; x: number; y: number } | null>(null);
+  // Cell context menu + formula explanation
+  const [cellMenu, setCellMenu] = useState<{ row: number; col: number; x: number; y: number } | null>(null);
+  const [formulaExplanation, setFormulaExplanation] = useState<{ row: number; col: number; text: string; loading: boolean } | null>(null);
   const [renamingSheet, setRenamingSheet] = useState<string | null>(null);
   const [renameSheetValue, setRenameSheetValue] = useState("");
   const renameSheetRef = useRef<HTMLInputElement>(null);
@@ -254,11 +293,14 @@ export function SheetsPage() {
   }, [activeSheetId]);
 
   const startEditing = useCallback((ri: number, ci: number, currentValue: string) => {
+    // If the cell has a formula, edit the formula text instead of computed value
+    const formulaKey = `${ri},${ci}`;
+    const formula = activeSheet?.formulas?.[formulaKey];
     setEditingCell({ row: ri, col: ci });
-    setEditValue(currentValue);
+    setEditValue(formula ?? currentValue);
     setSelection(null);
     setSelAnchor(null);
-  }, []);
+  }, [activeSheet]);
 
   const commitEdit = useCallback(async () => {
     if (!editingCell || !activeSheet) return;
@@ -325,13 +367,20 @@ export function SheetsPage() {
     setIsDragging(false);
   }, []);
 
+  // Track copy origin for relative formula adjustment
+  const copyOrigin = useRef<{ r1: number; c1: number } | null>(null);
+
   const copySelection = useCallback(() => {
     if (!selection || !activeSheet) return;
+    copyOrigin.current = { r1: selection.r1, c1: selection.c1 };
     const rows: string[] = [];
     for (let ri = selection.r1; ri <= selection.r2; ri++) {
       const cols: string[] = [];
       for (let ci = selection.c1; ci <= selection.c2; ci++) {
-        cols.push(activeSheet.rows[ri]?.[ci] ?? "");
+        // Copy formula text if cell has one, otherwise the displayed value
+        const formulaKey = `${ri},${ci}`;
+        const formula = activeSheet.formulas?.[formulaKey];
+        cols.push(formula ?? (activeSheet.rows[ri]?.[ci] ?? ""));
       }
       rows.push(cols.join("\t"));
     }
@@ -345,11 +394,17 @@ export function SheetsPage() {
     const data = clipText.split(/\r?\n/).filter((line) => line.length > 0).map((line) => line.split("\t"));
     if (data.length === 0) return;
     try {
-      const res = await axios.put(`${API_BASE}/sheets/${activeSheet.id}/paste`, {
+      const payload: Record<string, unknown> = {
         start_row: startRow,
         start_col: startCol,
         data,
-      });
+      };
+      // Send source origin so backend can compute relative formula shifts
+      if (copyOrigin.current) {
+        payload.source_row = copyOrigin.current.r1;
+        payload.source_col = copyOrigin.current.c1;
+      }
+      const res = await axios.put(`${API_BASE}/sheets/${activeSheet.id}/paste`, payload);
       updateSheet(res.data);
       // Update selection to cover pasted area
       setSelection({
@@ -412,6 +467,39 @@ export function SheetsPage() {
     document.addEventListener("click", close);
     return () => document.removeEventListener("click", close);
   }, [rowMenu]);
+
+  // Close cell menu on outside click
+  useEffect(() => {
+    if (!cellMenu) return;
+    const close = () => setCellMenu(null);
+    document.addEventListener("click", close);
+    return () => document.removeEventListener("click", close);
+  }, [cellMenu]);
+
+  // Close formula explanation on outside click
+  useEffect(() => {
+    if (!formulaExplanation) return;
+    const close = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest("[data-formula-explanation]")) setFormulaExplanation(null);
+    };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [formulaExplanation]);
+
+  async function explainFormula(row: number, col: number) {
+    if (!activeSheet) return;
+    setCellMenu(null);
+    setFormulaExplanation({ row, col, text: "", loading: true });
+    try {
+      const res = await axios.post(`${API_BASE}/sheets/${activeSheet.id}/explain-formula`, {
+        row_index: row, col_index: col,
+      });
+      setFormulaExplanation({ row, col, text: res.data.explanation, loading: false });
+    } catch {
+      setFormulaExplanation({ row, col, text: "Failed to explain formula.", loading: false });
+    }
+  }
 
   // Column context menu operations
   async function colRenameStart(ci: number) {
@@ -656,7 +744,7 @@ export function SheetsPage() {
       const prev = sheets.find((s) => s.id === updated.id);
       if (prev) {
         const stack = undoStacks.current.get(updated.id) ?? [];
-        stack.push({ columns: prev.columns, rows: prev.rows });
+        stack.push({ columns: prev.columns, rows: prev.rows, formulas: prev.formulas ?? {} });
         if (stack.length > MAX_HISTORY) stack.shift();
         undoStacks.current.set(updated.id, stack);
         // Clear redo on new action
@@ -674,7 +762,7 @@ export function SheetsPage() {
     const snapshot = stack.pop()!;
     // Push current state to redo
     const redoStack = redoStacks.current.get(activeSheet.id) ?? [];
-    redoStack.push({ columns: activeSheet.columns, rows: activeSheet.rows });
+    redoStack.push({ columns: activeSheet.columns, rows: activeSheet.rows, formulas: activeSheet.formulas ?? {} });
     if (redoStack.length > MAX_HISTORY) redoStack.shift();
     redoStacks.current.set(activeSheet.id, redoStack);
     // Restore via API
@@ -683,6 +771,7 @@ export function SheetsPage() {
       const res = await axios.put(`${API_BASE}/sheets/${activeSheet.id}/data`, {
         columns: snapshot.columns,
         rows: snapshot.rows,
+        formulas: snapshot.formulas,
       });
       updateSheet(res.data);
     } catch { /* ignore */ }
@@ -697,7 +786,7 @@ export function SheetsPage() {
     const snapshot = stack.pop()!;
     // Push current state to undo
     const undoStack = undoStacks.current.get(activeSheet.id) ?? [];
-    undoStack.push({ columns: activeSheet.columns, rows: activeSheet.rows });
+    undoStack.push({ columns: activeSheet.columns, rows: activeSheet.rows, formulas: activeSheet.formulas ?? {} });
     if (undoStack.length > MAX_HISTORY) undoStack.shift();
     undoStacks.current.set(activeSheet.id, undoStack);
     // Restore via API
@@ -706,6 +795,7 @@ export function SheetsPage() {
       const res = await axios.put(`${API_BASE}/sheets/${activeSheet.id}/data`, {
         columns: snapshot.columns,
         rows: snapshot.rows,
+        formulas: snapshot.formulas,
       });
       updateSheet(res.data);
     } catch { /* ignore */ }
@@ -801,7 +891,7 @@ export function SheetsPage() {
     if (!activeSheet || aiDisabled) return;
     // Push snapshot before AI fill modifies cells (AI fill bypasses updateSheet)
     const stack = undoStacks.current.get(activeSheet.id) ?? [];
-    stack.push({ columns: activeSheet.columns, rows: activeSheet.rows });
+    stack.push({ columns: activeSheet.columns, rows: activeSheet.rows, formulas: activeSheet.formulas ?? {} });
     if (stack.length > MAX_HISTORY) stack.shift();
     undoStacks.current.set(activeSheet.id, stack);
     redoStacks.current.set(activeSheet.id, []);
@@ -1106,6 +1196,30 @@ export function SheetsPage() {
               </div>
             )}
 
+            {/* Formula bar */}
+            {activeSheet.columns.length > 0 && (() => {
+              const singleSel = selection && selection.r1 === selection.r2 && selection.c1 === selection.c2;
+              const selKey = singleSel ? `${selection!.r1},${selection!.c1}` : null;
+              const selFormula = selKey ? activeSheet.formulas?.[selKey] : null;
+              const showBar = editingCell || selFormula;
+              if (!showBar) return null;
+              const displayLabel = editingCell
+                ? `${String.fromCharCode(65 + Math.min(editingCell.col, 25))}${editingCell.row + 1}`
+                : singleSel
+                  ? `${String.fromCharCode(65 + Math.min(selection!.c1, 25))}${selection!.r1 + 1}`
+                  : "";
+              const displayValue = editingCell
+                ? editValue
+                : selFormula ?? "";
+              return (
+                <div className="border-b px-4 py-1 flex items-center gap-2 bg-muted/20 shrink-0">
+                  <span className="text-[11px] font-mono text-muted-foreground w-8 text-center shrink-0">{displayLabel}</span>
+                  <div className="w-px h-4 bg-border" />
+                  <span className="text-xs font-mono text-foreground truncate flex-1">{displayValue}</span>
+                </div>
+              );
+            })()}
+
             {/* Grid */}
             <div
               ref={gridRef}
@@ -1293,7 +1407,14 @@ export function SheetsPage() {
                     {filteredRowIndices.length > ROW_RENDER_LIMIT && scrollRowStart > 0 && (
                       <tr><td colSpan={activeSheet.columns.length + 2} style={{ height: scrollRowStart * 29, padding: 0, border: "none" }} /></tr>
                     )}
-                    {visibleRowIndices.map((ri) => {
+                    {/* Compute formula ref highlights once per render */}
+                    {(() => {
+                      const formulaRefSet = new Set<string>();
+                      if (editingCell && editValue.startsWith("=")) {
+                        parseFormulaRefs(editValue, activeSheet.rows.length, activeSheet.columns.length)
+                          .forEach((k) => formulaRefSet.add(k));
+                      }
+                      return visibleRowIndices.map((ri) => {
                       const row = activeSheet.rows[ri];
                       return (
                       <tr key={ri}>
@@ -1312,6 +1433,9 @@ export function SheetsPage() {
                           const justFilled = ci === aiFillCol && aiFilledRows.has(ri);
                           const fillError = ci === aiFillCol && aiFillErrors.has(ri);
                           const selected = !isEditing && isCellSelected(ri, ci);
+                          const isFormulaRef = formulaRefSet.has(`${ri},${ci}`);
+                          const hasFormula = !!activeSheet.formulas?.[`${ri},${ci}`];
+                          const isErrorValue = hasFormula && cell.startsWith("#");
                           return (
                             <td
                               key={ci}
@@ -1320,9 +1444,16 @@ export function SheetsPage() {
                                 isEditing && "ring-2 ring-primary/40 ring-inset",
                                 isEditing && cellError && "ring-destructive/60",
                                 selected && "bg-primary/10",
+                                isFormulaRef && !isEditing && "bg-blue-500/10 border-blue-400/40",
                                 justFilled && "bg-green-500/10",
                                 fillError && "bg-destructive/10"
                               )}
+                              onContextMenu={(e) => {
+                                if (hasFormula) {
+                                  e.preventDefault();
+                                  setCellMenu({ row: ri, col: ci, x: e.clientX, y: e.clientY });
+                                }
+                              }}
                               onMouseDown={(e) => {
                                 if (!isEditing) {
                                   e.preventDefault();
@@ -1346,7 +1477,7 @@ export function SheetsPage() {
                                 <div className="relative">
                                   <input
                                     ref={cellInputRef}
-                                    type={colType === "number" ? "number" : colType === "date" ? "date" : "text"}
+                                    type={editValue.startsWith("=") ? "text" : colType === "number" ? "number" : colType === "date" ? "date" : "text"}
                                     step={colType === "number" ? "any" : undefined}
                                     className="w-full px-2 py-1 text-sm bg-transparent outline-none"
                                     value={editValue}
@@ -1385,6 +1516,8 @@ export function SheetsPage() {
                                     <span className={cell.toLowerCase() === "true" ? "text-green-500" : "text-muted-foreground/50"}>
                                       {cell.toLowerCase() === "true" ? "Yes" : "No"}
                                     </span>
+                                  ) : isErrorValue ? (
+                                    <span className="text-destructive font-mono text-xs">{cell}</span>
                                   ) : (
                                     cell || <span className="text-muted-foreground/30">&nbsp;</span>
                                   )}
@@ -1403,7 +1536,8 @@ export function SheetsPage() {
                         </td>
                       </tr>
                       );
-                    })}
+                    });
+                    })()}
                     {/* Virtual scroll spacer bottom */}
                     {filteredRowIndices.length > ROW_RENDER_LIMIT && (scrollRowStart + ROW_RENDER_LIMIT) < filteredRowIndices.length && (
                       <tr><td colSpan={activeSheet.columns.length + 2} style={{ height: (filteredRowIndices.length - scrollRowStart - ROW_RENDER_LIMIT) * 29, padding: 0, border: "none" }} /></tr>
@@ -1431,7 +1565,9 @@ export function SheetsPage() {
                 return count > 1 ? <span className="text-primary font-medium">{count} cells selected</span> : null;
               })()}
               {selection && selection.r1 === selection.r2 && selection.c1 === selection.c2 && activeSheet.columns[selection.c1] && (
-                <span>Type: {activeSheet.columns[selection.c1].type}</span>
+                activeSheet.formulas?.[`${selection.r1},${selection.c1}`]
+                  ? <span className="text-blue-500 font-medium">Formula</span>
+                  : <span>Type: {activeSheet.columns[selection.c1].type}</span>
               )}
               {selection && selection.r1 === selection.r2 && selection.c1 === selection.c2 && (
                 <span className="text-muted-foreground/60">
@@ -1635,6 +1771,56 @@ export function SheetsPage() {
           </div>
         </div>
       )}
+
+      {/* Cell context menu (formula cells only) */}
+      {cellMenu && (
+        <div
+          className="fixed z-50 bg-background border border-border rounded-md shadow-lg py-1 min-w-[160px] text-sm"
+          style={{ left: cellMenu.x, top: cellMenu.y }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2"
+            onClick={() => explainFormula(cellMenu.row, cellMenu.col)}
+          >
+            <Sparkles className="h-3.5 w-3.5 text-muted-foreground" />
+            Explain formula
+          </button>
+        </div>
+      )}
+
+      {/* Formula explanation popover */}
+      {formulaExplanation && (() => {
+        const cellEl = gridRef.current?.querySelector(
+          `tr:nth-child(${formulaExplanation.row + 1}) td:nth-child(${formulaExplanation.col + 2})`
+        );
+        const rect = cellEl?.getBoundingClientRect();
+        const x = rect ? rect.left : 200;
+        const y = rect ? rect.bottom + 4 : 200;
+        return (
+          <div
+            className="fixed z-50 bg-background border border-border rounded-lg shadow-lg p-3 max-w-[320px] text-sm"
+            style={{ left: x, top: y }}
+            data-formula-explanation
+          >
+            <div className="flex items-center gap-1.5 mb-1.5">
+              <Sparkles className="h-3.5 w-3.5 text-primary shrink-0" />
+              <span className="text-xs font-medium text-muted-foreground">Formula Explanation</span>
+              <button className="ml-auto text-muted-foreground hover:text-foreground" onClick={() => setFormulaExplanation(null)}>
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+            {formulaExplanation.loading ? (
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Thinking...
+              </div>
+            ) : (
+              <p className="text-xs leading-relaxed text-foreground">{formulaExplanation.text}</p>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Row context menu */}
       {rowMenu && (

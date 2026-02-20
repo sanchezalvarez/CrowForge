@@ -59,6 +59,39 @@ def col_to_index(col_str: str) -> int:
     return n - 1
 
 
+def index_to_col(idx: int) -> str:
+    """0->A, 1->B, ..., 25->Z, 26->AA."""
+    result = ""
+    idx += 1
+    while idx > 0:
+        idx, rem = divmod(idx - 1, 26)
+        result = chr(rem + ord('A')) + result
+    return result
+
+
+_SHIFT_REF_RE = re.compile(r'([A-Za-z]{1,3})(\d{1,7})')
+
+
+def shift_refs(formula: str, row_delta: int, col_delta: int) -> str:
+    """Shift all cell references in a formula by (row_delta, col_delta).
+
+    Returns the adjusted formula, or the original if any ref would go negative.
+    """
+    def _replace(m: re.Match) -> str:
+        col_str = m.group(1)
+        row_num = int(m.group(2))
+        new_col = col_to_index(col_str) + col_delta
+        new_row = row_num - 1 + row_delta  # 0-based
+        if new_col < 0 or new_row < 0:
+            raise InvalidRefError("Shifted ref out of bounds")
+        return f"{index_to_col(new_col)}{new_row + 1}"
+
+    try:
+        return formula[0] + _SHIFT_REF_RE.sub(_replace, formula[1:])
+    except InvalidRefError:
+        return formula  # keep original if shift goes out of bounds
+
+
 def parse_cell_ref(ref: str) -> tuple[int, int]:
     """'A1' -> (row=0, col=0). Raises InvalidRefError on bad input."""
     m = _CELL_REF_RE.match(ref.strip())

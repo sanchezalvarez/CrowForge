@@ -648,13 +648,17 @@ async def clear_cell_range(sheet_id: str, req: dict):
     if not sheet:
         raise HTTPException(status_code=404, detail="Sheet not found")
     formulas = dict(sheet.formulas)
+    changed = set()
     with sheet_repo.db.get_connection() as conn:
         for ri in range(r1, r2 + 1):
             for ci in range(c1, c2 + 1):
+                key = f"{ri},{ci}"
+                changed.add(key)
                 if ri < len(sheet.rows) and ci < len(sheet.rows[ri]):
                     sheet.rows[ri][ci] = ""
-                formulas.pop(f"{ri},{ci}", None)
-        sheet_repo._save(conn, sheet_id, sheet.columns, sheet.rows, formulas)
+                formulas.pop(key, None)
+        sheet_repo._save(conn, sheet_id, sheet.columns, sheet.rows, formulas,
+                         changed_cells=changed)
     return sheet_repo.get_by_id(sheet_id)
 
 @app.put("/sheets/{sheet_id}/paste", response_model=Sheet)
@@ -668,6 +672,7 @@ async def paste_cells(sheet_id: str, req: dict):
         raise HTTPException(status_code=404, detail="Sheet not found")
     num_cols = len(sheet.columns)
     formulas = dict(sheet.formulas)
+    changed = set()
     with sheet_repo.db.get_connection() as conn:
         for dr, row_vals in enumerate(data):
             ri = start_row + dr
@@ -680,13 +685,15 @@ async def paste_cells(sheet_id: str, req: dict):
                     continue
                 val_str = str(val)
                 key = f"{ri},{ci}"
+                changed.add(key)
                 if val_str.startswith('='):
                     formulas[key] = val_str
                     sheet.rows[ri][ci] = ""
                 else:
                     formulas.pop(key, None)
                     sheet.rows[ri][ci] = val_str
-        sheet_repo._save(conn, sheet_id, sheet.columns, sheet.rows, formulas)
+        sheet_repo._save(conn, sheet_id, sheet.columns, sheet.rows, formulas,
+                         changed_cells=changed)
     return sheet_repo.get_by_id(sheet_id)
 
 @app.put("/sheets/{sheet_id}/cell", response_model=Sheet)

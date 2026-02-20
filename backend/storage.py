@@ -283,10 +283,16 @@ class SheetRepository:
             return [self._row_to_sheet(r) for r in rows]
 
     def _save(self, conn, sheet_id: str, columns: List[SheetColumn],
-              rows: List[List[str]], formulas: dict):
-        """Recalculate formulas and persist columns, rows, and formulas."""
+              rows: List[List[str]], formulas: dict,
+              changed_cells: set | None = None):
+        """Recalculate formulas and persist columns, rows, and formulas.
+
+        changed_cells=None   — full recalculation (structural changes, restore).
+        changed_cells={..}   — targeted recalculation (only dependents of those cells).
+        changed_cells=set()  — skip recalculation (no value changes, e.g. add empty row).
+        """
         from backend.formula import recalculate
-        recalculate(rows, formulas)
+        recalculate(rows, formulas, changed_cells)
         conn.execute(
             "UPDATE sheets SET columns_json = ?, rows_json = ?, formulas_json = ?, "
             "updated_at = CURRENT_TIMESTAMP WHERE id = ?",
@@ -326,7 +332,8 @@ class SheetRepository:
             if not sheet:
                 return None
             sheet.rows.append([""] * len(sheet.columns))
-            self._save(conn, sheet_id, sheet.columns, sheet.rows, sheet.formulas)
+            self._save(conn, sheet_id, sheet.columns, sheet.rows, sheet.formulas,
+                       changed_cells=set())
             return self.get_by_id(sheet_id)
 
     def insert_row_at(self, sheet_id: str, row_index: int) -> Optional[Sheet]:
@@ -369,7 +376,8 @@ class SheetRepository:
             sheet.columns.append(SheetColumn(name=name, type=col_type))
             for row in sheet.rows:
                 row.append("")
-            self._save(conn, sheet_id, sheet.columns, sheet.rows, sheet.formulas)
+            self._save(conn, sheet_id, sheet.columns, sheet.rows, sheet.formulas,
+                       changed_cells=set())
             return self.get_by_id(sheet_id)
 
     @staticmethod
@@ -416,7 +424,8 @@ class SheetRepository:
                     raise ValueError(error)
                 sheet.rows[row_index][col_index] = value
 
-            self._save(conn, sheet_id, sheet.columns, sheet.rows, formulas)
+            self._save(conn, sheet_id, sheet.columns, sheet.rows, formulas,
+                       changed_cells={key})
             return self.get_by_id(sheet_id)
 
     def delete_row(self, sheet_id: str, row_index: int) -> Optional[Sheet]:
@@ -484,7 +493,8 @@ class SheetRepository:
             if not sheet or col_index < 0 or col_index >= len(sheet.columns):
                 return None
             sheet.columns[col_index] = SheetColumn(name=name, type=sheet.columns[col_index].type)
-            self._save(conn, sheet_id, sheet.columns, sheet.rows, sheet.formulas)
+            self._save(conn, sheet_id, sheet.columns, sheet.rows, sheet.formulas,
+                       changed_cells=set())
             return self.get_by_id(sheet_id)
 
     def move_column(self, sheet_id: str, from_index: int, to_index: int) -> Optional[Sheet]:

@@ -6,6 +6,8 @@ import {
   MessageSquare,
   FileText,
   Table2,
+  PanelRightClose,
+  PanelRightOpen,
 } from "lucide-react";
 import crowforgeLogo from "./assets/crowforge_ico.png";
 import { cn } from "./lib/utils";
@@ -55,6 +57,14 @@ export default function App() {
   useEffect(() => {
     if (selectedTemplateId !== null) localStorage.setItem("ai_template_id", String(selectedTemplateId));
   }, [selectedTemplateId]);
+
+  // AI panel visibility
+  const [aiPanelOpen, setAiPanelOpen] = useState(() =>
+    localStorage.getItem("ai_panel_open") !== "false"
+  );
+  useEffect(() => {
+    localStorage.setItem("ai_panel_open", String(aiPanelOpen));
+  }, [aiPanelOpen]);
 
   // AI debug toggle
   const [showDebug, setShowDebug] = useState(() =>
@@ -109,7 +119,7 @@ export default function App() {
 
       {/* MAIN + AI CONTROLS */}
       <div className="flex flex-1 min-w-0 flex-col lg:flex-row overflow-hidden">
-      <main className="flex-1 min-w-0 overflow-y-auto">
+      <main className="flex-1 min-w-0 overflow-y-auto relative">
         {appError && (
           <div className="max-w-4xl mx-auto px-4 sm:px-6 pt-6">
             <div className="flex items-start gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
@@ -147,15 +157,25 @@ export default function App() {
         ) : currentPage === "benchmark" ? (
           <BenchmarkPage />
         ) : null}
+
+        <button
+          onClick={() => setAiPanelOpen(!aiPanelOpen)}
+          className="absolute top-2 right-2 z-10 p-1.5 rounded-md border bg-background text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+          title={aiPanelOpen ? "Hide AI panel" : "Show AI panel"}
+        >
+          {aiPanelOpen ? <PanelRightClose size={16} /> : <PanelRightOpen size={16} />}
+        </button>
       </main>
 
-      <AIControlPanel
-        templates={templates}
-        selectedTemplateId={selectedTemplateId}
-        onTemplateChange={setSelectedTemplateId}
-        showDebug={showDebug}
-        onShowDebugChange={setShowDebug}
-      />
+      {aiPanelOpen && (
+        <AIControlPanel
+          templates={templates}
+          selectedTemplateId={selectedTemplateId}
+          onTemplateChange={setSelectedTemplateId}
+          showDebug={showDebug}
+          onShowDebugChange={setShowDebug}
+        />
+      )}
       </div>
 
       <Toaster />

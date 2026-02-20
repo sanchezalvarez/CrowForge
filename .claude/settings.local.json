@@ -32,7 +32,8 @@
       "Bash(where:*)",
       "Bash(npm uninstall:*)",
       "Bash(cargo check:*)",
-      "Bash(cd:*)"
+      "Bash(cd:*)",
+      "Bash(test:*)"
     ]
   }
 }

@@ -485,6 +485,11 @@ def recalculate(rows: list[list[str]], formulas: dict[str, str],
 
     if changed_cells is not None:
         eval_order = graph.affected(changed_cells)
+        # Also evaluate formulas AT the changed cells themselves
+        # (e.g. when a new formula is entered or an existing one is modified)
+        for key in changed_cells:
+            if key in formulas and key not in set(eval_order):
+                eval_order.insert(0, key)
     else:
         eval_order = graph.topo_sort_all()
 

@@ -456,8 +456,10 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
   }, [selection]);
 
   const handleCellMouseDown = useCallback((ri: number, ci: number, e: React.MouseEvent) => {
-    // Don't interfere with editing
-    if (editingCell) return;
+    // If editing a different cell, commit the edit first
+    if (editingCell && (editingCell.row !== ri || editingCell.col !== ci)) {
+      commitEdit();
+    }
 
     if (e.shiftKey && selAnchor) {
       // Extend selection from anchor
@@ -469,7 +471,7 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
       setSelection({ r1: ri, c1: ci, r2: ri, c2: ci });
       setIsDragging(true);
     }
-  }, [editingCell, selAnchor, makeRect]);
+  }, [editingCell, commitEdit, selAnchor, makeRect]);
 
   const handleCellMouseEnter = useCallback((ri: number, ci: number) => {
     if (!isDragging || !selAnchor) return;
@@ -1670,27 +1672,34 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
               const displayValue = editingCell
                 ? editValue
                 : selFormula ?? (selKey ? (activeSheet.rows[selection!.r1]?.[selection!.c1] ?? "") : "");
-              const FUNS = ["SUM", "AVG", "COUNT", "MIN", "MAX", "IF"];
+              const FUNS = ["SUM", "AVG", "COUNT", "MIN", "MAX"];
+              // Convert column index to letter(s): 0→A, 25→Z, 26→AA …
+              const idxToCol = (i: number) => { let r="",n=i+1; while(n>0){const m=(n-1)%26;r=String.fromCharCode(65+m)+r;n=Math.floor((n-1)/26);}return r; };
 
               return (
                 <div className="border-b px-2 py-1 flex items-center gap-1 bg-muted/20 shrink-0">
                   <span className="text-[11px] font-mono text-muted-foreground w-10 text-center shrink-0 bg-muted rounded px-1 py-0.5">{displayLabel}</span>
                   <div className="w-px h-5 bg-border mx-1" />
-                  {/* Function buttons */}
+                  {/* Function buttons: select a range then click to insert formula below/right */}
                   {FUNS.map((fn) => (
                     <button
                       key={fn}
                       className="text-[10px] px-1.5 py-0.5 rounded bg-muted hover:bg-primary/20 text-muted-foreground hover:text-foreground font-mono shrink-0 transition-colors"
                       onMouseDown={(e) => e.preventDefault()}
                       onClick={() => {
-                        const target = editingCell ?? (singleSel ? { row: selection!.r1, col: selection!.c1 } : null);
-                        if (!target) return;
-                        const current = editingCell ? editValue : (activeSheet.rows[target.row]?.[target.col] ?? "");
-                        const insert = `=${fn}()`;
-                        if (!editingCell) {
-                          startEditing(target.row, target.col, insert);
+                        if (!selection) return;
+                        const { r1, c1, r2, c2 } = selection;
+                        const rangeStr = `${idxToCol(c1)}${r1+1}:${idxToCol(c2)}${r2+1}`;
+                        const formula = `=${fn}(${rangeStr})`;
+                        // Place formula in the cell below the selection if it exists,
+                        // otherwise to the right of the selection.
+                        if (r2 + 1 < activeSheet.rows.length) {
+                          startEditing(r2 + 1, c1, formula);
+                        } else if (c2 + 1 < activeSheet.columns.length) {
+                          startEditing(r1, c2 + 1, formula);
                         } else {
-                          setEditValue(current + `${fn}()`);
+                          // Just pre-fill the formula bar for the current cell
+                          startEditing(r1, c1, formula);
                         }
                       }}
                     >
@@ -1701,7 +1710,7 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
                   {/* Editable formula input */}
                   <input
                     className="flex-1 text-xs font-mono bg-transparent outline-none text-foreground px-1"
-                    placeholder={singleSel ? "Enter value or =formula…" : "Select a cell"}
+                    placeholder={editingCell || singleSel ? "Enter value or =formula…" : selection ? `${idxToCol(selection.c1)}${selection.r1+1}:${idxToCol(selection.c2)}${selection.r2+1} — select then click function` : "Select a cell"}
                     readOnly={!singleSel && !editingCell}
                     value={displayValue}
                     onFocus={() => {
@@ -2034,7 +2043,8 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
                                   axios.put(`${API_BASE}/sheets/${activeSheet.id}/cell`, {
                                     row_index: ri, col_index: ci, value: next,
                                   }).then((res) => updateSheet(res.data)).catch(() => {});
-                                } else if (!isEditing) {
+                                } else if (!isEditing && selection && selection.r1 === ri && selection.c1 === ci && selection.r2 === ri && selection.c2 === ci) {
+                                  // Start editing on second click (cell already selected)
                                   startEditing(ri, ci, cell);
                                 }
                               }}

@@ -116,12 +116,14 @@ export interface EditorSelection {
 }
 
 import type { DocumentContext } from "../App";
+import type { TuningParams } from "../components/AIControlPanel";
 
 interface DocumentsPageProps {
   onContextChange?: (ctx: DocumentContext | null) => void;
+  tuningParams?: TuningParams;
 }
 
-export function DocumentsPage({ onContextChange }: DocumentsPageProps) {
+export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPageProps) {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [activeDocId, setActiveDocId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -312,6 +314,8 @@ export function DocumentsPage({ onContextChange }: DocumentsPageProps) {
       const res = await axios.post(`${API_BASE}/documents/ai`, {
         action_type: actionType,
         selected_text: selection.text,
+        temperature: tuningParams?.temperature,
+        max_tokens: tuningParams?.maxTokens,
       });
       const html = res.data.html as string | undefined;
       if (typeof html === "string" && html.trim()) {

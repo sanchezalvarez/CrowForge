@@ -189,7 +189,13 @@ const ROW_WARN_THRESHOLD = 5000;   // show warning banner
 const ROW_AI_LIMIT = 10000;        // disable AI actions
 const ROW_RENDER_LIMIT = 500;      // max rows rendered at once (virtual window)
 
-export function SheetsPage() {
+import type { TuningParams } from "../components/AIControlPanel";
+
+interface SheetsPageProps {
+  tuningParams?: TuningParams;
+}
+
+export function SheetsPage({ tuningParams }: SheetsPageProps) {
   const [sheets, setSheets] = useState<Sheet[]>([]);
   const [activeSheetId, setActiveSheetId] = useState<string | null>(null);
   const activeSheet = sheets.find((s) => s.id === activeSheetId) ?? null;
@@ -620,6 +626,8 @@ export function SheetsPage() {
     try {
       const res = await axios.post(`${API_BASE}/sheets/${activeSheet.id}/explain-formula`, {
         row_index: row, col_index: col,
+        temperature: tuningParams?.temperature,
+        max_tokens: tuningParams?.maxTokens,
       });
       setFormulaExplanation({ row, col, text: res.data.explanation, loading: false });
     } catch {
@@ -977,7 +985,11 @@ export function SheetsPage() {
     setAiGenError(null);
     setAiGenPreview(null);
     try {
-      const res = await axios.post(`${API_BASE}/sheets/ai-schema`, { prompt: aiGenPrompt.trim() });
+      const res = await axios.post(`${API_BASE}/sheets/ai-schema`, {
+        prompt: aiGenPrompt.trim(),
+        temperature: tuningParams?.temperature,
+        max_tokens: tuningParams?.maxTokens,
+      });
       setAiGenPreview(res.data);
     } catch (err: any) {
       const detail = err?.response?.data?.detail;
@@ -1041,6 +1053,8 @@ export function SheetsPage() {
       col_index: String(colIndex),
       instruction,
     });
+    if (tuningParams?.temperature !== undefined) params.set("temperature", String(tuningParams.temperature));
+    if (tuningParams?.maxTokens !== undefined) params.set("max_tokens", String(tuningParams.maxTokens));
     const es = new EventSource(`${API_BASE}/sheets/${activeSheet.id}/ai-fill?${params}`);
     aiFillRef.current = es;
 

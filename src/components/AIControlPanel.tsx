@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
-import { Cpu, Layers, FileText, Sliders, Loader2 } from "lucide-react";
+import { Cpu, Sliders, Bug, Loader2, RefreshCw } from "lucide-react";
 import { Card, CardContent } from "./ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./ui/tabs";
 import { Separator } from "./ui/separator";
@@ -13,16 +13,21 @@ import {
   SelectValue,
 } from "./ui/select";
 import { toast } from "../hooks/useToast";
-import type { PromptTemplate } from "../types";
 
 const API_BASE = "http://127.0.0.1:8000";
 
+export interface TuningParams {
+  temperature: number;
+  topP: number;
+  maxTokens: number;
+  seed: number | null;
+}
+
 interface AIControlPanelProps {
-  templates: PromptTemplate[];
-  selectedTemplateId: number | null;
-  onTemplateChange: (id: number) => void;
   showDebug: boolean;
   onShowDebugChange: (show: boolean) => void;
+  tuningParams: TuningParams;
+  onTuningChange: (params: TuningParams) => void;
 }
 
 interface EngineInfo {
@@ -39,10 +44,9 @@ interface LocalModel {
 }
 
 /**
- * Always-visible right-side panel for power-user AI controls.
- * Engine and Model tabs are live-wired to the backend.
+ * Right-side AI control panel with 3 tabs: Engine & Model, Tuning, Debug.
  */
-export function AIControlPanel({ templates, selectedTemplateId, onTemplateChange, showDebug, onShowDebugChange }: AIControlPanelProps) {
+export function AIControlPanel({ showDebug, onShowDebugChange, tuningParams, onTuningChange }: AIControlPanelProps) {
   // ── Engine state ───────────────────────────────────────────────
   const [engines, setEngines] = useState<EngineInfo[]>([]);
   const [activeEngine, setActiveEngine] = useState<string | null>(null);
@@ -53,6 +57,10 @@ export function AIControlPanel({ templates, selectedTemplateId, onTemplateChange
   const [activeModel, setActiveModel] = useState<string | null>(null);
   const [modelSwitching, setModelSwitching] = useState(false);
 
+  // ── Debug state ────────────────────────────────────────────────
+  const [debugPayload, setDebugPayload] = useState<Record<string, unknown> | null>(null);
+  const [debugLoading, setDebugLoading] = useState(false);
+
   // ── Fetch engines ──────────────────────────────────────────────
   const fetchEngines = useCallback(async () => {
     try {
@@ -61,7 +69,7 @@ export function AIControlPanel({ templates, selectedTemplateId, onTemplateChange
       const active = res.data.find((e) => e.active);
       if (active) setActiveEngine(active.name);
     } catch {
-      // Silently ignore on startup — backend may not be up yet
+      // Silently ignore on startup
     }
   }, []);
 
@@ -72,9 +80,14 @@ export function AIControlPanel({ templates, selectedTemplateId, onTemplateChange
         `${API_BASE}/ai/models`
       );
       setModels(res.data.models);
-      setActiveModel(res.data.active_model);
+      // Auto-select first model if none active
+      if (!res.data.active_model && res.data.models.length > 0) {
+        setActiveModel(res.data.models[0].filename);
+      } else {
+        setActiveModel(res.data.active_model);
+      }
     } catch {
-      // Silently ignore — local engine may not be registered
+      // Silently ignore
     }
   }, []);
 
@@ -91,7 +104,6 @@ export function AIControlPanel({ templates, selectedTemplateId, onTemplateChange
       await axios.post(`${API_BASE}/ai/engine`, { engine: name });
       setActiveEngine(name);
       toast(`Switched to ${name} engine`, "success");
-      // Re-fetch to sync status flags
       await fetchEngines();
     } catch (err: any) {
       const msg = err?.response?.data?.detail || "Failed to switch engine";
@@ -122,11 +134,24 @@ export function AIControlPanel({ templates, selectedTemplateId, onTemplateChange
     }
   };
 
+  // ── Fetch debug payload ────────────────────────────────────────
+  const fetchDebug = useCallback(async () => {
+    setDebugLoading(true);
+    try {
+      const res = await axios.get(`${API_BASE}/ai/debug/last`);
+      setDebugPayload(res.data.payload);
+    } catch {
+      // ignore
+    } finally {
+      setDebugLoading(false);
+    }
+  }, []);
+
   const isBusy = engineSwitching || modelSwitching;
 
-  // Derived template helpers
-  const templateCategories = Array.from(new Set(templates.map((t) => t.category)));
-  const selectedTemplate = templates.find((t) => t.id === selectedTemplateId) ?? null;
+  // Check if local engine is active (to show model selector)
+  const activeEngineInfo = engines.find((e) => e.name === activeEngine);
+  const showModelSelector = activeEngineInfo?.type === "local";
 
   return (
     <aside className="w-full lg:w-[280px] shrink-0 border-t lg:border-t-0 lg:border-l bg-background flex flex-col overflow-hidden max-h-[40vh] lg:max-h-none">
@@ -141,28 +166,24 @@ export function AIControlPanel({ templates, selectedTemplateId, onTemplateChange
 
       {/* Scrollable content */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        <Tabs defaultValue="engine" className="w-full">
-          <TabsList className="w-full grid grid-cols-4 h-8">
-            <TabsTrigger value="engine" className="text-xs px-1.5 gap-1">
+        <Tabs defaultValue="engine-model" className="w-full">
+          <TabsList className="w-full grid grid-cols-3 h-8">
+            <TabsTrigger value="engine-model" className="text-xs px-1.5 gap-1">
               <Cpu size={12} />
               Engine
             </TabsTrigger>
-            <TabsTrigger value="model" className="text-xs px-1.5 gap-1">
-              <Layers size={12} />
-              Model
-            </TabsTrigger>
-            <TabsTrigger value="template" className="text-xs px-1.5 gap-1">
-              <FileText size={12} />
-              Prompt
-            </TabsTrigger>
-            <TabsTrigger value="creativity" className="text-xs px-1.5 gap-1">
+            <TabsTrigger value="tuning" className="text-xs px-1.5 gap-1">
               <Sliders size={12} />
               Tuning
             </TabsTrigger>
+            <TabsTrigger value="debug" className="text-xs px-1.5 gap-1" onClick={() => { if (showDebug) fetchDebug(); }}>
+              <Bug size={12} />
+              Debug
+            </TabsTrigger>
           </TabsList>
 
-          {/* ── Engine ─────────────────────────────── */}
-          <TabsContent value="engine">
+          {/* ── Engine & Model ─────────────────────── */}
+          <TabsContent value="engine-model">
             <Card className="shadow-none border-muted">
               <CardContent className="p-3 space-y-3">
                 <div className="space-y-1.5">
@@ -196,6 +217,41 @@ export function AIControlPanel({ templates, selectedTemplateId, onTemplateChange
                         : "Select an engine to begin"}
                   </p>
                 </div>
+
+                {/* Model selector — only when local engine is active */}
+                {showModelSelector && (
+                  <>
+                    <Separator />
+                    <div className="space-y-1.5">
+                      <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">
+                        Local Model
+                      </Label>
+                      <Select
+                        value={activeModel ?? undefined}
+                        onValueChange={handleModelChange}
+                        disabled={isBusy || models.length === 0}
+                      >
+                        <SelectTrigger className="h-8 text-xs font-mono">
+                          <SelectValue placeholder="No model loaded" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {models.map((m) => (
+                            <SelectItem key={m.filename} value={m.filename}>
+                              <span>{m.filename}</span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-[10px] text-muted-foreground/70">
+                        {modelSwitching
+                          ? "Loading model — this may take a moment..."
+                          : activeModel
+                            ? `Loaded: ${activeModel}`
+                            : "Select a GGUF model to load"}
+                      </p>
+                    </div>
+                  </>
+                )}
 
                 <Separator />
 
@@ -232,212 +288,175 @@ export function AIControlPanel({ templates, selectedTemplateId, onTemplateChange
             </Card>
           </TabsContent>
 
-          {/* ── Model ──────────────────────────────── */}
-          <TabsContent value="model">
+          {/* ── Tuning ─────────────────────────────── */}
+          <TabsContent value="tuning">
             <Card className="shadow-none border-muted">
               <CardContent className="p-3 space-y-3">
-                <div className="space-y-1.5">
-                  <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">
-                    Local Model
-                  </Label>
-                  <Select
-                    value={activeModel ?? undefined}
-                    onValueChange={handleModelChange}
-                    disabled={isBusy || models.length === 0}
-                  >
-                    <SelectTrigger className="h-8 text-xs font-mono">
-                      <SelectValue placeholder="No model loaded" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {models.map((m) => (
-                        <SelectItem key={m.filename} value={m.filename}>
-                          <span>{m.filename}</span>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-[10px] text-muted-foreground/70">
-                    {modelSwitching
-                      ? "Loading model — this may take a moment..."
-                      : activeModel
-                        ? `Loaded: ${activeModel}`
-                        : "Select a GGUF model to load"}
-                  </p>
+                {/* Temperature */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">
+                      Temperature
+                    </Label>
+                    <span className="text-xs font-mono text-foreground">
+                      {tuningParams.temperature.toFixed(2)}
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1.5"
+                    step="0.05"
+                    value={tuningParams.temperature}
+                    onChange={(e) => onTuningChange({ ...tuningParams, temperature: parseFloat(e.target.value) })}
+                    className="w-full h-2 accent-primary cursor-pointer"
+                  />
+                  <p className="text-[10px] text-muted-foreground/60 text-right">0 – 1.5</p>
                 </div>
 
                 <Separator />
 
-                <div className="space-y-1.5">
-                  <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">
-                    Available GGUF Models
-                  </Label>
-                  {models.length === 0 ? (
-                    <p className="text-[10px] text-muted-foreground/70 italic">
-                      No .gguf files found in models directory
-                    </p>
-                  ) : (
-                    models.map((m) => (
-                      <div
-                        key={m.filename}
-                        className="flex items-center justify-between rounded-md border px-3 py-1.5 text-xs"
+                {/* Top-p */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">
+                      Top-p
+                    </Label>
+                    <span className="text-xs font-mono text-foreground">
+                      {tuningParams.topP.toFixed(2)}
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0.1"
+                    max="1.0"
+                    step="0.05"
+                    value={tuningParams.topP}
+                    onChange={(e) => onTuningChange({ ...tuningParams, topP: parseFloat(e.target.value) })}
+                    className="w-full h-2 accent-primary cursor-pointer"
+                  />
+                  <p className="text-[10px] text-muted-foreground/60 text-right">0.1 – 1.0</p>
+                </div>
+
+                <Separator />
+
+                {/* Max Tokens */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">
+                      Max Tokens
+                    </Label>
+                    <span className="text-xs font-mono text-foreground">
+                      {tuningParams.maxTokens}
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min="64"
+                    max="8192"
+                    step="64"
+                    value={tuningParams.maxTokens}
+                    onChange={(e) => onTuningChange({ ...tuningParams, maxTokens: parseInt(e.target.value) })}
+                    className="w-full h-2 accent-primary cursor-pointer"
+                  />
+                  <p className="text-[10px] text-muted-foreground/60 text-right">64 – 8192</p>
+                </div>
+
+                <Separator />
+
+                {/* Seed */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">
+                      Seed
+                    </Label>
+                    <span className="text-xs font-mono text-foreground">
+                      {tuningParams.seed !== null ? tuningParams.seed : "Random"}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min="0"
+                      placeholder="Random"
+                      value={tuningParams.seed !== null ? tuningParams.seed : ""}
+                      onChange={(e) => {
+                        const val = e.target.value.trim();
+                        onTuningChange({ ...tuningParams, seed: val ? parseInt(val) : null });
+                      }}
+                      className="flex-1 h-7 rounded-md border border-input bg-background px-2 text-xs font-mono text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                    />
+                    {tuningParams.seed !== null && (
+                      <button
+                        onClick={() => onTuningChange({ ...tuningParams, seed: null })}
+                        className="text-[10px] text-muted-foreground hover:text-foreground"
                       >
-                        <div className="flex items-center gap-2">
-                          <div
-                            className={`h-2 w-2 rounded-full ${
-                              m.filename === activeModel ? "bg-emerald-500" : "bg-muted-foreground/30"
-                            }`}
-                          />
-                          <span className="font-mono text-foreground truncate max-w-[140px]">
-                            {m.filename}
-                          </span>
-                        </div>
-                        <span className="text-[10px] text-muted-foreground/60 whitespace-nowrap">
-                          {m.size_mb >= 1024
-                            ? `${(m.size_mb / 1024).toFixed(1)}G`
-                            : `${m.size_mb}M`}
-                          {" "}ctx {m.default_ctx}
-                        </span>
-                      </div>
-                    ))
-                  )}
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-muted-foreground/60 text-right">optional</p>
                 </div>
               </CardContent>
             </Card>
           </TabsContent>
 
-          {/* ── Prompt Template ────────────────────── */}
-          <TabsContent value="template">
+          {/* ── Debug ──────────────────────────────── */}
+          <TabsContent value="debug">
             <Card className="shadow-none border-muted">
               <CardContent className="p-3 space-y-3">
-                <div className="space-y-1.5">
-                  <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">
-                    Prompt Template
-                  </Label>
-                  <Select
-                    value={selectedTemplateId !== null ? String(selectedTemplateId) : undefined}
-                    onValueChange={(v) => onTemplateChange(parseInt(v))}
-                    disabled={isBusy}
+                {/* Debug toggle */}
+                <button
+                  type="button"
+                  onClick={() => onShowDebugChange(!showDebug)}
+                  className="flex items-center gap-2.5 w-full px-1 py-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <div
+                    className={`h-4 w-8 rounded-full relative transition-colors ${
+                      showDebug ? "bg-emerald-500" : "bg-muted-foreground/30"
+                    }`}
                   >
-                    <SelectTrigger className="h-8 text-xs">
-                      <SelectValue placeholder="Select template..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {templateCategories.map((cat) => (
-                        <div key={cat}>
-                          <div className="px-2 py-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-                            {cat}
-                          </div>
-                          {templates
-                            .filter((t) => t.category === cat)
-                            .map((t) => (
-                              <SelectItem key={t.id} value={String(t.id)}>
-                                {t.name}
-                                {t.version ? ` v${t.version}` : ""}
-                              </SelectItem>
-                            ))}
-                        </div>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {selectedTemplate && (
-                    <p className="text-[10px] text-muted-foreground/70 leading-snug">
-                      {selectedTemplate.description || `Category: ${selectedTemplate.category}`}
-                    </p>
-                  )}
-                </div>
+                    <div
+                      className={`absolute top-0.5 h-3 w-3 rounded-full bg-white transition-transform ${
+                        showDebug ? "translate-x-4" : "translate-x-0.5"
+                      }`}
+                    />
+                  </div>
+                  <span className="font-mono">Show AI Debug</span>
+                </button>
 
-                <Separator />
-
-                <div className="space-y-1.5">
-                  <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">
-                    All Templates
-                  </Label>
-                  {templates.length === 0 ? (
-                    <p className="text-[10px] text-muted-foreground/70 italic">
-                      No templates loaded
-                    </p>
-                  ) : (
-                    templates.map((t) => (
-                      <div
-                        key={t.id}
-                        className="flex items-center justify-between rounded-md border px-3 py-1.5 text-xs hover:bg-muted/50 cursor-pointer transition-colors"
-                        onClick={() => onTemplateChange(t.id)}
-                      >
-                        <div className="flex items-center gap-2">
-                          <div
-                            className={`h-2 w-2 rounded-full ${
-                              t.id === selectedTemplateId ? "bg-emerald-500" : "bg-muted-foreground/30"
-                            }`}
-                          />
-                          <span className="text-foreground">{t.name}</span>
-                        </div>
-                        <span className="text-[10px] text-muted-foreground/60">
-                          {t.category}{t.version ? ` v${t.version}` : ""}
-                        </span>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* ── Creativity / Tuning (placeholder) ── */}
-          <TabsContent value="creativity">
-            <Card className="shadow-none border-muted">
-              <CardContent className="p-3 space-y-3">
-                {[
-                  { label: "Temperature", value: "0.70", range: "0 – 1.5" },
-                  { label: "Top-p", value: "0.95", range: "0.1 – 1.0" },
-                  { label: "Max Tokens", value: "1024", range: "64 – 8192" },
-                  { label: "Seed", value: "Random", range: "optional" },
-                ].map((param, i) => (
-                  <div key={param.label}>
-                    {i > 0 && <Separator className="mb-3" />}
-                    <div className="space-y-1">
+                {showDebug && (
+                  <>
+                    <Separator />
+                    <div className="space-y-1.5">
                       <div className="flex items-center justify-between">
                         <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">
-                          {param.label}
+                          Last Generation
                         </Label>
-                        <span className="text-xs font-mono text-foreground">
-                          {param.value}
-                        </span>
+                        <button
+                          onClick={fetchDebug}
+                          disabled={debugLoading}
+                          className="text-muted-foreground hover:text-foreground"
+                        >
+                          <RefreshCw size={12} className={debugLoading ? "animate-spin" : ""} />
+                        </button>
                       </div>
-                      {/* Placeholder track */}
-                      <div className="h-2 w-full rounded-full bg-muted">
-                        <div className="h-2 rounded-full bg-primary/30 w-1/2" />
-                      </div>
-                      <p className="text-[10px] text-muted-foreground/60 text-right">
-                        {param.range}
-                      </p>
+                      {debugPayload ? (
+                        <pre className="text-[10px] font-mono text-foreground/80 bg-muted rounded p-2 overflow-auto max-h-[300px] whitespace-pre-wrap break-all">
+                          {JSON.stringify(debugPayload, null, 2)}
+                        </pre>
+                      ) : (
+                        <p className="text-[10px] text-muted-foreground/70 italic">
+                          {debugLoading ? "Loading..." : "No debug data yet. Set DEBUG_AI=true in .env and make a generation request."}
+                        </p>
+                      )}
                     </div>
-                  </div>
-                ))}
+                  </>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
         </Tabs>
-
-        {/* Debug toggle */}
-        <Separator className="my-1" />
-        <button
-          type="button"
-          onClick={() => onShowDebugChange(!showDebug)}
-          className="flex items-center gap-2.5 w-full px-1 py-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <div
-            className={`h-4 w-8 rounded-full relative transition-colors ${
-              showDebug ? "bg-emerald-500" : "bg-muted-foreground/30"
-            }`}
-          >
-            <div
-              className={`absolute top-0.5 h-3 w-3 rounded-full bg-white transition-transform ${
-                showDebug ? "translate-x-4" : "translate-x-0.5"
-              }`}
-            />
-          </div>
-          <span className="font-mono">Show AI Debug</span>
-        </button>
       </div>
     </aside>
   );

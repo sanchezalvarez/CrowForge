@@ -14,6 +14,7 @@ import {
 } from "../components/ui/select";
 import { cn } from "../lib/utils";
 import type { DocumentContext } from "../App";
+import type { TuningParams } from "../components/AIControlPanel";
 
 const API_BASE = "http://127.0.0.1:8000";
 
@@ -42,9 +43,10 @@ interface ChatMessage {
 
 interface ChatPageProps {
   documentContext?: DocumentContext | null;
+  tuningParams?: TuningParams;
 }
 
-export function ChatPage({ documentContext }: ChatPageProps) {
+export function ChatPage({ documentContext, tuningParams }: ChatPageProps) {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<number | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -172,7 +174,11 @@ export function ChatPage({ documentContext }: ChatPageProps) {
     try {
       await axios.post(
         `${API_BASE}/chat/session/${activeSessionId}/message`,
-        { content }
+        {
+          content,
+          temperature: tuningParams?.temperature,
+          max_tokens: tuningParams?.maxTokens,
+        }
       );
       await loadMessages(activeSessionId);
     } catch {

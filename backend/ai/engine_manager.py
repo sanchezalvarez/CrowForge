@@ -45,7 +45,16 @@ class AIEngineManager:
     # ── introspection ────────────────────────────────────────────────
 
     def list_engines(self) -> list[dict]:
+        type_map = {
+            MockAIEngine: "mock",
+            HTTPAIEngine: "http",
+            LocalLLAMAEngine: "local",
+        }
         return [
-            {"name": name, "active": name == self._active_name}
-            for name in self._engines
+            {
+                "name": name,
+                "type": type_map.get(type(engine), "unknown"),
+                "active": name == self._active_name,
+            }
+            for name, engine in self._engines.items()
         ]

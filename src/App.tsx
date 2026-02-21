@@ -11,13 +11,12 @@ import {
 } from "lucide-react";
 import crowforgeLogo from "./assets/crowforge_ico.png";
 import { cn } from "./lib/utils";
-import { PromptTemplate } from "./types";
 import { BenchmarkPage } from "./pages/BenchmarkPage";
 import { ChatPage } from "./pages/ChatPage";
 import { DocumentsPage } from "./pages/DocumentsPage";
 import { SheetsPage } from "./pages/SheetsPage";
 import { Toaster } from "./components/ui/toaster";
-import { AIControlPanel } from "./components/AIControlPanel";
+import { AIControlPanel, TuningParams } from "./components/AIControlPanel";
 
 const API_BASE = "http://127.0.0.1:8000";
 
@@ -35,28 +34,18 @@ export default function App() {
   const [appError, setAppError] = useState<string | null>(null);
   const [docContext, setDocContext] = useState<DocumentContext | null>(null);
 
-  // Prompt template state
-  const [templates, setTemplates] = useState<PromptTemplate[]>([]);
-  const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(() => {
-    const v = localStorage.getItem("ai_template_id");
-    return v ? parseInt(v) : null;
+  // Tuning params state — persisted to localStorage
+  const [tuningParams, setTuningParams] = useState<TuningParams>(() => {
+    try {
+      const stored = localStorage.getItem("ai_tuning");
+      if (stored) return JSON.parse(stored);
+    } catch { /* ignore */ }
+    return { temperature: 0.7, topP: 0.95, maxTokens: 1024, seed: null };
   });
 
   useEffect(() => {
-    axios.get(`${API_BASE}/prompt-templates`).then((res) => {
-      const all: PromptTemplate[] = res.data;
-      const visible = all.filter((t) => t.category !== "Refine");
-      setTemplates(visible);
-      if (selectedTemplateId === null && visible.length > 0) {
-        setSelectedTemplateId(visible[0].id);
-      }
-    }).catch(() => {});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    if (selectedTemplateId !== null) localStorage.setItem("ai_template_id", String(selectedTemplateId));
-  }, [selectedTemplateId]);
+    localStorage.setItem("ai_tuning", JSON.stringify(tuningParams));
+  }, [tuningParams]);
 
   // AI panel visibility
   const [aiPanelOpen, setAiPanelOpen] = useState(() =>
@@ -149,11 +138,11 @@ export default function App() {
             </div>
           </div>
         ) : currentPage === "chat" ? (
-          <ChatPage documentContext={docContext} />
+          <ChatPage documentContext={docContext} tuningParams={tuningParams} />
         ) : currentPage === "documents" ? (
-          <DocumentsPage onContextChange={setDocContext} />
+          <DocumentsPage onContextChange={setDocContext} tuningParams={tuningParams} />
         ) : currentPage === "sheets" ? (
-          <SheetsPage />
+          <SheetsPage tuningParams={tuningParams} />
         ) : currentPage === "benchmark" ? (
           <BenchmarkPage />
         ) : null}
@@ -169,11 +158,10 @@ export default function App() {
 
       {aiPanelOpen && (
         <AIControlPanel
-          templates={templates}
-          selectedTemplateId={selectedTemplateId}
-          onTemplateChange={setSelectedTemplateId}
           showDebug={showDebug}
           onShowDebugChange={setShowDebug}
+          tuningParams={tuningParams}
+          onTuningChange={setTuningParams}
         />
       )}
       </div>

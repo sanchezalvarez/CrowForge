@@ -115,11 +115,12 @@ def _build_debug_payload(
     seed: int | None, latency_ms: int, response_len: int,
 ) -> str | None:
     """Build a JSON debug payload string, or None if debug is off."""
+    global _last_debug_payload
     if not DEBUG_AI:
         return None
     try:
         token_estimate = (len(system_prompt) + len(user_prompt)) // 4
-        return json.dumps({
+        payload = {
             "engine_name": engine_name,
             "final_system_prompt": system_prompt,
             "final_user_prompt": user_prompt,
@@ -132,7 +133,9 @@ def _build_debug_payload(
             "latency_ms": latency_ms,
             "token_estimate": token_estimate,
             "response_chars": response_len,
-        })
+        }
+        _last_debug_payload = payload
+        return json.dumps(payload)
     except Exception:
         return None
 
@@ -140,6 +143,44 @@ def _build_debug_payload(
 @app.get("/ai/debug")
 async def get_debug_status():
     return {"enabled": DEBUG_AI}
+
+# In-memory store for last debug payload
+_last_debug_payload: dict | None = None
+
+@app.get("/ai/debug/last")
+async def get_last_debug():
+    return {"enabled": DEBUG_AI, "payload": _last_debug_payload}
+
+
+# ── Tuning defaults ──────────────────────────────────────────────────
+
+@app.get("/ai/tuning")
+async def get_tuning():
+    temp = app_repo.get_setting("tuning_temperature") or "0.7"
+    top_p = app_repo.get_setting("tuning_top_p") or "0.95"
+    max_tokens = app_repo.get_setting("tuning_max_tokens") or "1024"
+    seed = app_repo.get_setting("tuning_seed")
+    return {
+        "temperature": float(temp),
+        "topP": float(top_p),
+        "maxTokens": int(max_tokens),
+        "seed": int(seed) if seed else None,
+    }
+
+@app.post("/ai/tuning")
+async def set_tuning(data: dict):
+    if "temperature" in data:
+        app_repo.set_setting("tuning_temperature", str(data["temperature"]))
+    if "topP" in data:
+        app_repo.set_setting("tuning_top_p", str(data["topP"]))
+    if "maxTokens" in data:
+        app_repo.set_setting("tuning_max_tokens", str(data["maxTokens"]))
+    if "seed" in data:
+        if data["seed"] is None:
+            app_repo.set_setting("tuning_seed", "")
+        else:
+            app_repo.set_setting("tuning_seed", str(data["seed"]))
+    return {"status": "saved"}
 
 
 @app.get("/state")

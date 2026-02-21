@@ -1,9 +1,22 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import axios from "axios";
-import { PlusCircle, Table2, Trash2, Plus, X, AlertCircle, Sparkles, Square, Loader2, LayoutTemplate, FileSpreadsheet, ListTodo, FileText, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Copy, Pencil, Filter, Eraser, Tags, ListChecks, Undo2, Redo2, AlignLeft, AlignCenter, AlignRight, AlignVerticalJustifyStart, AlignVerticalJustifyCenter, AlignVerticalJustifyEnd, Bold, Italic, Paintbrush, Type, WrapText, RotateCcw } from "lucide-react";
+import { PlusCircle, Table2, Trash2, Plus, X, AlertCircle, Sparkles, Square, Loader2, LayoutTemplate, FileSpreadsheet, ListTodo, FileText, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Copy, Pencil, Filter, Eraser, Tags, ListChecks, Undo2, Redo2, AlignLeft, AlignCenter, AlignRight, AlignVerticalJustifyStart, AlignVerticalJustifyCenter, AlignVerticalJustifyEnd, Bold, Italic, Paintbrush, Type, WrapText, RotateCcw, Upload, Download, ChevronDown } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { ScrollArea } from "../components/ui/scroll-area";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "../components/ui/dialog";
 import { cn } from "../lib/utils";
+import { toast } from "../hooks/useToast";
+import { useDropImport, IMPORT_FORMAT_LABELS } from "../hooks/useDropImport";
+import {
+  validateImportFile,
+  parseSheetImport,
+  exportSheetAs,
+  exportAllSheetsXLSX,
+  SHEET_IMPORT_ACCEPT,
+  SHEET_IMPORT_EXTS,
+  SHEET_EXPORT_FORMATS,
+  type SheetExportFormat,
+} from "../lib/fileService";
 
 const API_BASE = "http://127.0.0.1:8000";
 
@@ -260,6 +273,17 @@ export function SheetsPage() {
   const [colWidths, setColWidths] = useState<Record<number, number>>({});
   const [rowHeights, setRowHeights] = useState<Record<number, number>>({});
   const [resizing, setResizing] = useState<{ type: 'col' | 'row'; index: number; startPos: number; startSize: number } | null>(null);
+
+  // Import / Export
+  const importInputRef = useRef<HTMLInputElement>(null);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [importing, setImporting] = useState(false);
+
+  // Drag-and-drop import (renamed to avoid collision with resize isDragging)
+  const { isDragging: isDropDragging, pendingFile, confirmImport, clearPending, dragProps } = useDropImport(
+    SHEET_IMPORT_EXTS,
+    (file) => handleImportFile(file),
+  );
 
   // Sync sizes from activeSheet when switching sheets
   useEffect(() => {
@@ -1203,18 +1227,135 @@ export function SheetsPage() {
     return () => document.removeEventListener("mousedown", close);
   }, [colorPickerOpen]);
 
+  // Close export dropdown on outside click
+  useEffect(() => {
+    if (!exportOpen) return;
+    const close = () => setExportOpen(false);
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [exportOpen]);
+
+  // ---- Import ----
+  async function handleImportFile(file: File) {
+    if (validateImportFile(file, SHEET_IMPORT_EXTS)) return; // toast already fired
+    setImporting(true);
+    try {
+      const parsed = await parseSheetImport(file);
+      const created = await axios.post(`${API_BASE}/sheets`, { title: parsed.title, columns: [], rows: [] });
+      const sheetId: string = created.data.id;
+      const populated = await axios.put(`${API_BASE}/sheets/${sheetId}/data`, {
+        columns: parsed.columns,
+        rows: parsed.rows,
+        formulas: parsed.formulas,
+        sizes: parsed.sizes,
+        alignments: {},
+        formats: {},
+      });
+      const newSheet: Sheet = populated.data;
+      setSheets((prev) => [...prev, newSheet]);
+      setActiveSheetId(sheetId);
+      toast(`"${parsed.title}" imported.`);
+    } catch {
+      toast("Import failed. Please check the file and try again.", "error");
+    } finally {
+      setImporting(false);
+      if (importInputRef.current) importInputRef.current.value = "";
+    }
+  }
+
+  function handleExport(format: SheetExportFormat) {
+    setExportOpen(false);
+    if (!activeSheet) return;
+    exportSheetAs(format, {
+      title: activeSheet.title,
+      columns: activeSheet.columns,
+      rows: activeSheet.rows,
+      formulas: activeSheet.formulas,
+      colWidths,
+      rowHeights,
+      defaultColWidth: DEFAULT_COL_WIDTH,
+      defaultRowHeight: DEFAULT_ROW_HEIGHT,
+    });
+  }
+
+  function handleExportAllXLSX() {
+    if (sheets.length === 0) return;
+    exportAllSheetsXLSX(
+      sheets.map((s) => ({
+        title: s.title,
+        columns: s.columns,
+        rows: s.rows,
+        formulas: s.formulas,
+        colWidths: s.sizes?.colWidths ?? {},
+        rowHeights: s.sizes?.rowHeights ?? {},
+        defaultColWidth: DEFAULT_COL_WIDTH,
+        defaultRowHeight: DEFAULT_ROW_HEIGHT,
+      }))
+    );
+  }
+
+  const pendingExt   = pendingFile ? pendingFile.name.split(".").pop()?.toLowerCase() ?? "" : "";
+  const pendingLabel = pendingFile ? (IMPORT_FORMAT_LABELS[pendingExt] ?? pendingExt.toUpperCase()) : "";
+
   return (
-    <div className="flex h-full">
+    <div className="flex h-full relative" {...dragProps}>
+      {/* Drag-over overlay */}
+      {isDropDragging && (
+        <div className="absolute inset-0 z-40 flex flex-col items-center justify-center gap-3 rounded-lg pointer-events-none"
+          style={{ background: "color-mix(in srgb, var(--primary) 8%, transparent)", border: "2px dashed var(--primary)" }}>
+          <Upload className="h-10 w-10 text-primary/60" />
+          <p className="text-sm font-medium text-primary">Drop file to import</p>
+          <p className="text-xs text-muted-foreground">{SHEET_IMPORT_EXTS.map((e) => `.${e}`).join("  ·  ")}</p>
+        </div>
+      )}
+
+      {/* Drop-confirm dialog */}
+      <Dialog open={!!pendingFile} onOpenChange={(o) => { if (!o) clearPending(); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Import file?</DialogTitle>
+            <DialogDescription>
+              A new sheet will be created from this file.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex items-start gap-3 rounded-md border border-border bg-muted/40 px-4 py-3 my-1">
+            <FileSpreadsheet className="h-8 w-8 text-muted-foreground shrink-0 mt-0.5" />
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-foreground truncate">{pendingFile?.name}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">{pendingLabel}</p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={clearPending}>Cancel</Button>
+            <Button size="sm" onClick={confirmImport} disabled={importing}>
+              {importing && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
+              Import
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Sheets sidebar */}
       <div className="w-[220px] shrink-0 border-r bg-background flex flex-col">
-        <div className="p-3 border-b">
+        <div className="p-3 border-b flex flex-col gap-1.5">
           <Button variant="outline" size="sm" className="w-full" onClick={() => setTemplatePickerOpen(true)}>
             <PlusCircle className="h-4 w-4 mr-1.5" />
             New Sheet
           </Button>
-          <Button variant="outline" size="sm" className="w-full mt-1.5" onClick={() => setAiGenOpen(true)}>
+          <Button variant="outline" size="sm" className="w-full" onClick={() => setAiGenOpen(true)}>
             <Sparkles className="h-4 w-4 mr-1.5" />
             AI Generate
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full text-xs"
+            disabled={sheets.length === 0}
+            onClick={handleExportAllXLSX}
+            title="Export every sheet as one XLSX workbook"
+          >
+            <Download className="h-3.5 w-3.5 mr-1.5" />
+            Export all as XLSX
           </Button>
         </div>
         <ScrollArea className="flex-1">
@@ -1385,6 +1526,53 @@ export function SheetsPage() {
                   </Button>
                 </>
               )}
+              <div className="flex-1" />
+              {/* Import */}
+              <input
+                ref={importInputRef}
+                type="file"
+                accept={SHEET_IMPORT_ACCEPT}
+                className="hidden"
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImportFile(f); }}
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs gap-1"
+                onClick={() => importInputRef.current?.click()}
+                disabled={importing}
+                title="Import XLSX / CSV / TSV"
+              >
+                {importing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Upload className="h-3 w-3" />}
+                Import
+              </Button>
+              {/* Export dropdown */}
+              <div className="relative" onClick={(e) => e.stopPropagation()}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs gap-1"
+                  onClick={() => setExportOpen((o) => !o)}
+                  title="Export sheet"
+                >
+                  <Download className="h-3 w-3" />
+                  Export
+                  <ChevronDown className="h-3 w-3" />
+                </Button>
+                {exportOpen && (
+                  <div className="absolute right-0 top-full mt-1 z-50 bg-background border border-border rounded-md shadow-lg py-1 min-w-[130px]">
+                    {SHEET_EXPORT_FORMATS.map(([fmt, label]) => (
+                      <button
+                        key={fmt}
+                        className="w-full text-left px-3 py-1.5 text-xs hover:bg-muted transition-colors"
+                        onClick={() => handleExport(fmt)}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* AI Fill panel */}

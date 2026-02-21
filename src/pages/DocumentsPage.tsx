@@ -3,7 +3,7 @@ import axios from "axios";
 import {
   PlusCircle, FileText, Trash2, Loader2, Type, RefreshCw, AlignLeft,
   Maximize2, SpellCheck, Check, X, AlertCircle, Bold, Italic, Heading1,
-  Heading2, List,
+  Heading2, List, Upload, Download, ChevronDown, PackageOpen,
 } from "lucide-react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
@@ -12,7 +12,20 @@ import { DOMParser as PmDOMParser, Fragment } from "@tiptap/pm/model";
 import { Button } from "../components/ui/button";
 import { ScrollArea } from "../components/ui/scroll-area";
 import { Badge } from "../components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "../components/ui/dialog";
 import { cn } from "../lib/utils";
+import { toast } from "../hooks/useToast";
+import { useDropImport, IMPORT_FORMAT_LABELS } from "../hooks/useDropImport";
+import {
+  validateImportFile,
+  parseDocumentImport,
+  exportDocumentAs,
+  exportDocumentsAsZip,
+  DOCUMENT_IMPORT_ACCEPT,
+  DOCUMENT_IMPORT_EXTS,
+  DOCUMENT_EXPORT_FORMATS,
+  type DocExportFormat,
+} from "../lib/fileService";
 
 const editorExtensions = [StarterKit, Markdown];
 
@@ -122,6 +135,22 @@ export function DocumentsPage({ onContextChange }: DocumentsPageProps) {
   const pendingOriginalText = useRef<string | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeDoc = documents.find((d) => d.id === activeDocId) ?? null;
+
+  // Import / Export
+  const importDocInputRef = useRef<HTMLInputElement>(null);
+  const [exportDocOpen, setExportDocOpen] = useState(false);
+  const [importing, setImporting] = useState(false);
+
+  // Bulk export — checkbox selection
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkExporting, setBulkExporting] = useState(false);
+
+  // Drag-and-drop import
+  const { isDragging, pendingFile, confirmImport, clearPending, dragProps } = useDropImport(
+    DOCUMENT_IMPORT_EXTS,
+    (file) => handleImportFile(file),
+  );
 
   // Report document context to parent (for Chat integration)
   useEffect(() => {
@@ -374,16 +403,176 @@ export function DocumentsPage({ onContextChange }: DocumentsPageProps) {
     pendingOriginalText.current = null;
   }
 
+  // ---- Import ----
+  async function handleImportFile(file: File) {
+    if (!editor) return;
+    if (validateImportFile(file, DOCUMENT_IMPORT_EXTS)) return; // toast already fired
+    setImporting(true);
+    try {
+      const parsed = await parseDocumentImport(file);
+      const res = await axios.post(`${API_BASE}/documents`, { title: parsed.title, content_json: {} });
+      const doc: Document = res.data;
+      setDocuments((prev) => [doc, ...prev]);
+      setActiveDocId(doc.id);
+      setTimeout(() => {
+        if (!editor) return;
+        if (parsed.type === "markdown") {
+          (editor.commands as unknown as { setMarkdown: (s: string) => void }).setMarkdown(parsed.content);
+        } else {
+          editor.commands.setContent(parsed.content);
+        }
+        saveContent(doc.id, editor.getJSON());
+      }, 50);
+      toast(`"${parsed.title}" imported.`);
+    } catch {
+      toast("Import failed. Please check the file and try again.", "error");
+    } finally {
+      setImporting(false);
+      if (importDocInputRef.current) importDocInputRef.current.value = "";
+    }
+  }
+
+  // ---- Export ----
+  async function handleExportDoc(format: DocExportFormat) {
+    setExportDocOpen(false);
+    if (!editor || !activeDoc) return;
+    await exportDocumentAs(format, {
+      html: editor.getHTML(),
+      json: editor.getJSON(),
+      text: editor.getText(),
+      markdown: (editor.storage as unknown as { markdown: { getMarkdown: () => string } }).markdown.getMarkdown(),
+      title: activeDoc.title,
+    });
+  }
+
+  // ---- Bulk export ----
+  async function handleBulkExport() {
+    const selected = documents.filter((d) => selectedIds.has(d.id));
+    if (selected.length === 0) return;
+    setBulkExporting(true);
+    try {
+      await exportDocumentsAsZip(selected.map((d) => ({ title: d.title, content_json: d.content_json })));
+    } finally {
+      setBulkExporting(false);
+    }
+  }
+
+  function toggleSelectMode() {
+    setSelectMode((v) => !v);
+    setSelectedIds(new Set());
+  }
+
+  function toggleDocSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function selectAll() {
+    setSelectedIds(new Set(documents.map((d) => d.id)));
+  }
+
+  // Close export dropdown on outside click
+  useEffect(() => {
+    if (!exportDocOpen) return;
+    const close = () => setExportDocOpen(false);
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [exportDocOpen]);
+
+  const pendingExt = pendingFile ? pendingFile.name.split(".").pop()?.toLowerCase() ?? "" : "";
+  const pendingLabel = pendingFile ? (IMPORT_FORMAT_LABELS[pendingExt] ?? pendingExt.toUpperCase()) : "";
+
   return (
-    <div className="flex h-full">
+    <div className="flex h-full relative" {...dragProps}>
+      {/* Drag-over overlay */}
+      {isDragging && (
+        <div className="absolute inset-0 z-40 flex flex-col items-center justify-center gap-3 rounded-lg pointer-events-none"
+          style={{ background: "color-mix(in srgb, var(--primary) 8%, transparent)", border: "2px dashed var(--primary)" }}>
+          <Upload className="h-10 w-10 text-primary/60" />
+          <p className="text-sm font-medium text-primary">Drop file to import</p>
+          <p className="text-xs text-muted-foreground">{DOCUMENT_IMPORT_EXTS.map((e) => `.${e}`).join("  ·  ")}</p>
+        </div>
+      )}
+
+      {/* Drop-confirm dialog */}
+      <Dialog open={!!pendingFile} onOpenChange={(o) => { if (!o) clearPending(); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Import file?</DialogTitle>
+            <DialogDescription>
+              A new document will be created from this file.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex items-start gap-3 rounded-md border border-border bg-muted/40 px-4 py-3 my-1">
+            <FileText className="h-8 w-8 text-muted-foreground shrink-0 mt-0.5" />
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-foreground truncate">{pendingFile?.name}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">{pendingLabel}</p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={clearPending}>Cancel</Button>
+            <Button size="sm" onClick={confirmImport} disabled={importing}>
+              {importing && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
+              Import
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Documents sidebar */}
       <div className="w-[220px] shrink-0 border-r bg-background flex flex-col">
-        <div className="p-3 border-b">
+        <div className="p-3 border-b flex flex-col gap-1.5">
           <Button variant="outline" size="sm" className="w-full" onClick={createDocument}>
             <PlusCircle className="h-4 w-4 mr-1.5" />
             New Document
           </Button>
+          <Button
+            variant={selectMode ? "secondary" : "ghost"}
+            size="sm"
+            className="w-full text-xs h-7"
+            onClick={toggleSelectMode}
+          >
+            <PackageOpen className="h-3.5 w-3.5 mr-1.5" />
+            {selectMode ? "Cancel selection" : "Select for export"}
+          </Button>
         </div>
+
+        {/* Bulk-export action bar */}
+        {selectMode && (
+          <div className="flex items-center gap-1.5 px-2 py-1.5 border-b bg-muted/30">
+            <button
+              className="text-[11px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
+              onClick={selectAll}
+            >
+              All
+            </button>
+            <button
+              className="text-[11px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
+              onClick={() => setSelectedIds(new Set())}
+            >
+              None
+            </button>
+            <div className="flex-1" />
+            <Button
+              size="sm"
+              className="h-6 text-[11px] px-2 gap-1"
+              disabled={selectedIds.size === 0 || bulkExporting}
+              onClick={handleBulkExport}
+            >
+              {bulkExporting
+                ? <Loader2 className="h-3 w-3 animate-spin" />
+                : <Download className="h-3 w-3" />
+              }
+              Export ({selectedIds.size})
+            </Button>
+          </div>
+        )}
+
         <ScrollArea className="flex-1">
           <div className="p-2 space-y-0.5">
             {documents.map((doc) => (
@@ -391,23 +580,40 @@ export function DocumentsPage({ onContextChange }: DocumentsPageProps) {
                 key={doc.id}
                 className={cn(
                   "group flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-sm cursor-pointer transition-colors",
-                  activeDocId === doc.id
+                  activeDocId === doc.id && !selectMode
                     ? "bg-primary/10 text-primary font-medium"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                  selectMode && selectedIds.has(doc.id) && "bg-primary/10 text-primary"
                 )}
-                onClick={() => setActiveDocId(doc.id)}
+                onClick={() => {
+                  if (selectMode) toggleDocSelect(doc.id);
+                  else setActiveDocId(doc.id);
+                }}
               >
-                <FileText className="h-3.5 w-3.5 shrink-0" />
+                {selectMode ? (
+                  <div className={cn(
+                    "h-3.5 w-3.5 shrink-0 rounded border flex items-center justify-center",
+                    selectedIds.has(doc.id)
+                      ? "bg-primary border-primary"
+                      : "border-muted-foreground/40"
+                  )}>
+                    {selectedIds.has(doc.id) && <Check className="h-2.5 w-2.5 text-primary-foreground" />}
+                  </div>
+                ) : (
+                  <FileText className="h-3.5 w-3.5 shrink-0" />
+                )}
                 <span className="flex-1 truncate">{doc.title}</span>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    deleteDocument(doc.id);
-                  }}
-                  className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
+                {!selectMode && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deleteDocument(doc.id);
+                    }}
+                    className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                )}
               </div>
             ))}
             {documents.length === 0 && (
@@ -493,6 +699,53 @@ export function DocumentsPage({ onContextChange }: DocumentsPageProps) {
                 >
                   <List className="h-3.5 w-3.5" />
                 </Button>
+                <div className="flex-1" />
+                {/* Import */}
+                <input
+                  ref={importDocInputRef}
+                  type="file"
+                  accept={DOCUMENT_IMPORT_ACCEPT}
+                  className="hidden"
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImportFile(f); }}
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs gap-1"
+                  onClick={() => importDocInputRef.current?.click()}
+                  disabled={importing}
+                  title="Import DOCX / MD / TXT"
+                >
+                  {importing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Upload className="h-3 w-3" />}
+                  Import
+                </Button>
+                {/* Export dropdown */}
+                <div className="relative" onClick={(e) => e.stopPropagation()}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs gap-1"
+                    onClick={() => setExportDocOpen((o) => !o)}
+                    title="Export document"
+                  >
+                    <Download className="h-3 w-3" />
+                    Export
+                    <ChevronDown className="h-3 w-3" />
+                  </Button>
+                  {exportDocOpen && (
+                    <div className="absolute right-0 top-full mt-1 z-50 bg-background border border-border rounded-md shadow-lg py-1 min-w-[140px]">
+                      {DOCUMENT_EXPORT_FORMATS.map(([fmt, label]) => (
+                        <button
+                          key={fmt}
+                          className="w-full text-left px-3 py-1.5 text-xs hover:bg-muted transition-colors"
+                          onClick={() => handleExportDoc(fmt)}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 

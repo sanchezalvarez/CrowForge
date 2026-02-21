@@ -1360,6 +1360,25 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
             <Sparkles className="h-4 w-4 mr-1.5" />
             AI Generate
           </Button>
+          {/* Import — always reachable, creates a new sheet from file */}
+          <input
+            ref={importInputRef}
+            type="file"
+            accept={SHEET_IMPORT_ACCEPT}
+            className="hidden"
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImportFile(f); }}
+          />
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full text-xs"
+            onClick={() => importInputRef.current?.click()}
+            disabled={importing}
+            title="Import XLSX / CSV / TSV"
+          >
+            {importing ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Upload className="h-3.5 w-3.5 mr-1.5" />}
+            Import Sheet
+          </Button>
           <Button
             variant="ghost"
             size="sm"
@@ -1541,26 +1560,7 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
                 </>
               )}
               <div className="flex-1" />
-              {/* Import */}
-              <input
-                ref={importInputRef}
-                type="file"
-                accept={SHEET_IMPORT_ACCEPT}
-                className="hidden"
-                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImportFile(f); }}
-              />
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-7 text-xs gap-1"
-                onClick={() => importInputRef.current?.click()}
-                disabled={importing}
-                title="Import XLSX / CSV / TSV"
-              >
-                {importing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Upload className="h-3 w-3" />}
-                Import
-              </Button>
-              {/* Export dropdown */}
+              {/* Export dropdown — active sheet only */}
               <div className="relative" onClick={(e) => e.stopPropagation()}>
                 <Button
                   variant="outline"

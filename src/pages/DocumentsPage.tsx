@@ -535,6 +535,25 @@ export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPagePr
             <PlusCircle className="h-4 w-4 mr-1.5" />
             New Document
           </Button>
+          {/* Import — always reachable, creates a new document from file */}
+          <input
+            ref={importDocInputRef}
+            type="file"
+            accept={DOCUMENT_IMPORT_ACCEPT}
+            className="hidden"
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImportFile(f); }}
+          />
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full text-xs h-7"
+            onClick={() => importDocInputRef.current?.click()}
+            disabled={importing}
+            title="Import DOCX / MD / TXT"
+          >
+            {importing ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Upload className="h-3.5 w-3.5 mr-1.5" />}
+            Import Document
+          </Button>
           <Button
             variant={selectMode ? "secondary" : "ghost"}
             size="sm"
@@ -704,26 +723,7 @@ export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPagePr
                   <List className="h-3.5 w-3.5" />
                 </Button>
                 <div className="flex-1" />
-                {/* Import */}
-                <input
-                  ref={importDocInputRef}
-                  type="file"
-                  accept={DOCUMENT_IMPORT_ACCEPT}
-                  className="hidden"
-                  onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImportFile(f); }}
-                />
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 text-xs gap-1"
-                  onClick={() => importDocInputRef.current?.click()}
-                  disabled={importing}
-                  title="Import DOCX / MD / TXT"
-                >
-                  {importing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Upload className="h-3 w-3" />}
-                  Import
-                </Button>
-                {/* Export dropdown */}
+                {/* Export dropdown — active document only */}
                 <div className="relative" onClick={(e) => e.stopPropagation()}>
                   <Button
                     variant="ghost"

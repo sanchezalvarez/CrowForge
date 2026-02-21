@@ -255,6 +255,11 @@ class DocumentRepository:
             conn.commit()
             return self.get_by_id(doc_id)
 
+    def delete(self, doc_id: str) -> None:
+        with self.db.get_connection() as conn:
+            conn.execute("DELETE FROM documents WHERE id = ?", (doc_id,))
+            conn.commit()
+
 
 class SheetRepository:
     def __init__(self, db: DatabaseManager):

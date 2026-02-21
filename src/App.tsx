@@ -142,12 +142,10 @@ export default function App() {
   return (
     <div className="flex h-screen w-full overflow-hidden bg-muted/40 text-foreground font-sans antialiased">
       {/* SIDEBAR */}
-      <aside className="hidden lg:flex w-[260px] shrink-0 flex-col border-r bg-background">
-        <div className="h-20 flex items-center px-5 border-b">
-          <div className="flex items-center gap-3 font-bold text-2xl tracking-tight">
-            <img src={crowforgeLogo} alt="CrowForge" className="h-12 w-12 rounded-lg" />
-            <span>CrowForge</span>
-          </div>
+      <aside className="hidden lg:flex w-[220px] shrink-0 flex-col border-r bg-background">
+        <div className="h-16 flex items-center px-4 border-b gap-2.5">
+          <img src={crowforgeLogo} alt="CrowForge" className="h-8 w-8 rounded-md shrink-0" />
+          <span className="font-bold text-base tracking-tight truncate">CrowForge</span>
         </div>
 
         <div className="flex-1 overflow-y-auto">

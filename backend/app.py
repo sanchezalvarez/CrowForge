@@ -739,6 +739,23 @@ async def update_document(doc_id: str, req: DocumentUpdate):
     return document_repo.update(doc_id, title=req.title, content_json=req.content_json)
 
 
+@app.delete("/documents/{doc_id}")
+async def delete_document(doc_id: str):
+    doc = document_repo.get_by_id(doc_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    document_repo.delete(doc_id)
+    return {"status": "deleted"}
+
+
+@app.post("/documents/{doc_id}/duplicate", response_model=Document)
+async def duplicate_document(doc_id: str):
+    doc = document_repo.get_by_id(doc_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return document_repo.create(title=f"{doc.title} (copy)", content_json=doc.content_json)
+
+
 _DOC_AI_FORMAT = """
 You MUST respond with ONLY valid semantic HTML. No markdown, no backticks, no explanations, no wrapping.
 Allowed tags ONLY: <h1> <h2> <h3> <p> <ul> <ol> <li> <strong> <em> <blockquote>.

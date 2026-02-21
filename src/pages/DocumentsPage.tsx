@@ -3,7 +3,7 @@ import axios from "axios";
 import {
   PlusCircle, FileText, Trash2, Loader2, Type, RefreshCw, AlignLeft,
   Maximize2, SpellCheck, Check, X, AlertCircle, Bold, Italic, Heading1,
-  Heading2, List, Upload, Download, ChevronDown, PackageOpen,
+  Heading2, List, Upload, Download, ChevronDown, PackageOpen, Pencil, Copy,
 } from "lucide-react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
@@ -123,6 +123,10 @@ interface DocumentsPageProps {
   tuningParams?: TuningParams;
 }
 
+// A4 at 96 DPI: 794 × 1123 px. We use this for page-break simulation.
+const A4_HEIGHT_PX = 1123;
+const A4_WIDTH_PX = 794;
+
 export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPageProps) {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [activeDocId, setActiveDocId] = useState<string | null>(null);
@@ -133,6 +137,17 @@ export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPagePr
   const [aiError, setAiError] = useState<string | null>(null);
   const [activeEngine, setActiveEngine] = useState<string>("mock");
   const [outline, setOutline] = useState<OutlineItem[]>([]);
+  const [docMenu, setDocMenu] = useState<{ docId: string; x: number; y: number } | null>(null);
+  const [renamingDoc, setRenamingDoc] = useState<string | null>(null);
+  const [renameDocValue, setRenameDocValue] = useState("");
+  const renameDocRef = useRef<HTMLInputElement>(null);
+  const [outlineWidth, setOutlineWidth] = useState(180);
+  const outlineResizing = useRef(false);
+  const outlineResizeStart = useRef(0);
+  const outlineWidthStart = useRef(180);
+  const editorScrollRef = useRef<HTMLDivElement>(null);
+  const [pageCount, setPageCount] = useState(1);
+  const [currentPage, setCurrentPage] = useState(1);
   const pendingRange = useRef<{ from: number; to: number } | null>(null);
   const pendingOriginalText = useRef<string | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -176,7 +191,7 @@ export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPagePr
     editorProps: {
       attributes: {
         class:
-          "prose prose-sm max-w-none focus:outline-none min-h-[calc(100vh-10rem)] px-8 py-6",
+          "prose prose-sm max-w-none focus:outline-none min-h-full",
       },
       handleKeyDown: (_view, event) => {
         if ((event.metaKey || event.ctrlKey) && event.key === "j") {
@@ -192,6 +207,10 @@ export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPagePr
       if (!activeDocId) return;
       const json = editor.getJSON();
       debouncedSave(activeDocId, json);
+      // Estimate page count from editor DOM height
+      const el = editor.view.dom as HTMLElement;
+      const h = el.scrollHeight;
+      setPageCount(Math.max(1, Math.ceil(h / A4_HEIGHT_PX)));
     },
     onSelectionUpdate: ({ editor }) => {
       const { from, to } = editor.state.selection;
@@ -208,6 +227,28 @@ export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPagePr
     loadDocuments();
     fetchActiveEngine();
   }, []);
+
+  // Outline panel resize via mouse drag
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (!outlineResizing.current) return;
+      const delta = e.clientX - outlineResizeStart.current;
+      setOutlineWidth(Math.max(120, Math.min(400, outlineWidthStart.current + delta)));
+    };
+    const onUp = () => { outlineResizing.current = false; };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+    return () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+    };
+  }, []);
+
+  // Track current page from scroll position
+  function handleEditorScroll(e: React.UIEvent<HTMLDivElement>) {
+    const scrollTop = (e.target as HTMLDivElement).scrollTop;
+    setCurrentPage(Math.max(1, Math.floor(scrollTop / A4_HEIGHT_PX) + 1));
+  }
 
   async function fetchActiveEngine() {
     try {
@@ -271,10 +312,44 @@ export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPagePr
 
   async function deleteDocument(id: string) {
     setDocuments((prev) => prev.filter((d) => d.id !== id));
-    if (activeDocId === id) {
-      setActiveDocId(null);
-    }
+    if (activeDocId === id) setActiveDocId(null);
+    await axios.delete(`${API_BASE}/documents/${id}`).catch(() => {});
   }
+
+  async function duplicateDocument(id: string) {
+    try {
+      const res = await axios.post(`${API_BASE}/documents/${id}/duplicate`);
+      const doc: Document = res.data;
+      setDocuments((prev) => [doc, ...prev]);
+      setActiveDocId(doc.id);
+    } catch { /* ignore */ }
+  }
+
+  function docRenameStart(id: string) {
+    const doc = documents.find((d) => d.id === id);
+    if (!doc) return;
+    setRenamingDoc(id);
+    setRenameDocValue(doc.title);
+  }
+
+  async function docRenameCommit() {
+    if (!renamingDoc || !renameDocValue.trim()) { setRenamingDoc(null); return; }
+    await updateTitle(renamingDoc, renameDocValue.trim());
+    setRenamingDoc(null);
+  }
+
+  // Close doc context menu on outside click
+  useEffect(() => {
+    if (!docMenu) return;
+    const close = () => setDocMenu(null);
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [docMenu]);
+
+  // Auto-focus rename input
+  useEffect(() => {
+    if (renamingDoc && renameDocRef.current) renameDocRef.current.focus();
+  }, [renamingDoc]);
 
   async function saveContent(docId: string, content: Record<string, unknown>) {
     setSaving(true);
@@ -535,7 +610,6 @@ export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPagePr
             <PlusCircle className="h-4 w-4 mr-1.5" />
             New Document
           </Button>
-          {/* Import — always reachable, creates a new document from file */}
           <input
             ref={importDocInputRef}
             type="file"
@@ -546,7 +620,7 @@ export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPagePr
           <Button
             variant="ghost"
             size="sm"
-            className="w-full text-xs h-7"
+            className="w-full text-xs"
             onClick={() => importDocInputRef.current?.click()}
             disabled={importing}
             title="Import DOCX / MD / TXT"
@@ -557,7 +631,7 @@ export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPagePr
           <Button
             variant={selectMode ? "secondary" : "ghost"}
             size="sm"
-            className="w-full text-xs h-7"
+            className="w-full text-xs"
             onClick={toggleSelectMode}
           >
             <PackageOpen className="h-3.5 w-3.5 mr-1.5" />
@@ -568,29 +642,11 @@ export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPagePr
         {/* Bulk-export action bar */}
         {selectMode && (
           <div className="flex items-center gap-1.5 px-2 py-1.5 border-b bg-muted/30">
-            <button
-              className="text-[11px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
-              onClick={selectAll}
-            >
-              All
-            </button>
-            <button
-              className="text-[11px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
-              onClick={() => setSelectedIds(new Set())}
-            >
-              None
-            </button>
+            <button className="text-[11px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline" onClick={selectAll}>All</button>
+            <button className="text-[11px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline" onClick={() => setSelectedIds(new Set())}>None</button>
             <div className="flex-1" />
-            <Button
-              size="sm"
-              className="h-6 text-[11px] px-2 gap-1"
-              disabled={selectedIds.size === 0 || bulkExporting}
-              onClick={handleBulkExport}
-            >
-              {bulkExporting
-                ? <Loader2 className="h-3 w-3 animate-spin" />
-                : <Download className="h-3 w-3" />
-              }
+            <Button size="sm" className="h-6 text-[11px] px-2 gap-1" disabled={selectedIds.size === 0 || bulkExporting} onClick={handleBulkExport}>
+              {bulkExporting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
               Export ({selectedIds.size})
             </Button>
           </div>
@@ -608,45 +664,67 @@ export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPagePr
                     : "text-muted-foreground hover:bg-muted hover:text-foreground",
                   selectMode && selectedIds.has(doc.id) && "bg-primary/10 text-primary"
                 )}
-                onClick={() => {
-                  if (selectMode) toggleDocSelect(doc.id);
-                  else setActiveDocId(doc.id);
+                onClick={() => { if (selectMode) toggleDocSelect(doc.id); else setActiveDocId(doc.id); }}
+                onContextMenu={(e) => {
+                  if (selectMode) return;
+                  e.preventDefault();
+                  setDocMenu({ docId: doc.id, x: e.clientX, y: e.clientY });
                 }}
               >
                 {selectMode ? (
-                  <div className={cn(
-                    "h-3.5 w-3.5 shrink-0 rounded border flex items-center justify-center",
-                    selectedIds.has(doc.id)
-                      ? "bg-primary border-primary"
-                      : "border-muted-foreground/40"
-                  )}>
+                  <div className={cn("h-3.5 w-3.5 shrink-0 rounded border flex items-center justify-center", selectedIds.has(doc.id) ? "bg-primary border-primary" : "border-muted-foreground/40")}>
                     {selectedIds.has(doc.id) && <Check className="h-2.5 w-2.5 text-primary-foreground" />}
                   </div>
                 ) : (
                   <FileText className="h-3.5 w-3.5 shrink-0" />
                 )}
-                <span className="flex-1 truncate">{doc.title}</span>
-                {!selectMode && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      deleteDocument(doc.id);
+                {renamingDoc === doc.id ? (
+                  <input
+                    ref={renameDocRef}
+                    className="flex-1 min-w-0 h-5 px-1 text-xs border border-primary/40 rounded bg-background outline-none"
+                    value={renameDocValue}
+                    onChange={(e) => setRenameDocValue(e.target.value)}
+                    onClick={(e) => e.stopPropagation()}
+                    onBlur={docRenameCommit}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") docRenameCommit();
+                      if (e.key === "Escape") setRenamingDoc(null);
                     }}
-                    className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
+                  />
+                ) : (
+                  <span className="flex-1 truncate">{doc.title}</span>
                 )}
               </div>
             ))}
             {documents.length === 0 && (
-              <p className="text-xs text-muted-foreground text-center py-6">
-                No documents yet.
-              </p>
+              <p className="text-xs text-muted-foreground text-center py-6">No documents yet.</p>
             )}
           </div>
         </ScrollArea>
       </div>
+
+      {/* Document context menu */}
+      {docMenu && (
+        <div
+          className="fixed z-50 bg-background border border-border rounded-md shadow-lg py-1 min-w-[150px] text-sm"
+          style={{ left: docMenu.x, top: docMenu.y }}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <button className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2"
+            onClick={() => { docRenameStart(docMenu.docId); setDocMenu(null); }}>
+            <Pencil className="h-3.5 w-3.5 text-muted-foreground" /> Rename
+          </button>
+          <button className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2"
+            onClick={() => { duplicateDocument(docMenu.docId); setDocMenu(null); }}>
+            <Copy className="h-3.5 w-3.5 text-muted-foreground" /> Duplicate
+          </button>
+          <div className="border-t border-border my-1" />
+          <button className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2 text-destructive"
+            onClick={() => { deleteDocument(docMenu.docId); setDocMenu(null); }}>
+            <Trash2 className="h-3.5 w-3.5" /> Delete
+          </button>
+        </div>
+      )}
 
       {/* Editor area */}
       <div className="flex-1 flex flex-col min-w-0">
@@ -674,6 +752,9 @@ export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPagePr
                   {selection.text.length} chars selected
                 </Badge>
               )}
+              <span className="text-xs text-muted-foreground shrink-0 font-mono">
+                Page {currentPage} / {pageCount}
+              </span>
               {saving && (
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0">
                   <Loader2 className="h-3 w-3 animate-spin" />
@@ -782,9 +863,9 @@ export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPagePr
 
             {/* TipTap editor + Outline + AI result panel */}
             <div className="flex-1 flex min-h-0">
-              {/* Outline panel */}
+              {/* Outline panel — resizable */}
               {outline.length > 0 && (
-                <div className="w-[180px] shrink-0 border-r bg-background">
+                <div className="shrink-0 border-r bg-background flex flex-col relative" style={{ width: outlineWidth }}>
                   <div className="px-3 py-2 border-b">
                     <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Outline</span>
                   </div>
@@ -798,7 +879,6 @@ export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPagePr
                           onClick={() => {
                             if (!editor) return;
                             editor.chain().focus().setTextSelection(item.pos + 1).run();
-                            // Scroll the heading into view
                             const dom = editor.view.domAtPos(item.pos + 1);
                             if (dom.node instanceof HTMLElement) {
                               dom.node.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -812,14 +892,58 @@ export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPagePr
                       ))}
                     </div>
                   </ScrollArea>
+                  {/* Resize handle */}
+                  <div
+                    className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-primary/40 z-10 transition-colors"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      outlineResizing.current = true;
+                      outlineResizeStart.current = e.clientX;
+                      outlineWidthStart.current = outlineWidth;
+                    }}
+                  />
                 </div>
               )}
 
-              <ScrollArea className="flex-1">
-                <div className="max-w-3xl mx-auto">
-                  <EditorContent editor={editor} />
+              {/* A4 editor scroll area */}
+              <div
+                ref={editorScrollRef}
+                className="flex-1 overflow-auto bg-muted/30"
+                onScroll={handleEditorScroll}
+              >
+                {/* Page number CSS for print */}
+                <style>{`
+                  @media print {
+                    @page { size: A4; margin: 25mm; }
+                    .a4-page { box-shadow: none !important; margin: 0 !important; border-radius: 0 !important; }
+                    .page-break-line { display: none !important; }
+                  }
+                  .a4-page { page-break-after: always; }
+                `}</style>
+
+                <div className="py-8 flex flex-col items-center gap-0">
+                  {/* Single A4 "page" — content flows naturally, break lines are visual only */}
+                  <div
+                    className="a4-page bg-white text-black shadow-lg rounded-sm relative"
+                    style={{ width: A4_WIDTH_PX, minHeight: A4_HEIGHT_PX, padding: "25mm 20mm" }}
+                  >
+                    <EditorContent editor={editor} />
+
+                    {/* Visual page-break lines */}
+                    {Array.from({ length: pageCount - 1 }, (_, i) => (
+                      <div
+                        key={i}
+                        className="page-break-line absolute left-0 right-0 border-t-2 border-dashed border-muted-foreground/20 pointer-events-none"
+                        style={{ top: A4_HEIGHT_PX * (i + 1) - 95 /* subtract top padding */ }}
+                      >
+                        <span className="absolute right-2 -top-3 text-[9px] text-muted-foreground/40 font-mono select-none">
+                          page {i + 2}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </ScrollArea>
+              </div>
 
               {/* AI error banner */}
               {aiError && aiBlocks.length === 0 && (

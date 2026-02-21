@@ -203,6 +203,18 @@ class BenchmarkRepository:
             ).fetchall()
             return [BenchmarkRun(**dict(r)) for r in rows]
 
+    def delete_by_id(self, run_id: int) -> bool:
+        with self.db.get_connection() as conn:
+            cursor = conn.execute("DELETE FROM benchmark_runs WHERE id = ?", (run_id,))
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def delete_by_input(self, input_text: str) -> int:
+        with self.db.get_connection() as conn:
+            cursor = conn.execute("DELETE FROM benchmark_runs WHERE input_text = ?", (input_text,))
+            conn.commit()
+            return cursor.rowcount
+
 
 class DocumentRepository:
     def __init__(self, db: DatabaseManager):

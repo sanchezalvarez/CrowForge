@@ -498,25 +498,47 @@ export function BenchmarkPage() {
                   {sessions.map((s) => {
                     const isActive = selectedSessionKey === s.key;
                     return (
-                      <button
+                      <div
                         key={s.key}
-                        onClick={() => {
-                          setSelectedSessionKey(isActive ? null : s.key);
-                          setExpandedId(null);
-                        }}
-                        className={`w-full text-left px-2.5 py-2 rounded-md transition-colors ${
+                        className={`group relative w-full text-left px-2.5 py-2 rounded-md transition-colors cursor-pointer ${
                           isActive
                             ? "bg-primary/10 ring-1 ring-primary/20"
                             : "hover:bg-muted/50"
                         }`}
+                        onClick={() => {
+                          setSelectedSessionKey(isActive ? null : s.key);
+                          setExpandedId(null);
+                        }}
                       >
                         <div className="flex items-center justify-between gap-2">
                           <span className={`text-xs truncate flex-1 ${isActive ? "font-medium text-foreground" : "text-muted-foreground"}`}>
                             {s.inputSummary}
                           </span>
-                          <span className="text-[10px] text-muted-foreground/60 tabular-nums shrink-0">
-                            {s.runCount}
-                          </span>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <span className="text-[10px] text-muted-foreground/60 tabular-nums">
+                              {s.runCount}
+                            </span>
+                            <button
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                try {
+                                  await axios.delete(`${API_BASE}/benchmark/session`, { params: { input_text: s.key } });
+                                  setRuns((prev) => prev.filter((r) => r.input_text !== s.key));
+                                  if (selectedSessionKey === s.key) {
+                                    setSelectedSessionKey(null);
+                                    setExpandedId(null);
+                                  }
+                                  toast("Session deleted", "success");
+                                } catch {
+                                  toast("Failed to delete session", "error");
+                                }
+                              }}
+                              className="opacity-0 group-hover:opacity-100 p-0.5 rounded text-muted-foreground hover:text-destructive transition-opacity"
+                              title="Delete session"
+                            >
+                              <Trash2 size={11} />
+                            </button>
+                          </div>
                         </div>
                         <div className="flex items-center gap-2 mt-0.5">
                           <span className="text-[10px] text-muted-foreground/60">
@@ -527,7 +549,7 @@ export function BenchmarkPage() {
                             {s.models.join(", ")}
                           </span>
                         </div>
-                      </button>
+                      </div>
                     );
                   })}
                 </div>

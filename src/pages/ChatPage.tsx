@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import axios from "axios";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { PlusCircle, Send, Trash2, MessageSquare, Loader2, FileText } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Textarea } from "../components/ui/textarea";
@@ -297,13 +299,21 @@ export function ChatPage({ documentContext, tuningParams }: ChatPageProps) {
                   >
                     <Card
                       className={cn(
-                        "px-4 py-2.5 max-w-[80%] text-sm whitespace-pre-wrap",
+                        "px-4 py-2.5 max-w-[80%] text-sm",
                         msg.role === "user"
-                          ? "bg-primary text-primary-foreground"
+                          ? "bg-primary text-primary-foreground whitespace-pre-wrap"
                           : "bg-muted"
                       )}
                     >
-                      {msg.content}
+                      {msg.role === "user" ? (
+                        msg.content
+                      ) : (
+                        <div className="prose prose-sm dark:prose-invert max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                            {msg.content}
+                          </ReactMarkdown>
+                        </div>
+                      )}
                     </Card>
                   </div>
                 ))}

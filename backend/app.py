@@ -4,6 +4,7 @@ if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 import os
 import json
+from contextlib import asynccontextmanager
 from typing import List, Optional
 from time import time
 from fastapi import FastAPI, HTTPException, Request
@@ -26,8 +27,33 @@ from backend.ai.engine_manager import AIEngineManager
 # Timeout for a full generation pass (seconds). If the active engine
 # produces no output within this window, we abort and fall back to mock.
 GENERATION_TIMEOUT = float(os.getenv("LLM_GENERATION_TIMEOUT", "120"))
+MODEL_IDLE_TIMEOUT = float(os.getenv("MODEL_IDLE_TIMEOUT", "600"))  # 10 minutes default
 
-app = FastAPI()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Start background idle-unload watcher
+    task = asyncio.create_task(_idle_unload_watcher())
+    yield
+    task.cancel()
+
+
+async def _idle_unload_watcher():
+    """Every 60 s, unload the local model if it has been idle > MODEL_IDLE_TIMEOUT."""
+    import time as _time
+    while True:
+        await asyncio.sleep(60)
+        try:
+            local = engine_manager._engines.get("local")
+            if isinstance(local, LocalLLAMAEngine) and local.is_ready and local.last_used > 0:
+                idle_secs = _time.time() - local.last_used
+                if idle_secs >= MODEL_IDLE_TIMEOUT:
+                    local.unload()
+        except Exception as e:
+            print(f"[IDLE_WATCHER] Error: {e}")
+
+
+app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -371,6 +397,20 @@ async def set_local_model(data: dict):
     return {"status": "ok", "model": local.get_model_info()}
 
 
+@app.get("/ai/model/status")
+async def get_model_status():
+    """Return whether a local model is currently loaded."""
+    local = engine_manager._engines.get("local")
+    if not isinstance(local, LocalLLAMAEngine):
+        return {"loaded": False, "model_name": None, "is_local_engine": False}
+    info = local.get_model_info()
+    return {
+        "loaded": info["is_ready"],
+        "model_name": info.get("model_name"),
+        "is_local_engine": engine_manager._active_name == "local",
+    }
+
+
 # ── Benchmark ────────────────────────────────────────────────────
 
 @app.post("/benchmark/run")
@@ -463,6 +503,22 @@ async def list_benchmark_runs(limit: int = 50):
     """Return the most recent benchmark runs."""
     runs = benchmark_repo.get_recent(limit)
     return {"runs": [r.model_dump() for r in runs]}
+
+
+@app.delete("/benchmark/run/{run_id}")
+async def delete_benchmark_run(run_id: int):
+    """Delete a single benchmark run by ID."""
+    deleted = benchmark_repo.delete_by_id(run_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Run not found")
+    return {"status": "ok"}
+
+
+@app.delete("/benchmark/session")
+async def delete_benchmark_session(input_text: str):
+    """Delete all benchmark runs sharing the same input prompt (a session)."""
+    count = benchmark_repo.delete_by_input(input_text)
+    return {"status": "ok", "deleted": count}
 
 
 # ── Chat ──────────────────────────────────────────────────────────

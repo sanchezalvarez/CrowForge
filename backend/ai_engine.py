@@ -141,6 +141,7 @@ class LocalLLAMAEngine(AIEngine):
         self.chat_format = chat_format
         self._lock = threading.Lock()
         self._generating = False
+        self.last_used: float = 0.0  # epoch seconds; 0 means never used
 
         path = model_path or os.getenv("LLM_MODEL_PATH")
         ctx = n_ctx or int(os.getenv("LLM_CTX_SIZE", "2048"))
@@ -183,12 +184,25 @@ class LocalLLAMAEngine(AIEngine):
         self._load_model(model_path, n_ctx)
         return "ok" if self.is_ready else "failed"
 
+    def unload(self) -> None:
+        """Free the loaded model from memory."""
+        with self._lock:
+            if self.llm is not None:
+                old = self.llm
+                self.llm = None
+                self.is_ready = False
+                self.model_path = None
+                self.last_used = 0.0
+                del old
+                print("[LOCAL_LLM] Model unloaded (idle timeout)")
+
     def get_model_info(self) -> dict:
         return {
             "model_path": self.model_path,
             "model_name": os.path.basename(self.model_path) if self.model_path else None,
             "n_ctx": self.n_ctx,
             "is_ready": self.is_ready,
+            "last_used": self.last_used,
         }
 
     async def generate_stream(
@@ -201,6 +215,8 @@ class LocalLLAMAEngine(AIEngine):
             yield "[ERROR] Local model is not loaded."
             return
 
+        import time as _time
+        self.last_used = _time.time()
         self._generating = True
         try:
             kwargs: dict = dict(

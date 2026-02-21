@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import {
   Gauge,
@@ -8,6 +8,7 @@ import {
   Settings,
   PanelRightClose,
   PanelRightOpen,
+  CpuIcon,
 } from "lucide-react";
 import crowforgeLogo from "./assets/crowforge_ico.png";
 import { cn } from "./lib/utils";
@@ -65,6 +66,40 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem("ai_show_debug", String(showDebug));
   }, [showDebug]);
+
+  // Model status indicator — polls every 15s when app is ready
+  type ModelStatus = "loaded" | "not_loaded" | "unloaded" | "no_local";
+  const [modelStatus, setModelStatus] = useState<ModelStatus>("no_local");
+  const prevModelLoadedRef = useRef<boolean | null>(null);
+
+  useEffect(() => {
+    if (appStatus !== "ready") return;
+    let cancelled = false;
+
+    async function checkModelStatus() {
+      if (cancelled) return;
+      try {
+        const res = await axios.get(`${API_BASE}/ai/model/status`);
+        const { loaded, is_local_engine } = res.data;
+        if (!is_local_engine) {
+          setModelStatus("no_local");
+        } else if (loaded) {
+          prevModelLoadedRef.current = true;
+          setModelStatus("loaded");
+        } else {
+          const wasLoaded = prevModelLoadedRef.current;
+          prevModelLoadedRef.current = false;
+          setModelStatus(wasLoaded ? "unloaded" : "not_loaded");
+        }
+      } catch {
+        // backend offline — leave status as-is
+      }
+    }
+
+    checkModelStatus();
+    const interval = setInterval(checkModelStatus, 15_000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [appStatus]);
 
   // Backend polling on startup
   useEffect(() => {
@@ -176,6 +211,14 @@ export default function App() {
       </div>
 
       <Toaster />
+
+      {/* Model status indicator — bottom-center, only shown when not loaded */}
+      {modelStatus !== "loaded" && modelStatus !== "no_local" && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-2 rounded-full text-xs font-medium bg-background border shadow-md text-muted-foreground pointer-events-none">
+          <CpuIcon size={14} className={modelStatus === "unloaded" ? "text-amber-500" : "text-muted-foreground/60"} />
+          {modelStatus === "unloaded" ? "Model unloaded (idle)" : "No model loaded"}
+        </div>
+      )}
     </div>
   );
 }

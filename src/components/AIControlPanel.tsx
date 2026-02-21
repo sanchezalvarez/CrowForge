@@ -80,12 +80,7 @@ export function AIControlPanel({ showDebug, onShowDebugChange, tuningParams, onT
         `${API_BASE}/ai/models`
       );
       setModels(res.data.models);
-      // Auto-select first model if none active
-      if (!res.data.active_model && res.data.models.length > 0) {
-        setActiveModel(res.data.models[0].filename);
-      } else {
-        setActiveModel(res.data.active_model);
-      }
+      setActiveModel(res.data.active_model);
     } catch {
       // Silently ignore
     }
@@ -232,7 +227,7 @@ export function AIControlPanel({ showDebug, onShowDebugChange, tuningParams, onT
                         disabled={isBusy || models.length === 0}
                       >
                         <SelectTrigger className="h-8 text-xs font-mono">
-                          <SelectValue placeholder="No model loaded" />
+                          <SelectValue placeholder="Choose a model…" />
                         </SelectTrigger>
                         <SelectContent>
                           {models.map((m) => (
@@ -242,13 +237,11 @@ export function AIControlPanel({ showDebug, onShowDebugChange, tuningParams, onT
                           ))}
                         </SelectContent>
                       </Select>
-                      <p className="text-[10px] text-muted-foreground/70">
-                        {modelSwitching
-                          ? "Loading model — this may take a moment..."
-                          : activeModel
-                            ? `Loaded: ${activeModel}`
-                            : "Select a GGUF model to load"}
-                      </p>
+                      {modelSwitching && (
+                        <p className="text-[10px] text-muted-foreground/70">
+                          Loading model — this may take a moment...
+                        </p>
+                      )}
                     </div>
                   </>
                 )}

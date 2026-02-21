@@ -98,6 +98,14 @@ class SheetDeleteRow(BaseModel):
 class SheetDeleteColumn(BaseModel):
     col_index: int
 
+class SheetAICellRequest(BaseModel):
+    source_value: str
+    instruction: str
+    target_row: int
+    target_col: int
+    temperature: Optional[float] = None
+    max_tokens: Optional[int] = None
+
 class PromptTemplate(BaseModel):
     id: Optional[int] = Field(default=None)
     name: str

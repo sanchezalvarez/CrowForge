@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import axios from "axios";
-import { PlusCircle, Table2, Trash2, Plus, X, AlertCircle, Sparkles, Square, Loader2, LayoutTemplate, FileSpreadsheet, ListTodo, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Copy, Pencil, Filter, Eraser, Tags, ListChecks, Undo2, Redo2, AlignLeft, AlignCenter, AlignRight, AlignVerticalJustifyStart, AlignVerticalJustifyCenter, AlignVerticalJustifyEnd, Bold, Italic, Paintbrush, Type, WrapText, RotateCcw, Upload, Download, ChevronDown, DollarSign, BarChart2 } from "lucide-react";
+import { PlusCircle, Table2, Trash2, Plus, X, AlertCircle, Sparkles, Square, Loader2, LayoutTemplate, FileSpreadsheet, ListTodo, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Copy, Pencil, Filter, Eraser, Tags, ListChecks, Undo2, Redo2, AlignLeft, AlignCenter, AlignRight, AlignVerticalJustifyStart, AlignVerticalJustifyCenter, AlignVerticalJustifyEnd, Bold, Italic, Paintbrush, Type, WrapText, RotateCcw, Upload, Download, ChevronDown, DollarSign, BarChart2, ChevronRight } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { ScrollArea } from "../components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "../components/ui/dialog";
@@ -238,6 +238,21 @@ function colLetterToIndex(letters: string): number {
   return idx - 1;
 }
 
+function resolveCellRef(ref: string): { row: number; col: number } | null {
+  const match = ref.toUpperCase().match(/^([A-Z]+)(\d+)$/);
+  if (!match) return null;
+  const col = colLetterToIndex(match[1]);
+  const row = parseInt(match[2], 10) - 1;
+  if (isNaN(row) || isNaN(col) || row < 0 || col < 0) return null;
+  return { row, col };
+}
+
+const idxToCol = (i: number) => { 
+  let r="",n=i+1; 
+  while(n>0){const m=(n-1)%26;r=String.fromCharCode(65+m)+r;n=Math.floor((n-1)/26);}
+  return r; 
+};
+
 const ROW_WARN_THRESHOLD = 5000;   // show warning banner
 const ROW_AI_LIMIT = 10000;        // disable AI actions
 const ROW_RENDER_LIMIT = 500;      // max rows rendered at once (virtual window)
@@ -327,6 +342,15 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
   const [aiFilledRows, setAiFilledRows] = useState<Set<number>>(new Set());
   const aiFillRef = useRef<EventSource | null>(null);
   const aiFillInstructionRef = useRef<HTMLInputElement>(null);
+
+  // AI Cell state
+  const [aiCellOpen, setAiCellOpen] = useState(false);
+  const [aiCellSourceStr, setAiCellSourceStr] = useState("");
+  const [aiCellTargetStr, setAiCellTargetStr] = useState("");
+  const [aiCellInstruction, setAiCellInstruction] = useState("");
+  const [aiCellAction, setAiCellAction] = useState<"translate" | "rewrite" | "summarize" | "custom">("translate");
+  const [aiCellLanguage, setAiCellLanguage] = useState("Slovak");
+  const [aiCellLoading, setAiCellLoading] = useState(false);
 
   // Column/row resize state
   const [colWidths, setColWidths] = useState<Record<number, number>>({});
@@ -1161,6 +1185,64 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
     runAiFillStream(aiFillCol, aiFillInstruction.trim());
   }
 
+  async function runAiCellOperation() {
+    if (!activeSheet) return;
+
+    const source = resolveCellRef(aiCellSourceStr);
+    const target = resolveCellRef(aiCellTargetStr);
+
+    if (!source || !target) {
+      toast("Invalid source or target cell reference.", "error");
+      return;
+    }
+
+    if (source.row === target.row && source.col === target.col) {
+      toast("Source and target cells cannot be the same.", "error");
+      return;
+    }
+
+    const sourceValue = activeSheet.rows[source.row]?.[source.col]?.trim();
+    if (!sourceValue) {
+      toast("Source cell is empty.", "error");
+      return;
+    }
+
+    let instruction = aiCellInstruction.trim();
+    if (aiCellAction === "translate") {
+      instruction = `Translate to ${aiCellLanguage}`;
+    } else if (aiCellAction === "rewrite") {
+      instruction = "Rewrite this text to be clearer and more professional.";
+    } else if (aiCellAction === "summarize") {
+      instruction = "Summarize this text concisely.";
+    }
+
+    if (!instruction) {
+      toast("Please provide an instruction.", "error");
+      return;
+    }
+
+    setAiCellLoading(true);
+    try {
+      const res = await axios.post(`${API_BASE}/sheets/${activeSheet.id}/ai-cell`, {
+        source_value: sourceValue,
+        instruction: instruction,
+        target_row: target.row,
+        target_col: target.col,
+        temperature: tuningParams?.temperature,
+        max_tokens: tuningParams?.maxTokens,
+      });
+      updateSheet(res.data);
+      setAiCellOpen(false);
+      setAiCellInstruction("");
+      toast("AI operation complete.");
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail;
+      toast(detail || "AI operation failed.", "error");
+    } finally {
+      setAiCellLoading(false);
+    }
+  }
+
   // AI Column Tools — predefined instructions
   function colToolClean(ci: number) {
     if (!activeSheet) return;
@@ -1612,6 +1694,30 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
                     <Sparkles className="h-3 w-3" />
                     AI Fill
                   </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs gap-1"
+                    onClick={() => {
+                      if (selection) {
+                        setAiCellTargetStr(`${idxToCol(selection.c1)}${selection.r1 + 1}`);
+                        if (selection.c1 > 0) {
+                          setAiCellSourceStr(`${idxToCol(selection.c1 - 1)}${selection.r1 + 1}`);
+                        } else {
+                          setAiCellSourceStr(`${idxToCol(selection.c1)}${selection.r1 + 1}`);
+                        }
+                      } else {
+                        setAiCellTargetStr("");
+                        setAiCellSourceStr("");
+                      }
+                      setAiCellOpen(true);
+                    }}
+                    disabled={aiDisabled}
+                    title="Process a single cell with AI"
+                  >
+                    <Sparkles className="h-3 w-3" />
+                    AI Cell
+                  </Button>
                 </>
               )}
               <div className="flex-1" />
@@ -1727,7 +1833,6 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
                 : selFormula ?? (selKey ? (activeSheet.rows[selection!.r1]?.[selection!.c1] ?? "") : "");
               const FUNS = ["SUM", "AVG", "COUNT", "MIN", "MAX"];
               // Convert column index to letter(s): 0→A, 25→Z, 26→AA …
-              const idxToCol = (i: number) => { let r="",n=i+1; while(n>0){const m=(n-1)%26;r=String.fromCharCode(65+m)+r;n=Math.floor((n-1)/26);}return r; };
 
               return (
                 <div className="border-b px-2 py-1 flex items-center gap-1 bg-muted/20 shrink-0">
@@ -1759,6 +1864,24 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
                       {fn}
                     </button>
                   ))}
+                  <button
+                    className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 hover:bg-primary/20 text-primary font-medium shrink-0 transition-colors flex items-center gap-1"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => {
+                      if (selection) {
+                        setAiCellSourceStr(`${idxToCol(selection.c1)}${selection.r1 + 1}`);
+                        setAiCellTargetStr(`${idxToCol(selection.c1)}${selection.r1 + 1}`);
+                      } else {
+                        setAiCellSourceStr("");
+                        setAiCellTargetStr("");
+                      }
+                      setAiCellOpen(true);
+                    }}
+                    title="AI Cell Action"
+                  >
+                    <Sparkles className="h-2.5 w-2.5" />
+                    AI
+                  </button>
                   <div className="w-px h-5 bg-border mx-1" />
                   {/* Editable formula input */}
                   <input
@@ -2418,6 +2541,81 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
             <Sparkles className="h-3.5 w-3.5 text-muted-foreground" />
             Explain formula
           </button>
+          
+          <div className="border-t border-border my-1" />
+          
+          <div className="relative group/ai">
+            <button className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2">
+              <Sparkles className="h-3.5 w-3.5 text-primary" />
+              <span>AI</span>
+              <ChevronRight className="h-3.5 w-3.5 ml-auto text-muted-foreground" />
+            </button>
+            <div className="absolute left-full top-[-5px] hidden group-hover/ai:block bg-background border border-border rounded-md shadow-lg py-1 min-w-[180px]">
+              <button
+                className="w-full px-3 py-1.5 text-left hover:bg-muted"
+                onClick={() => {
+                  setAiCellSourceStr(`${idxToCol(cellMenu.col)}${cellMenu.row + 1}`);
+                  setAiCellTargetStr(`${idxToCol(cellMenu.col)}${cellMenu.row + 1}`);
+                  setAiCellAction("translate");
+                  setAiCellLanguage("Slovak");
+                  setAiCellOpen(true);
+                  setCellMenu(null);
+                }}
+              >
+                Translate to Slovak
+              </button>
+              <button
+                className="w-full px-3 py-1.5 text-left hover:bg-muted"
+                onClick={() => {
+                  setAiCellSourceStr(`${idxToCol(cellMenu.col)}${cellMenu.row + 1}`);
+                  setAiCellTargetStr(`${idxToCol(cellMenu.col)}${cellMenu.row + 1}`);
+                  setAiCellAction("translate");
+                  setAiCellLanguage("English");
+                  setAiCellOpen(true);
+                  setCellMenu(null);
+                }}
+              >
+                Translate to English
+              </button>
+              <button
+                className="w-full px-3 py-1.5 text-left hover:bg-muted"
+                onClick={() => {
+                  setAiCellSourceStr(`${idxToCol(cellMenu.col)}${cellMenu.row + 1}`);
+                  setAiCellTargetStr(`${idxToCol(cellMenu.col)}${cellMenu.row + 1}`);
+                  setAiCellAction("translate");
+                  setAiCellOpen(true);
+                  setCellMenu(null);
+                }}
+              >
+                Translate to...
+              </button>
+              <div className="border-t border-border my-1" />
+              <button
+                className="w-full px-3 py-1.5 text-left hover:bg-muted"
+                onClick={() => {
+                  setAiCellSourceStr(`${idxToCol(cellMenu.col)}${cellMenu.row + 1}`);
+                  setAiCellTargetStr(`${idxToCol(cellMenu.col)}${cellMenu.row + 1}`);
+                  setAiCellAction("rewrite");
+                  setAiCellOpen(true);
+                  setCellMenu(null);
+                }}
+              >
+                Rewrite
+              </button>
+              <button
+                className="w-full px-3 py-1.5 text-left hover:bg-muted"
+                onClick={() => {
+                  setAiCellSourceStr(`${idxToCol(cellMenu.col)}${cellMenu.row + 1}`);
+                  setAiCellTargetStr(`${idxToCol(cellMenu.col)}${cellMenu.row + 1}`);
+                  setAiCellAction("summarize");
+                  setAiCellOpen(true);
+                  setCellMenu(null);
+                }}
+              >
+                Summarize
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -2655,6 +2853,110 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
                 </div>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* AI Cell overlay */}
+      {aiCellOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => { if (!aiCellLoading) setAiCellOpen(false); }}>
+          <div className="bg-background border rounded-lg shadow-lg w-[400px] p-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-2 mb-3">
+              <Sparkles className="h-4 w-4 text-primary" />
+              <h3 className="text-sm font-medium">AI Cell Operation</h3>
+            </div>
+            <p className="text-xs text-muted-foreground mb-4">
+              Process a source cell's value with AI and write the result to a target cell.
+            </p>
+
+            <div className="space-y-3 mb-4">
+              <div className="grid grid-cols-4 items-center gap-3">
+                <label className="text-xs text-muted-foreground text-right">Source</label>
+                <div className="col-span-3 flex gap-2">
+                  <input
+                    className="flex-1 h-8 px-2 text-sm border border-border rounded-md bg-background outline-none focus:ring-1 focus:ring-primary/40"
+                    placeholder="e.g. A1"
+                    value={aiCellSourceStr}
+                    onChange={(e) => setAiCellSourceStr(e.target.value)}
+                  />
+                  <Button variant="outline" size="sm" className="h-8 text-[10px] px-2" onClick={() => {
+                    if (selection) {
+                      setAiCellSourceStr(`${idxToCol(selection.c1)}${selection.r1 + 1}`);
+                    }
+                  }}>Set Selection</Button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-4 items-center gap-3">
+                <label className="text-xs text-muted-foreground text-right">Target</label>
+                <div className="col-span-3 flex gap-2">
+                  <input
+                    className="flex-1 h-8 px-2 text-sm border border-border rounded-md bg-background outline-none focus:ring-1 focus:ring-primary/40"
+                    placeholder="e.g. B1"
+                    value={aiCellTargetStr}
+                    onChange={(e) => setAiCellTargetStr(e.target.value)}
+                  />
+                  <Button variant="outline" size="sm" className="h-8 text-[10px] px-2" onClick={() => {
+                    if (selection) {
+                      setAiCellTargetStr(`${idxToCol(selection.c1)}${selection.r1 + 1}`);
+                    }
+                  }}>Set Selection</Button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-4 items-center gap-3">
+                <label className="text-xs text-muted-foreground text-right">Action</label>
+                <div className="col-span-3 flex gap-2">
+                  <select
+                    className="flex-1 h-8 px-2 text-sm border border-border rounded-md bg-background outline-none focus:ring-1 focus:ring-primary/40"
+                    value={aiCellAction}
+                    onChange={(e) => setAiCellAction(e.target.value as any)}
+                  >
+                    <option value="translate">Translate</option>
+                    <option value="rewrite">Rewrite</option>
+                    <option value="summarize">Summarize</option>
+                    <option value="custom">Custom Instruction</option>
+                  </select>
+                  {aiCellAction === "translate" && (
+                    <select
+                      className="flex-1 h-8 px-2 text-sm border border-border rounded-md bg-background outline-none focus:ring-1 focus:ring-primary/40"
+                      value={aiCellLanguage}
+                      onChange={(e) => setAiCellLanguage(e.target.value)}
+                    >
+                      <option value="Slovak">Slovak</option>
+                      <option value="English">English</option>
+                      <option value="German">German</option>
+                      <option value="French">French</option>
+                      <option value="Spanish">Spanish</option>
+                      <option value="Italian">Italian</option>
+                      <option value="Japanese">Japanese</option>
+                      <option value="Chinese">Chinese</option>
+                    </select>
+                  )}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-4 items-start gap-3">
+                <label className="text-xs text-muted-foreground text-right mt-1.5">Instruction</label>
+                <textarea
+                  className="col-span-3 min-h-[80px] w-full p-2 text-sm border border-border rounded-md bg-background outline-none focus:ring-1 focus:ring-primary/40 resize-none"
+                  placeholder={aiCellAction === "custom" ? 'e.g. "Fix formatting", "Make it more professional"' : 'Autogenerated from action'}
+                  value={aiCellAction === "custom" ? aiCellInstruction : ""}
+                  onChange={(e) => setAiCellInstruction(e.target.value)}
+                  disabled={aiCellAction !== "custom"}
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setAiCellOpen(false)} disabled={aiCellLoading}>
+                Cancel
+              </Button>
+              <Button variant="default" size="sm" className="h-8 text-xs gap-1.5" onClick={runAiCellOperation} disabled={aiCellLoading || !aiCellSourceStr.trim() || !aiCellTargetStr.trim() || (aiCellAction === "custom" && !aiCellInstruction.trim())}>
+                {aiCellLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                Run AI
+              </Button>
+            </div>
           </div>
         </div>
       )}

@@ -20,7 +20,7 @@ def get_resource_path(relative_path):
         return os.path.join(sys._MEIPASS, relative_path)
     return os.path.abspath(relative_path)
 
-from backend.models import PromptTemplate, BenchmarkRun, BenchmarkRequest, ChatSession, ChatMessage, ChatMessageRequest, Document, DocumentCreate, DocumentUpdate, DocumentAIRequest, Sheet, SheetCreate, SheetColumn, SheetAddColumn, SheetUpdateCell, SheetDeleteRow, SheetDeleteColumn
+from backend.models import PromptTemplate, BenchmarkRun, BenchmarkRequest, ChatSession, ChatMessage, ChatMessageRequest, Document, DocumentCreate, DocumentUpdate, DocumentAIRequest, Sheet, SheetCreate, SheetColumn, SheetAddColumn, SheetUpdateCell, SheetDeleteRow, SheetDeleteColumn, SheetAICellRequest
 from backend.storage import DatabaseManager, AppRepository, PromptTemplateRepository, BenchmarkRepository, ChatSessionRepository, ChatMessageRepository, DocumentRepository, SheetRepository
 from backend.ai_engine import MockAIEngine, HTTPAIEngine, LocalLLAMAEngine, AILogger
 from backend.ai.engine_manager import AIEngineManager
@@ -1160,6 +1160,53 @@ async def sort_sheet_column(sheet_id: str, req: dict):
     sheet = sheet_repo.sort_by_column(sheet_id, col_index, ascending)
     if not sheet:
         raise HTTPException(status_code=404, detail="Sheet not found or invalid column")
+    return sheet
+
+
+@app.post("/sheets/{sheet_id}/ai-cell", response_model=Sheet)
+async def ai_process_cell(sheet_id: str, req: SheetAICellRequest):
+    """Process a single cell's value with AI and update a target cell."""
+    sheet = sheet_repo.get_by_id(sheet_id)
+    if not sheet:
+        raise HTTPException(status_code=404, detail="Sheet not found")
+
+    system_prompt = (
+        "You are a spreadsheet assistant.\n"
+        "TASK: Process the provided value based on the user's instruction.\n"
+        "RULES:\n"
+        "- Return ONLY the final result string.\n"
+        "- Do NOT include explanations, labels, or markdown.\n"
+        "- If the result should be a number, return only the number.\n"
+        "- If the instruction is to translate, return only the translation."
+    )
+    user_prompt = f"Value: \"{req.source_value}\"\nInstruction: {req.instruction}"
+
+    full_response = ""
+    try:
+        temperature = req.temperature if req.temperature is not None else 0.7
+        max_tokens = req.max_tokens if req.max_tokens is not None else 1024
+        async for chunk in engine_manager.get_active().generate_stream(
+            system_prompt, user_prompt,
+            temperature=temperature, max_tokens=max_tokens,
+            json_mode=False,
+        ):
+            full_response += chunk
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"AI generation failed: {e}")
+
+    result = full_response.strip()
+    if not result:
+        raise HTTPException(status_code=500, detail="AI returned empty response")
+
+    # Update the target cell in the sheet
+    try:
+        sheet = sheet_repo.update_cell(sheet_id, ri := req.target_row, ci := req.target_col, result)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+    if not sheet:
+        raise HTTPException(status_code=404, detail="Target cell indices are invalid")
+
     return sheet
 
 

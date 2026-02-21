@@ -385,14 +385,14 @@ async def set_local_model(data: dict):
     if not isinstance(local, LocalLLAMAEngine):
         raise HTTPException(status_code=400, detail="Local engine is not registered")
 
-    result = local.reload(model_path, n_ctx=ctx)
+    status, detail = local.reload(model_path, n_ctx=ctx)
 
-    if result == "busy":
+    if status == "busy":
         raise HTTPException(status_code=409, detail="Cannot reload while generation is in progress")
-    if result.startswith("not_found"):
-        raise HTTPException(status_code=404, detail=f"Model file not found: {filename}")
-    if result == "failed":
-        raise HTTPException(status_code=500, detail="Model failed to load — previous model restored if available")
+    if status == "not_found":
+        raise HTTPException(status_code=404, detail=f"Model file not found: {model_path}")
+    if status == "failed":
+        raise HTTPException(status_code=500, detail=f"Model failed to load: {detail}")
 
     return {"status": "ok", "model": local.get_model_info()}
 
@@ -471,15 +471,15 @@ async def run_benchmark(req: BenchmarkRequest):
         if isinstance(engine, LocalLLAMAEngine) and req.models:
             for model_filename in req.models:
                 model_path = os.path.join(LLM_MODELS_DIR, model_filename)
-                result = engine.reload(model_path, n_ctx=int(os.getenv("LLM_CTX_SIZE", "2048")))
-                if result != "ok":
+                reload_status, reload_detail = engine.reload(model_path, n_ctx=int(os.getenv("LLM_CTX_SIZE", "2048")))
+                if reload_status != "ok":
                     run = BenchmarkRun(
                         input_text=req.input_text,
                         engine_name=engine_name,
                         model_name=model_filename,
                         temperature=req.temperature,
                         max_tokens=req.max_tokens,
-                        error=f"Model swap failed: {result}",
+                        error=f"Model swap failed: {reload_detail}",
                     )
                     saved = benchmark_repo.create(run)
                     results.append(saved.model_dump())

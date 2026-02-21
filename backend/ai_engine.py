@@ -149,6 +149,7 @@ class LocalLLAMAEngine(AIEngine):
             self._load_model(path, ctx)
 
     def _load_model(self, model_path: str, n_ctx: int) -> None:
+        """Load model; raises on failure so callers can propagate the real error."""
         from llama_cpp import Llama
         with self._lock:
             old = self.llm
@@ -170,19 +171,27 @@ class LocalLLAMAEngine(AIEngine):
                 self.llm = old
                 if old is not None:
                     self.is_ready = True
+                # Free partially-constructed model if different from old
+                if self.llm is not old and self.llm is not None:
+                    del self.llm
+                    self.llm = old
+                raise
 
             # Free old model memory
             if old is not None and old is not self.llm:
                 del old
 
-    def reload(self, model_path: str, n_ctx: int = 2048) -> str:
-        """Reload with a different model. Returns status string. Blocks if generation active."""
+    def reload(self, model_path: str, n_ctx: int = 2048) -> tuple[str, str]:
+        """Reload with a different model. Returns (status, error_detail) tuple."""
         if self._generating:
-            return "busy"
+            return "busy", "Generation is in progress"
         if not os.path.exists(model_path):
-            return f"not_found:{model_path}"
-        self._load_model(model_path, n_ctx)
-        return "ok" if self.is_ready else "failed"
+            return "not_found", f"File not found: {model_path}"
+        try:
+            self._load_model(model_path, n_ctx)
+            return "ok", ""
+        except Exception as e:
+            return "failed", str(e)
 
     def unload(self) -> None:
         """Free the loaded model from memory."""

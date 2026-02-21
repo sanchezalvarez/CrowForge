@@ -35,7 +35,17 @@
       "Bash(cd:*)",
       "Bash(test:*)",
       "Bash(tail:*)",
-      "Bash(head:*)"
+      "Bash(head:*)",
+      "Bash(cd /c/unity/CrowForge && python --version && node --version && rustc --version 2>&1)",
+      "Bash(cd /c/unity/CrowForge && python -m PyInstaller --onefile --name crowforge-backend --add-data \"backend/schema.sql;backend\" backend/app.py 2>&12)",
+      "Bash(cd /c/unity/CrowForge && npm run tauri build)",
+      "Bash(cd /c/unity/CrowForge && npm run tauri build 2>&1)",
+      "Bash(Remove-Item:*)",
+      "Bash(taskkill:*)",
+      "Bash(pkill:*)",
+      "Bash(grep:*)",
+      "Bash(cmd.exe:*)",
+      "Bash(powershell.exe:*)"
     ]
   }
 }

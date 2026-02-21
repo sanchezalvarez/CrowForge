@@ -24,7 +24,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": [],
     "externalBin": [
       "bin/crowforge-backend"
     ],

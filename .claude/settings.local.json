@@ -45,7 +45,9 @@
       "Bash(pkill:*)",
       "Bash(grep:*)",
       "Bash(cmd.exe:*)",
-      "Bash(powershell.exe:*)"
+      "Bash(powershell.exe:*)",
+      "Bash(netstat:*)",
+      "Bash(cmd:*)"
     ]
   }
 }

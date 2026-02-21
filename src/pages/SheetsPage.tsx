@@ -411,8 +411,8 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
     const formula = activeSheet?.formulas?.[formulaKey];
     setEditingCell({ row: ri, col: ci });
     setEditValue(formula ?? currentValue);
-    setSelection(null);
-    setSelAnchor(null);
+    setSelection({ r1: ri, c1: ci, r2: ri, c2: ci });
+    setSelAnchor({ row: ri, col: ci });
   }, [activeSheet]);
 
   const commitEdit = useCallback(async () => {
@@ -1504,7 +1504,7 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
                       {getSelectionFormat().tc && <div className="absolute bottom-0.5 left-1 right-1 h-0.5 rounded" style={{ backgroundColor: getSelectionFormat().tc }} />}
                     </Button>
                     {colorPickerOpen === 'tc' && (
-                      <div className="absolute top-full left-0 mt-1 z-50 bg-background border border-border rounded-md shadow-lg p-2 grid grid-cols-6 gap-1 w-[156px]" onClick={(e) => e.stopPropagation()}>
+                      <div className="absolute top-full left-0 mt-1 z-50 bg-background border border-border rounded-md shadow-lg p-2 grid grid-cols-6 gap-1 w-[156px]" onMouseDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
                         {['#000000','#ef4444','#f97316','#eab308','#22c55e','#3b82f6','#8b5cf6','#ec4899','#6b7280','#ffffff','#991b1b','#9a3412'].map(c => (
                           <button key={c} className="w-5 h-5 rounded border border-border hover:scale-110 transition-transform" style={{ backgroundColor: c }} onClick={() => { applyFormat({ tc: c }); setColorPickerOpen(null); }} />
                         ))}
@@ -1518,7 +1518,7 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
                       {getSelectionFormat().bg && <div className="absolute bottom-0.5 left-1 right-1 h-0.5 rounded" style={{ backgroundColor: getSelectionFormat().bg }} />}
                     </Button>
                     {colorPickerOpen === 'bg' && (
-                      <div className="absolute top-full left-0 mt-1 z-50 bg-background border border-border rounded-md shadow-lg p-2 grid grid-cols-6 gap-1 w-[156px]" onClick={(e) => e.stopPropagation()}>
+                      <div className="absolute top-full left-0 mt-1 z-50 bg-background border border-border rounded-md shadow-lg p-2 grid grid-cols-6 gap-1 w-[156px]" onMouseDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
                         {['#fef2f2','#fff7ed','#fefce8','#f0fdf4','#eff6ff','#f5f3ff','#fdf2f8','#f9fafb','#fecaca','#fed7aa','#fde68a','#bbf7d0'].map(c => (
                           <button key={c} className="w-5 h-5 rounded border border-border hover:scale-110 transition-transform" style={{ backgroundColor: c }} onClick={() => { applyFormat({ bg: c }); setColorPickerOpen(null); }} />
                         ))}
@@ -1662,45 +1662,64 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
               const singleSel = selection && selection.r1 === selection.r2 && selection.c1 === selection.c2;
               const selKey = singleSel ? `${selection!.r1},${selection!.c1}` : null;
               const selFormula = selKey ? activeSheet.formulas?.[selKey] : null;
-              const selError = selKey && selFormula && typeof (activeSheet.rows[selection!.r1]?.[selection!.c1]) === 'string' && activeSheet.rows[selection!.r1]?.[selection!.c1]?.startsWith("#");
-              const showBar = editingCell || selFormula;
-              if (!showBar) return null;
               const displayLabel = editingCell
                 ? `${String.fromCharCode(65 + Math.min(editingCell.col, 25))}${editingCell.row + 1}`
                 : singleSel
                   ? `${String.fromCharCode(65 + Math.min(selection!.c1, 25))}${selection!.r1 + 1}`
-                  : "";
+                  : "—";
               const displayValue = editingCell
                 ? editValue
-                : selFormula ?? "";
-
-              // Build colored formula segments
-              let formulaSpans: React.ReactNode = displayValue;
-              try {
-                if (displayValue.startsWith("=")) {
-                  const groups = parseFormulaRefGroups(displayValue, activeSheet.rows.length, activeSheet.columns.length);
-                  if (groups.length > 0) {
-                    const parts: React.ReactNode[] = [];
-                    let last = 0;
-                    for (const g of groups) {
-                      if (g.start > last) parts.push(<span key={`t${last}`}>{displayValue.slice(last, g.start)}</span>);
-                      parts.push(<span key={`r${g.start}`} style={{ color: REF_COLORS[g.colorIdx].text, fontWeight: 600 }}>{g.token}</span>);
-                      last = g.end;
-                    }
-                    if (last < displayValue.length) parts.push(<span key={`t${last}`}>{displayValue.slice(last)}</span>);
-                    formulaSpans = parts;
-                  }
-                }
-              } catch { /* safe */ }
+                : selFormula ?? (selKey ? (activeSheet.rows[selection!.r1]?.[selection!.c1] ?? "") : "");
+              const FUNS = ["SUM", "AVG", "COUNT", "MIN", "MAX", "IF"];
 
               return (
-                <div className="border-b px-4 py-1 flex items-center gap-2 bg-muted/20 shrink-0">
-                  <span className="text-[11px] font-mono text-muted-foreground w-8 text-center shrink-0">{displayLabel}</span>
-                  <div className="w-px h-4 bg-border" />
-                  <span className="text-xs font-mono text-foreground truncate flex-1">{formulaSpans}</span>
-                  {selError && !editingCell && (
-                    <span className="text-[10px] font-mono text-destructive shrink-0">{activeSheet.rows[selection!.r1]?.[selection!.c1]}</span>
-                  )}
+                <div className="border-b px-2 py-1 flex items-center gap-1 bg-muted/20 shrink-0">
+                  <span className="text-[11px] font-mono text-muted-foreground w-10 text-center shrink-0 bg-muted rounded px-1 py-0.5">{displayLabel}</span>
+                  <div className="w-px h-5 bg-border mx-1" />
+                  {/* Function buttons */}
+                  {FUNS.map((fn) => (
+                    <button
+                      key={fn}
+                      className="text-[10px] px-1.5 py-0.5 rounded bg-muted hover:bg-primary/20 text-muted-foreground hover:text-foreground font-mono shrink-0 transition-colors"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => {
+                        const target = editingCell ?? (singleSel ? { row: selection!.r1, col: selection!.c1 } : null);
+                        if (!target) return;
+                        const current = editingCell ? editValue : (activeSheet.rows[target.row]?.[target.col] ?? "");
+                        const insert = `=${fn}()`;
+                        if (!editingCell) {
+                          startEditing(target.row, target.col, insert);
+                        } else {
+                          setEditValue(current + `${fn}()`);
+                        }
+                      }}
+                    >
+                      {fn}
+                    </button>
+                  ))}
+                  <div className="w-px h-5 bg-border mx-1" />
+                  {/* Editable formula input */}
+                  <input
+                    className="flex-1 text-xs font-mono bg-transparent outline-none text-foreground px-1"
+                    placeholder={singleSel ? "Enter value or =formula…" : "Select a cell"}
+                    readOnly={!singleSel && !editingCell}
+                    value={displayValue}
+                    onFocus={() => {
+                      if (singleSel && !editingCell) {
+                        startEditing(selection!.r1, selection!.c1, displayValue);
+                      }
+                    }}
+                    onChange={(e) => {
+                      if (editingCell) {
+                        setEditValue(e.target.value);
+                        setCellError(null);
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") { e.preventDefault(); commitEdit(); }
+                      if (e.key === "Escape") { e.preventDefault(); cancelEdit(); }
+                    }}
+                  />
                 </div>
               );
             })()}
@@ -1844,6 +1863,14 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
                           key={ci}
                           className="group border border-border bg-muted px-2 py-1.5 text-left text-xs font-medium text-muted-foreground cursor-context-menu relative"
                           style={{ width: colWidths[ci] ?? DEFAULT_COL_WIDTH, minWidth: MIN_COL_WIDTH }}
+                          onClick={() => {
+                            const lastRow = activeSheet.rows.length - 1;
+                            if (lastRow < 0) return;
+                            setSelAnchor({ row: 0, col: ci });
+                            selMoving.current = { row: lastRow, col: ci };
+                            setSelection({ r1: 0, c1: ci, r2: lastRow, c2: ci });
+                            gridRef.current?.focus();
+                          }}
                           onContextMenu={(e) => {
                             e.preventDefault();
                             setColMenu({ colIndex: ci, x: e.clientX, y: e.clientY });
@@ -1978,11 +2005,16 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
                                 justFilled && "bg-green-500/10",
                                 fillError && "bg-destructive/10"
                               )}
-                              style={{
-                                width: colWidths[ci] ?? DEFAULT_COL_WIDTH,
-                                minWidth: MIN_COL_WIDTH,
-                                ...(isFormulaRef && !isEditing ? { backgroundColor: refColor!.bg, borderColor: refColor!.border } : {}),
-                              }}
+                              style={(() => {
+                                const fmt: CellFormat = activeSheet.formats?.[`${ri},${ci}`] ?? {};
+                                return {
+                                  width: colWidths[ci] ?? DEFAULT_COL_WIDTH,
+                                  minWidth: MIN_COL_WIDTH,
+                                  ...(isFormulaRef && !isEditing
+                                    ? { backgroundColor: refColor!.bg, borderColor: refColor!.border }
+                                    : fmt.bg ? { backgroundColor: fmt.bg } : {}),
+                                };
+                              })()}
                               onContextMenu={(e) => {
                                 if (hasFormula) {
                                   e.preventDefault();
@@ -1996,14 +2028,13 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
                                 }
                               }}
                               onMouseEnter={() => handleCellMouseEnter(ri, ci)}
-                              onDoubleClick={() => {
-                                setSelection(null);
+                              onClick={() => {
                                 if (colType === "boolean") {
                                   const next = cell.toLowerCase() === "true" ? "false" : "true";
                                   axios.put(`${API_BASE}/sheets/${activeSheet.id}/cell`, {
                                     row_index: ri, col_index: ci, value: next,
                                   }).then((res) => updateSheet(res.data)).catch(() => {});
-                                } else {
+                                } else if (!isEditing) {
                                   startEditing(ri, ci, cell);
                                 }
                               }}

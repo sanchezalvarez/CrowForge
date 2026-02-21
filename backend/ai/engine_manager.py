@@ -42,6 +42,14 @@ class AIEngineManager:
         self._ensure_active()
         return self._active_name
 
+    # ── management ───────────────────────────────────────────────────
+
+    def clear(self) -> None:
+        """Unregister all engines and reset active selection."""
+        self._engines.clear()
+        self._active_name = None
+        logger.info("All engines cleared")
+
     # ── introspection ────────────────────────────────────────────────
 
     def list_engines(self) -> list[dict]:

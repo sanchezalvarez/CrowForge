@@ -1245,8 +1245,8 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
   useEffect(() => {
     if (!exportOpen) return;
     const close = () => setExportOpen(false);
-    document.addEventListener("mousedown", close);
-    return () => document.removeEventListener("mousedown", close);
+    document.addEventListener("click", close);
+    return () => document.removeEventListener("click", close);
   }, [exportOpen]);
 
   // ---- Import ----
@@ -1277,10 +1277,10 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
     }
   }
 
-  function handleExport(format: SheetExportFormat) {
+  async function handleExport(format: SheetExportFormat) {
     setExportOpen(false);
     if (!activeSheet) return;
-    exportSheetAs(format, {
+    await exportSheetAs(format, {
       title: activeSheet.title,
       columns: activeSheet.columns,
       rows: activeSheet.rows,
@@ -1292,9 +1292,9 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
     });
   }
 
-  function handleExportAllXLSX() {
+  async function handleExportAllXLSX() {
     if (sheets.length === 0) return;
-    exportAllSheetsXLSX(
+    await exportAllSheetsXLSX(
       sheets.map((s) => ({
         title: s.title,
         columns: s.columns,

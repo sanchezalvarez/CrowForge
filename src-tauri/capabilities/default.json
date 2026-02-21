@@ -6,6 +6,16 @@
   "permissions": [
     "core:default",
     "opener:default",
+    "dialog:default",
+    "dialog:allow-save",
+    "dialog:allow-open",
+    "fs:default",
+    "fs:allow-write-file",
+    "fs:allow-read-file",
+    "fs:scope-download",
+    "fs:scope-desktop",
+    "fs:scope-document",
+    "fs:scope-home",
     {
       "identifier": "shell:allow-execute",
       "allow": [

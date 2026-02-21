@@ -195,6 +195,116 @@ async def save_state(data: dict):
         app_repo.set_setting("onboarding_completed", "true" if data["onboarding_completed"] else "false")
     return {"status": "saved"}
 
+# ── AI Settings (read/write .env-style config) ───────────────────────
+
+@app.get("/settings/ai")
+async def get_ai_settings():
+    """Return current effective AI config (settings table → env fallback)."""
+    def _get(key: str, env_fallback: str = "") -> str:
+        """Settings DB first, then provided env_fallback (already resolved)."""
+        val = app_repo.get_setting(key)
+        return val if val else env_fallback
+
+    return {
+        "enable_llm": (_get("ai_enable_llm", os.getenv("ENABLE_LLM", "false"))).lower() == "true",
+        "engine": _get("ai_engine", os.getenv("LLM_ENGINE", "mock")),
+        "base_url": _get("ai_base_url", os.getenv("LLM_BASE_URL", "https://api.openai.com/v1")),
+        "api_key": _get("ai_api_key", os.getenv("LLM_API_KEY", "")),
+        "model": _get("ai_model", os.getenv("LLM_MODEL", "gpt-4o-mini")),
+        "model_path": _get("ai_model_path", os.getenv("LLM_MODEL_PATH", "")),
+        "models_dir": _get("ai_models_dir", os.getenv("LLM_MODELS_DIR", "C:/models")),
+        "ctx_size": int(_get("ai_ctx_size", os.getenv("LLM_CTX_SIZE", "2048"))),
+    }
+
+
+@app.post("/settings/ai")
+async def save_ai_settings(data: dict):
+    """Persist AI config to settings table, re-init engines, and write .env."""
+    global LLM_MODELS_DIR
+
+    mapping = {
+        "enable_llm": ("ai_enable_llm", lambda v: "true" if v else "false"),
+        "engine": ("ai_engine", str),
+        "base_url": ("ai_base_url", str),
+        "api_key": ("ai_api_key", str),
+        "model": ("ai_model", str),
+        "model_path": ("ai_model_path", str),
+        "models_dir": ("ai_models_dir", str),
+        "ctx_size": ("ai_ctx_size", str),
+    }
+    for field, (key, transform) in mapping.items():
+        if field in data:
+            app_repo.set_setting(key, transform(data[field]))
+
+    # Update models dir global
+    new_models_dir = app_repo.get_setting("ai_models_dir")
+    if new_models_dir:
+        LLM_MODELS_DIR = new_models_dir
+
+    # Re-initialize engines based on new settings
+    enable_llm = app_repo.get_setting("ai_enable_llm") == "true"
+    engine_type = app_repo.get_setting("ai_engine") or "mock"
+    base_url = app_repo.get_setting("ai_base_url") or os.getenv("LLM_BASE_URL", "https://api.openai.com/v1")
+    api_key = app_repo.get_setting("ai_api_key") or os.getenv("LLM_API_KEY", "")
+    model = app_repo.get_setting("ai_model") or os.getenv("LLM_MODEL", "gpt-4o-mini")
+    model_path = app_repo.get_setting("ai_model_path") or ""
+    ctx_size = int(app_repo.get_setting("ai_ctx_size") or "2048")
+
+    engine_manager.clear()
+    engine_manager.register("mock", MockAIEngine())
+
+    if enable_llm:
+        if engine_type == "local":
+            local_engine = LocalLLAMAEngine(
+                model_path=model_path if model_path else None,
+                n_ctx=ctx_size,
+            )
+            engine_manager.register("local", local_engine)
+            engine_manager.set_active("local")
+        else:
+            # HTTPAIEngine reads from os.environ, so set before constructing
+            os.environ["LLM_BASE_URL"] = base_url
+            os.environ["LLM_API_KEY"] = api_key
+            os.environ["LLM_MODEL"] = model
+            http_engine = HTTPAIEngine()
+            engine_manager.register("openai", http_engine)
+            engine_manager.set_active("openai")
+    else:
+        engine_manager.set_active("mock")
+
+    # Persist settings to .env file for restart durability
+    _write_env({
+        "ENABLE_LLM": "true" if enable_llm else "false",
+        "LLM_ENGINE": engine_type,
+        "LLM_BASE_URL": base_url,
+        "LLM_API_KEY": api_key,
+        "LLM_MODEL": model,
+        "LLM_MODEL_PATH": model_path,
+        "LLM_MODELS_DIR": LLM_MODELS_DIR,
+        "LLM_CTX_SIZE": str(ctx_size),
+    })
+
+    print(f"[SETTINGS] Engine re-initialized: {engine_manager.active_name}")
+    return {"status": "ok", "active_engine": engine_manager.active_name}
+
+
+def _write_env(updates: dict[str, str]) -> None:
+    """Merge updates into the .env file (create if missing)."""
+    env_path = os.path.abspath(".env")
+    existing: dict[str, str] = {}
+    if os.path.exists(env_path):
+        with open(env_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    k, _, v = line.partition("=")
+                    existing[k.strip()] = v.strip()
+    existing.update(updates)
+    with open(env_path, "w", encoding="utf-8") as f:
+        for k, v in existing.items():
+            f.write(f"{k}={v}\n")
+
+
 # ── Prompt Templates ─────────────────────────────────────────────────
 
 @app.get("/prompt-templates", response_model=List[PromptTemplate])

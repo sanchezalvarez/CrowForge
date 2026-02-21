@@ -26,6 +26,8 @@ import * as XLSX from "xlsx";
 import autoTable from "jspdf-autotable";
 import JSZip from "jszip";
 import { toast } from "../hooks/useToast";
+import { save } from "@tauri-apps/plugin-dialog";
+import { writeFile } from "@tauri-apps/plugin-fs";
 
 // ─── Shared constants & utilities ─────────────────────────────────────────────
 
@@ -65,14 +67,35 @@ export function getFileStem(file: File): string {
   return file.name.replace(/\.[^.]+$/, "");
 }
 
-/** Trigger a browser download for a Blob. */
-export function downloadBlob(blob: Blob, filename: string): void {
+/** Save bytes to disk using Tauri's native save dialog. Falls back to browser download. */
+export async function downloadBlob(blob: Blob, filename: string): Promise<void> {
+  // Try Tauri native save dialog first
+  try {
+    const ext = filename.split(".").pop() ?? "";
+    const path = await save({
+      defaultPath: filename,
+      filters: [{ name: ext.toUpperCase(), extensions: [ext] }],
+    });
+    if (!path) return; // user cancelled
+    const buf = new Uint8Array(await blob.arrayBuffer());
+    await writeFile(path, buf);
+    return;
+  } catch (e) {
+    console.warn("[downloadBlob] Tauri save failed, using browser fallback:", e);
+  }
+  // Browser fallback — element must be in the DOM for WebView2
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
   a.download = filename;
+  a.style.display = "none";
+  document.body.appendChild(a);
   a.click();
-  URL.revokeObjectURL(url);
+  // Small delay before cleanup so the browser can start the download
+  setTimeout(() => {
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, 100);
 }
 
 /**
@@ -271,16 +294,16 @@ export async function exportDocumentAs(
           },
         ],
       });
-      downloadBlob(await Packer.toBlob(docxDoc), `${title}.docx`);
+      await downloadBlob(await Packer.toBlob(docxDoc), `${title}.docx`);
     } else if (format === "pdf") {
       await exportDocumentPDF(deps.json as unknown as TiptapNode, title);
     } else if (format === "md") {
-      downloadBlob(
+      await downloadBlob(
         new Blob([deps.markdown], { type: "text/markdown;charset=utf-8" }),
         `${title}.md`
       );
     } else {
-      downloadBlob(
+      await downloadBlob(
         new Blob([deps.text], { type: "text/plain;charset=utf-8" }),
         `${title}.txt`
       );
@@ -552,7 +575,11 @@ async function exportDocumentPDF(json: TiptapNode, title: string): Promise<void>
   }
 
   pdfFooter(s);
-  doc.save(`${title}.pdf`);
+  const pdfBuf = doc.output("arraybuffer");
+  await downloadBlob(
+    new Blob([pdfBuf], { type: "application/pdf" }),
+    `${title}.pdf`
+  );
 }
 
 // ─── Sheet import ─────────────────────────────────────────────────────────────
@@ -652,7 +679,7 @@ export interface SheetExportDeps {
  * Generate and trigger the download of a sheet in the requested format.
  * Emits a success or error toast when done.
  */
-export function exportSheetAs(format: SheetExportFormat, deps: SheetExportDeps): void {
+export async function exportSheetAs(format: SheetExportFormat, deps: SheetExportDeps): Promise<void> {
   const { title, columns, rows, formulas, colWidths, rowHeights, defaultColWidth, defaultRowHeight } =
     deps;
   try {
@@ -673,7 +700,11 @@ export function exportSheetAs(format: SheetExportFormat, deps: SheetExportDeps):
       ];
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, title.slice(0, 31));
-      XLSX.writeFile(wb, `${title}.xlsx`);
+      const xlsxBuf = XLSX.write(wb, { type: "array", bookType: "xlsx" });
+      await downloadBlob(
+        new Blob([xlsxBuf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }),
+        `${title}.xlsx`
+      );
     } else if (format === "csv" || format === "tsv") {
       const delimiter = format === "tsv" ? "\t" : ",";
       const aoa: string[][] = [
@@ -681,7 +712,7 @@ export function exportSheetAs(format: SheetExportFormat, deps: SheetExportDeps):
         ...rows.map((row) => columns.map((_, c) => row[c] ?? "")),
       ];
       const csv = XLSX.utils.sheet_to_csv(XLSX.utils.aoa_to_sheet(aoa), { FS: delimiter });
-      downloadBlob(
+      await downloadBlob(
         new Blob([csv], { type: "text/plain;charset=utf-8" }),
         `${title}.${format}`
       );
@@ -740,7 +771,11 @@ export function exportSheetAs(format: SheetExportFormat, deps: SheetExportDeps):
           doc.setDrawColor(0, 0, 0);
         },
       });
-      doc.save(`${title}.pdf`);
+      const pdfBuf = doc.output("arraybuffer");
+      await downloadBlob(
+        new Blob([pdfBuf], { type: "application/pdf" }),
+        `${title}.pdf`
+      );
     }
     toast(`Exported "${title}.${format}".`);
   } catch (err) {
@@ -755,7 +790,7 @@ export function exportSheetAs(format: SheetExportFormat, deps: SheetExportDeps):
  * Export every sheet as one worksheet inside a single XLSX workbook.
  * Sheet names are truncated to 31 characters (Excel limit).
  */
-export function exportAllSheetsXLSX(sheets: SheetExportDeps[]): void {
+export async function exportAllSheetsXLSX(sheets: SheetExportDeps[]): Promise<void> {
   try {
     const wb = XLSX.utils.book_new();
     for (const s of sheets) {
@@ -784,7 +819,11 @@ export function exportAllSheetsXLSX(sheets: SheetExportDeps[]): void {
       }
       XLSX.utils.book_append_sheet(wb, ws, sheetName);
     }
-    XLSX.writeFile(wb, "sheets-export.xlsx");
+    const xlsxBuf = XLSX.write(wb, { type: "array", bookType: "xlsx" });
+    await downloadBlob(
+      new Blob([xlsxBuf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }),
+      "sheets-export.xlsx"
+    );
     toast(`Exported ${sheets.length} sheet${sheets.length !== 1 ? "s" : ""} to XLSX.`);
   } catch (err) {
     console.error("Bulk sheet export failed", err);
@@ -889,7 +928,7 @@ export async function exportDocumentsAsZip(docs: BulkDocExportItem[]): Promise<v
       zip.file(filename, `# ${doc.title}\n\n${md}`);
     }
     const blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE" });
-    downloadBlob(blob, "documents-export.zip");
+    await downloadBlob(blob, "documents-export.zip");
     toast(`Exported ${docs.length} document${docs.length !== 1 ? "s" : ""} to ZIP.`);
   } catch (err) {
     console.error("Bulk document export failed", err);

@@ -1,11 +1,11 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
 import {
-  AlertCircle,
   Gauge,
   MessageSquare,
   FileText,
   Table2,
+  Settings,
   PanelRightClose,
   PanelRightOpen,
 } from "lucide-react";
@@ -15,12 +15,16 @@ import { BenchmarkPage } from "./pages/BenchmarkPage";
 import { ChatPage } from "./pages/ChatPage";
 import { DocumentsPage } from "./pages/DocumentsPage";
 import { SheetsPage } from "./pages/SheetsPage";
+import { SettingsPage } from "./pages/SettingsPage";
+import { SplashScreen } from "./components/SplashScreen";
+import { OnboardingPage } from "./pages/OnboardingPage";
 import { Toaster } from "./components/ui/toaster";
 import { AIControlPanel, TuningParams } from "./components/AIControlPanel";
 
 const API_BASE = "http://127.0.0.1:8000";
 
-type AppPage = "chat" | "documents" | "sheets" | "benchmark";
+type AppStatus = "loading" | "onboarding" | "ready" | "failed";
+type AppPage = "chat" | "documents" | "sheets" | "benchmark" | "settings";
 
 export interface DocumentContext {
   title: string;
@@ -29,9 +33,8 @@ export interface DocumentContext {
 }
 
 export default function App() {
+  const [appStatus, setAppStatus] = useState<AppStatus>("loading");
   const [currentPage, setCurrentPage] = useState<AppPage>("chat");
-  const [backendOnline, setBackendOnline] = useState(true);
-  const [appError, setAppError] = useState<string | null>(null);
   const [docContext, setDocContext] = useState<DocumentContext | null>(null);
 
   // Tuning params state — persisted to localStorage
@@ -63,8 +66,30 @@ export default function App() {
     localStorage.setItem("ai_show_debug", String(showDebug));
   }, [showDebug]);
 
+  // Backend polling on startup
   useEffect(() => {
-    axios.get(`${API_BASE}/state`).then(() => setBackendOnline(true)).catch(() => setBackendOnline(false));
+    let cancelled = false;
+    const MAX_ATTEMPTS = 25;
+    const INTERVAL_MS = 600;
+
+    async function poll(attempt: number) {
+      if (cancelled) return;
+      try {
+        const res = await axios.get(`${API_BASE}/state`, { timeout: 2000 });
+        if (cancelled) return;
+        const onboarded = res.data.onboarding_completed === true;
+        setAppStatus(onboarded ? "ready" : "onboarding");
+      } catch {
+        if (attempt >= MAX_ATTEMPTS) {
+          setAppStatus("failed");
+          return;
+        }
+        setTimeout(() => poll(attempt + 1), INTERVAL_MS);
+      }
+    }
+
+    poll(0);
+    return () => { cancelled = true; };
   }, []);
 
   const navItems: { page: AppPage; label: string; icon: typeof MessageSquare }[] = [
@@ -72,7 +97,12 @@ export default function App() {
     { page: "documents", label: "Documents", icon: FileText },
     { page: "sheets", label: "Sheets", icon: Table2 },
     { page: "benchmark", label: "Benchmark", icon: Gauge },
+    { page: "settings", label: "Settings", icon: Settings },
   ];
+
+  if (appStatus === "loading") return <SplashScreen />;
+  if (appStatus === "failed") return <SplashScreen failed />;
+  if (appStatus === "onboarding") return <OnboardingPage onComplete={() => setAppStatus("ready")} />;
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-muted/40 text-foreground font-sans antialiased">
@@ -108,62 +138,41 @@ export default function App() {
 
       {/* MAIN + AI CONTROLS */}
       <div className="flex flex-1 min-w-0 flex-col lg:flex-row overflow-hidden">
-      <main className="flex-1 min-w-0 overflow-y-auto relative">
-        {appError && (
-          <div className="max-w-4xl mx-auto px-4 sm:px-6 pt-6">
-            <div className="flex items-start gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-              <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
-              <div className="flex-1">{appError}</div>
+        <main className="flex-1 min-w-0 overflow-y-auto">
+          {currentPage === "chat" ? (
+            <ChatPage documentContext={docContext} tuningParams={tuningParams} />
+          ) : currentPage === "documents" ? (
+            <DocumentsPage onContextChange={setDocContext} tuningParams={tuningParams} />
+          ) : currentPage === "sheets" ? (
+            <SheetsPage tuningParams={tuningParams} />
+          ) : currentPage === "benchmark" ? (
+            <BenchmarkPage />
+          ) : currentPage === "settings" ? (
+            <SettingsPage />
+          ) : null}
+        </main>
+
+        {currentPage !== "settings" && (
+          <div className={`shrink-0 flex flex-col bg-background${aiPanelOpen ? "" : " border-l"}`}>
+            {aiPanelOpen && (
+              <AIControlPanel
+                showDebug={showDebug}
+                onShowDebugChange={setShowDebug}
+                tuningParams={tuningParams}
+                onTuningChange={setTuningParams}
+              />
+            )}
+            <div className="mt-auto p-2 border-t">
               <button
-                onClick={() => setAppError(null)}
-                className="text-destructive/60 hover:text-destructive text-xs font-medium"
+                onClick={() => setAiPanelOpen(!aiPanelOpen)}
+                className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                title={aiPanelOpen ? "Hide AI panel" : "Show AI panel"}
               >
-                Dismiss
+                {aiPanelOpen ? <PanelRightClose size={16} /> : <PanelRightOpen size={16} />}
               </button>
             </div>
           </div>
         )}
-
-        {!backendOnline ? (
-          <div className="flex-1 flex items-center justify-center h-full">
-            <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-6 text-center max-w-sm">
-              <AlertCircle className="h-8 w-8 text-destructive/60 mx-auto mb-3" />
-              <p className="text-sm font-medium text-destructive">Backend is offline</p>
-              <p className="text-xs text-muted-foreground mt-1.5">
-                Start the backend with:{" "}
-                <code className="bg-muted px-1.5 py-0.5 rounded text-[11px]">
-                  python -m backend.app
-                </code>
-              </p>
-            </div>
-          </div>
-        ) : currentPage === "chat" ? (
-          <ChatPage documentContext={docContext} tuningParams={tuningParams} />
-        ) : currentPage === "documents" ? (
-          <DocumentsPage onContextChange={setDocContext} tuningParams={tuningParams} />
-        ) : currentPage === "sheets" ? (
-          <SheetsPage tuningParams={tuningParams} />
-        ) : currentPage === "benchmark" ? (
-          <BenchmarkPage />
-        ) : null}
-
-        <button
-          onClick={() => setAiPanelOpen(!aiPanelOpen)}
-          className="absolute top-2 right-2 z-10 p-1.5 rounded-md border bg-background text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-          title={aiPanelOpen ? "Hide AI panel" : "Show AI panel"}
-        >
-          {aiPanelOpen ? <PanelRightClose size={16} /> : <PanelRightOpen size={16} />}
-        </button>
-      </main>
-
-      {aiPanelOpen && (
-        <AIControlPanel
-          showDebug={showDebug}
-          onShowDebugChange={setShowDebug}
-          tuningParams={tuningParams}
-          onTuningChange={setTuningParams}
-        />
-      )}
       </div>
 
       <Toaster />

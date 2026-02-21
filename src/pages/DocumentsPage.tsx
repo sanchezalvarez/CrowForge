@@ -483,8 +483,8 @@ export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPagePr
   useEffect(() => {
     if (!exportDocOpen) return;
     const close = () => setExportDocOpen(false);
-    document.addEventListener("mousedown", close);
-    return () => document.removeEventListener("mousedown", close);
+    document.addEventListener("click", close);
+    return () => document.removeEventListener("click", close);
   }, [exportDocOpen]);
 
   const pendingExt = pendingFile ? pendingFile.name.split(".").pop()?.toLowerCase() ?? "" : "";

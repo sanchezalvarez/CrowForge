@@ -33,7 +33,9 @@
       "Bash(npm uninstall:*)",
       "Bash(cargo check:*)",
       "Bash(cd:*)",
-      "Bash(test:*)"
+      "Bash(test:*)",
+      "Bash(tail:*)",
+      "Bash(head:*)"
     ]
   }
 }

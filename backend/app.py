@@ -4,10 +4,11 @@ if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 import os
 import json
+import httpx
 from contextlib import asynccontextmanager
 from typing import List, Optional
 from time import time
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from sse_starlette.sse import EventSourceResponse
 from dotenv import load_dotenv
@@ -32,6 +33,11 @@ MODEL_IDLE_TIMEOUT = float(os.getenv("MODEL_IDLE_TIMEOUT", "600"))  # 10 minutes
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Apply DB-saved models_dir over the env-var default on startup
+    global LLM_MODELS_DIR
+    saved_dir = app_repo.get_setting("ai_models_dir")
+    if saved_dir:
+        LLM_MODELS_DIR = saved_dir
     # Start background idle-unload watcher
     task = asyncio.create_task(_idle_unload_watcher())
     yield
@@ -95,7 +101,7 @@ if ENABLE_LLM:
 
 # ── Local model registry ─────────────────────────────────────────────
 # Scan LLM_MODELS_DIR for .gguf files, or fall back to known paths.
-LLM_MODELS_DIR = os.getenv("LLM_MODELS_DIR", "C:/model")
+LLM_MODELS_DIR = os.getenv("LLM_MODELS_DIR", "C:/models")
 
 def _scan_local_models() -> list[dict]:
     """Return list of available local GGUF models with metadata."""
@@ -238,7 +244,7 @@ async def get_ai_settings():
         "api_key": _get("ai_api_key", os.getenv("LLM_API_KEY", "")),
         "model": _get("ai_model", os.getenv("LLM_MODEL", "gpt-4o-mini")),
         "model_path": _get("ai_model_path", os.getenv("LLM_MODEL_PATH", "")),
-        "models_dir": _get("ai_models_dir", os.getenv("LLM_MODELS_DIR", "C:/models")),
+        "models_dir": _get("ai_models_dir", LLM_MODELS_DIR),
         "ctx_size": int(_get("ai_ctx_size", os.getenv("LLM_CTX_SIZE", "2048"))),
     }
 
@@ -267,7 +273,6 @@ async def save_ai_settings(data: dict):
     if new_models_dir:
         LLM_MODELS_DIR = new_models_dir
 
-    # Re-initialize engines based on new settings
     enable_llm = app_repo.get_setting("ai_enable_llm") == "true"
     engine_type = app_repo.get_setting("ai_engine") or "mock"
     base_url = app_repo.get_setting("ai_base_url") or os.getenv("LLM_BASE_URL", "https://api.openai.com/v1")
@@ -275,28 +280,6 @@ async def save_ai_settings(data: dict):
     model = app_repo.get_setting("ai_model") or os.getenv("LLM_MODEL", "gpt-4o-mini")
     model_path = app_repo.get_setting("ai_model_path") or ""
     ctx_size = int(app_repo.get_setting("ai_ctx_size") or "2048")
-
-    engine_manager.clear()
-    engine_manager.register("mock", MockAIEngine())
-
-    if enable_llm:
-        if engine_type == "local":
-            local_engine = LocalLLAMAEngine(
-                model_path=model_path if model_path else None,
-                n_ctx=ctx_size,
-            )
-            engine_manager.register("local", local_engine)
-            engine_manager.set_active("local")
-        else:
-            # HTTPAIEngine reads from os.environ, so set before constructing
-            os.environ["LLM_BASE_URL"] = base_url
-            os.environ["LLM_API_KEY"] = api_key
-            os.environ["LLM_MODEL"] = model
-            http_engine = HTTPAIEngine()
-            engine_manager.register("openai", http_engine)
-            engine_manager.set_active("openai")
-    else:
-        engine_manager.set_active("mock")
 
     # Persist settings to .env file for restart durability
     _write_env({
@@ -310,8 +293,54 @@ async def save_ai_settings(data: dict):
         "LLM_CTX_SIZE": str(ctx_size),
     })
 
-    print(f"[SETTINGS] Engine re-initialized: {engine_manager.active_name}")
-    return {"status": "ok", "active_engine": engine_manager.active_name}
+    # Re-init engines in background so the response returns immediately
+    _reinit_state["status"] = "reinitializing"
+    _reinit_state["error"] = None
+
+    async def _do_reinit():
+        try:
+            engine_manager.clear()
+            engine_manager.register("mock", MockAIEngine())
+            if enable_llm:
+                if engine_type == "local":
+                    local_engine = LocalLLAMAEngine(
+                        model_path=model_path if model_path else None,
+                        n_ctx=ctx_size,
+                    )
+                    engine_manager.register("local", local_engine)
+                    engine_manager.set_active("local")
+                else:
+                    os.environ["LLM_BASE_URL"] = base_url
+                    os.environ["LLM_API_KEY"] = api_key
+                    os.environ["LLM_MODEL"] = model
+                    http_engine = HTTPAIEngine()
+                    engine_manager.register("openai", http_engine)
+                    engine_manager.set_active("openai")
+            else:
+                engine_manager.set_active("mock")
+            _reinit_state["status"] = "ready"
+            print(f"[SETTINGS] Engine re-initialized: {engine_manager.active_name}")
+        except Exception as e:
+            _reinit_state["status"] = "error"
+            _reinit_state["error"] = str(e)
+            print(f"[SETTINGS] Re-init failed: {e}")
+
+    background_tasks.add_task(_do_reinit)
+    return {"status": "reinitializing", "active_engine": engine_manager.active_name}
+
+
+# Shared state for background re-init progress
+_reinit_state: dict = {"status": "ready", "error": None}
+
+
+@app.get("/settings/ai/status")
+async def get_reinit_status():
+    """Poll this after saving settings to know when engine re-init is done."""
+    return {
+        "status": _reinit_state["status"],   # "ready" | "reinitializing" | "error"
+        "error": _reinit_state["error"],
+        "active_engine": engine_manager.active_name,
+    }
 
 
 def _write_env(updates: dict[str, str]) -> None:
@@ -409,6 +438,75 @@ async def get_model_status():
         "model_name": info.get("model_name"),
         "is_local_engine": engine_manager._active_name == "local",
     }
+
+
+# ── Model downloads ───────────────────────────────────────────────
+
+# download_state: filename -> {progress, total, done, error}
+_download_state: dict = {}
+
+@app.post("/ai/models/download")
+async def start_model_download(data: dict, background_tasks: BackgroundTasks):
+    """Start a background download of a GGUF model into models_dir."""
+    url = data.get("url", "").strip()
+    filename = data.get("filename", "").strip()
+    if not url or not filename:
+        raise HTTPException(status_code=400, detail="Missing url or filename")
+
+    dest_dir = LLM_MODELS_DIR
+    os.makedirs(dest_dir, exist_ok=True)
+    dest_path = os.path.join(dest_dir, filename)
+
+    if _download_state.get(filename, {}).get("running"):
+        return {"status": "already_running"}
+
+    _download_state[filename] = {"progress": 0, "total": 0, "done": False, "error": None, "running": True}
+
+    async def _do_download():
+        try:
+            async with httpx.AsyncClient(timeout=None, follow_redirects=True) as client:
+                async with client.stream("GET", url) as resp:
+                    resp.raise_for_status()
+                    total = int(resp.headers.get("content-length", 0))
+                    _download_state[filename]["total"] = total
+                    downloaded = 0
+                    with open(dest_path, "wb") as f:
+                        async for chunk in resp.aiter_bytes(chunk_size=1024 * 256):
+                            f.write(chunk)
+                            downloaded += len(chunk)
+                            _download_state[filename]["progress"] = downloaded
+            _download_state[filename]["done"] = True
+            _download_state[filename]["running"] = False
+            print(f"[DOWNLOAD] Completed: {filename}")
+        except Exception as e:
+            _download_state[filename]["error"] = str(e)
+            _download_state[filename]["running"] = False
+            # Remove partial file
+            if os.path.exists(dest_path):
+                try:
+                    os.remove(dest_path)
+                except Exception:
+                    pass
+            print(f"[DOWNLOAD] Failed {filename}: {e}")
+
+    background_tasks.add_task(_do_download)
+    return {"status": "started"}
+
+
+@app.get("/ai/models/download/status")
+async def get_download_status():
+    """Return current state of all active/recent downloads."""
+    return {"downloads": _download_state}
+
+
+@app.delete("/ai/models/download/{filename}")
+async def cancel_model_download(filename: str):
+    """Mark a download as cancelled (best-effort; partial file removed on next download attempt)."""
+    state = _download_state.get(filename)
+    if state:
+        state["running"] = False
+        state["error"] = "Cancelled"
+    return {"status": "cancelled"}
 
 
 # ── Benchmark ────────────────────────────────────────────────────

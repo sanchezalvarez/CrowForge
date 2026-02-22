@@ -15,6 +15,8 @@ import {
   TableCell,
 } from "../components/ui/table";
 import { toast } from "../hooks/useToast";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 const API_BASE = "http://127.0.0.1:8000";
 
@@ -719,8 +721,8 @@ export function BenchmarkPage() {
                                   {run.error}
                                 </span>
                               ) : (
-                                <span className="font-mono text-muted-foreground line-clamp-2 break-all leading-relaxed">
-                                  {run.output_text.slice(0, 200) || "(empty)"}
+                                <span className="text-muted-foreground line-clamp-2 break-words leading-relaxed">
+                                  {run.output_text.slice(0, 200).replace(/[#*`_>~\[\]]/g, "") || "(empty)"}
                                   {run.output_text.length > 200 && "\u2026"}
                                 </span>
                               )}
@@ -778,30 +780,11 @@ export function BenchmarkPage() {
                                   {run.output_text.length.toLocaleString()} chars {"\u00b7"} ~{estimateTokens(run.output_text).toLocaleString()} tokens
                                 </span>
                               </div>
-                              {(() => {
-                                // Try to parse as JSON and render structured output
-                                try {
-                                  const trimmed = run.output_text.trim();
-                                  const startIdx = trimmed.indexOf("{");
-                                  const endIdx = trimmed.lastIndexOf("}");
-                                  if (startIdx === -1 || endIdx === -1) throw new Error("no json");
-                                  const parsed = JSON.parse(trimmed.slice(startIdx, endIdx + 1));
-                                  // Find array of concepts — could be under various keys or top-level
-                                  // Render parsed JSON as formatted code
-                                  return (
-                                    <pre className="text-xs font-mono bg-background rounded border px-3 py-2 max-h-72 overflow-y-auto whitespace-pre-wrap break-words leading-relaxed">
-                                      {JSON.stringify(parsed, null, 2)}
-                                    </pre>
-                                  );
-                                } catch {
-                                  // Fallback: raw text
-                                  return (
-                                    <pre className="text-xs font-mono bg-background rounded border px-3 py-2 max-h-72 overflow-y-auto whitespace-pre-wrap break-words leading-relaxed">
-                                      {run.output_text || "(empty)"}
-                                    </pre>
-                                  );
-                                }
-                              })()}
+                              <div className="text-xs bg-background rounded border px-3 py-2 max-h-72 overflow-y-auto leading-relaxed prose prose-sm dark:prose-invert max-w-none">
+                                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                  {run.output_text || "(empty)"}
+                                </ReactMarkdown>
+                              </div>
                             </div>
                           )}
                         </div>

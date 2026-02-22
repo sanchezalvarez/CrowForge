@@ -1218,6 +1218,16 @@ async def ai_range_operation(
             return str(sheet.rows[r][c])
         return ""
 
+    def clean_ai_result(text: str) -> str:
+        """Strip ChatML markers and common LLM headers."""
+        import re
+        res = text.strip().replace('`', '')
+        res = re.sub(r'<\|im_start\|>assistant\n?', '', res, flags=re.IGNORECASE)
+        res = re.sub(r'<\|im_start\|>.*?<\|im_end\|>', '', res, flags=re.DOTALL)
+        res = re.sub(r'Assistant:', '', res, flags=re.IGNORECASE)
+        res = re.sub(r'Response:', '', res, flags=re.IGNORECASE)
+        return res.strip()
+
     async def event_generator():
         try:
             if mode == "row-wise":
@@ -1245,7 +1255,7 @@ async def ai_range_operation(
                             ):
                                 full_resp += chunk
                         
-                        result = full_resp.strip().replace('`', '')
+                        result = clean_ai_result(full_resp)
                         sheet_repo.update_cell(sheet_id, tr + i, tc, result)
                         yield {"data": json.dumps({"type": "cell", "row": tr + i, "col": tc, "value": result})}
                     except Exception as e:
@@ -1269,7 +1279,7 @@ async def ai_range_operation(
                     ):
                         full_resp += chunk
                 
-                result = full_resp.strip().replace('`', '')
+                result = clean_ai_result(full_resp)
                 sheet_repo.update_cell(sheet_id, tr, tc, result)
                 yield {"data": json.dumps({"type": "cell", "row": tr, "col": tc, "value": result})}
 
@@ -1297,7 +1307,8 @@ async def ai_range_operation(
                         full_resp += chunk
                 
                 # Parse output - filter lines to find actual table rows
-                lines = [l.strip() for l in full_resp.strip().split('\n') if '|' in l]
+                clean_text = clean_ai_result(full_resp)
+                lines = [l.strip() for l in clean_text.split('\n') if '|' in l]
                 current_r = tr
                 for line in lines:
                     # Split by pipe

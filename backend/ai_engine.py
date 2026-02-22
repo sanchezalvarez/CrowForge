@@ -238,6 +238,7 @@ class LocalLLAMAEngine(AIEngine):
                 top_p=top_p,
                 repeat_penalty=1.3,
                 stream=True,
+                stop=["<|im_start|>", "<|im_end|>", "<|endoftext|>", "Assistant:", "User:"],
             )
             if json_mode:
                 kwargs["response_format"] = {"type": "json_object"}

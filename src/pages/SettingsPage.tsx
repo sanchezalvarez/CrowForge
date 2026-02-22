@@ -1,10 +1,25 @@
 import { useState, useEffect, useRef } from "react";
 import axios from "axios";
-import { Download, CheckCircle2, Loader2, X, AlertCircle } from "lucide-react";
+import { Download, CheckCircle2, Loader2, X, AlertCircle, User, Smile, Star, Zap, Heart, Coffee, Code2, Flame, Moon, Sun, Ghost, Bot } from "lucide-react";
 import { toast } from "../hooks/useToast";
 import { openUrl } from "@tauri-apps/plugin-opener";
 
 const API_BASE = "http://127.0.0.1:8000";
+
+const USER_AVATARS = [
+  { icon: User,   color: "bg-blue-500" },
+  { icon: Smile,  color: "bg-purple-500" },
+  { icon: Star,   color: "bg-yellow-500" },
+  { icon: Zap,    color: "bg-orange-500" },
+  { icon: Heart,  color: "bg-pink-500" },
+  { icon: Coffee, color: "bg-amber-700" },
+  { icon: Code2,  color: "bg-green-600" },
+  { icon: Flame,  color: "bg-red-500" },
+  { icon: Moon,   color: "bg-indigo-500" },
+  { icon: Sun,    color: "bg-yellow-400" },
+  { icon: Ghost,  color: "bg-slate-500" },
+  { icon: Bot,    color: "bg-teal-500" },
+];
 
 type EngineType = "mock" | "http" | "local";
 
@@ -150,6 +165,15 @@ interface SettingsPageProps {
 
 export function SettingsPage({ theme, setTheme, baseColor, setBaseColor }: SettingsPageProps) {
   const [section, setSection] = useState<Section>("ai");
+  const [avatarIndex, setAvatarIndex] = useState(() =>
+    parseInt(localStorage.getItem("user_avatar_index") ?? "0", 10)
+  );
+
+  function selectAvatar(index: number) {
+    setAvatarIndex(index);
+    localStorage.setItem("user_avatar_index", String(index));
+    window.dispatchEvent(new Event("avatarchange"));
+  }
   const [config, setConfig] = useState<AIConfig>({
     enable_llm: false,
     engine: "mock",
@@ -488,6 +512,24 @@ export function SettingsPage({ theme, setTheme, baseColor, setBaseColor }: Setti
                     >
                       <div className={`h-3 w-3 rounded-full ${preset.color}`} />
                       <span className="text-xs font-medium">{preset.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="pt-4">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Your Avatar</label>
+                <div className="mt-3 grid grid-cols-6 gap-2">
+                  {USER_AVATARS.map((av, i) => (
+                    <button
+                      key={i}
+                      onClick={() => selectAvatar(i)}
+                      className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${av.color} ${
+                        avatarIndex === i ? "ring-2 ring-offset-2 ring-primary" : "opacity-70 hover:opacity-100"
+                      }`}
+                      title={`Avatar ${i + 1}`}
+                    >
+                      <av.icon className="h-5 w-5 text-white" />
                     </button>
                   ))}
                 </div>

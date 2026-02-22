@@ -48,6 +48,15 @@ export default function App() {
   });
 
   useEffect(() => {
+    function handleUnload() {
+      // Best-effort: tell backend to exit when the window closes
+      navigator.sendBeacon("http://127.0.0.1:8000/shutdown");
+    }
+    window.addEventListener("unload", handleUnload);
+    return () => window.removeEventListener("unload", handleUnload);
+  }, []);
+
+  useEffect(() => {
     localStorage.setItem("theme", theme);
     if (theme === "dark") {
       document.documentElement.classList.add("dark");

@@ -142,6 +142,11 @@ class ChatSessionRepository:
             rows = conn.execute("SELECT * FROM chat_sessions ORDER BY created_at DESC").fetchall()
             return [ChatSession(**dict(r)) for r in rows]
 
+    def update_title(self, session_id: int, title: str):
+        with self.db.get_connection() as conn:
+            conn.execute("UPDATE chat_sessions SET title = ? WHERE id = ?", (title, session_id))
+            conn.commit()
+
     def delete(self, session_id: int):
         with self.db.get_connection() as conn:
             conn.execute("DELETE FROM chat_sessions WHERE id = ?", (session_id,))

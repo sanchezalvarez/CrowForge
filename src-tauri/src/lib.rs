@@ -4,6 +4,22 @@ use std::sync::Mutex;
 
 struct BackendProcess(Mutex<Option<CommandChild>>);
 
+impl BackendProcess {
+    fn kill_inner(&self) {
+        if let Ok(mut guard) = self.0.lock() {
+            if let Some(child) = guard.take() {
+                let _ = child.kill();
+            }
+        }
+    }
+}
+
+impl Drop for BackendProcess {
+    fn drop(&mut self) {
+        self.kill_inner();
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -25,20 +41,19 @@ pub fn run() {
             let (_rx, child) = sidecar_command.spawn()
                 .expect("failed to spawn crowforge-backend sidecar");
 
-            // Store child so it's killed when the app exits
+            // Store child — Drop impl will kill it when Tauri exits for any reason
             app.manage(BackendProcess(Mutex::new(Some(child))));
             Ok(())
         })
         .on_window_event(|window, event| {
-            if let tauri::WindowEvent::Destroyed = event {
-                // Kill the backend sidecar when the main window closes
-                if let Some(state) = window.try_state::<BackendProcess>() {
-                    if let Ok(mut guard) = state.0.lock() {
-                        if let Some(child) = guard.take() {
-                            let _ = child.kill();
-                        }
+            match event {
+                // CloseRequested fires before the window closes — most reliable on Windows
+                tauri::WindowEvent::CloseRequested { .. } | tauri::WindowEvent::Destroyed => {
+                    if let Some(state) = window.try_state::<BackendProcess>() {
+                        state.kill_inner();
                     }
                 }
+                _ => {}
             }
         })
         .invoke_handler(tauri::generate_handler![])

@@ -8,7 +8,7 @@ import httpx
 from contextlib import asynccontextmanager
 from typing import List, Optional
 from time import time
-from fastapi import FastAPI, HTTPException, Request, BackgroundTasks
+from fastapi import FastAPI, HTTPException, Request, BackgroundTasks, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from sse_starlette.sse import EventSourceResponse
 from dotenv import load_dotenv
@@ -52,10 +52,26 @@ async def lifespan(app: FastAPI):
     saved_dir = app_repo.get_setting("ai_models_dir")
     if saved_dir:
         LLM_MODELS_DIR = saved_dir
-    # Start background idle-unload watcher
-    task = asyncio.create_task(_idle_unload_watcher())
+    # Start background tasks
+    idle_task = asyncio.create_task(_idle_unload_watcher())
+    parent_task = asyncio.create_task(_parent_watchdog())
     yield
-    task.cancel()
+    idle_task.cancel()
+    parent_task.cancel()
+
+
+async def _parent_watchdog():
+    """Exit if the parent process (Tauri) dies — prevents orphan backend on crashes."""
+    import psutil
+    parent_pid = os.getppid()
+    while True:
+        await asyncio.sleep(5)
+        try:
+            if not psutil.pid_exists(parent_pid):
+                print("[WATCHDOG] Parent process gone — shutting down backend.")
+                os._exit(0)
+        except Exception:
+            pass
 
 
 async def _idle_unload_watcher():
@@ -184,6 +200,16 @@ def _build_debug_payload(
         return json.dumps(payload)
     except Exception:
         return None
+
+
+@app.post("/shutdown")
+async def shutdown():
+    """Gracefully shut down the backend process."""
+    async def _do_exit():
+        await asyncio.sleep(0.2)
+        os._exit(0)
+    asyncio.create_task(_do_exit())
+    return {"status": "shutting_down"}
 
 
 @app.get("/ai/debug")
@@ -677,6 +703,17 @@ async def update_chat_mode(session_id: int, data: dict):
     chat_session_repo.update_mode(session_id, mode)
     return chat_session_repo.get_by_id(session_id)
 
+@app.put("/chat/session/{session_id}/title")
+async def update_chat_title(session_id: int, data: dict):
+    session = chat_session_repo.get_by_id(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Chat session not found")
+    title = data.get("title", "").strip()
+    if not title:
+        raise HTTPException(status_code=400, detail="title is required")
+    chat_session_repo.update_title(session_id, title)
+    return chat_session_repo.get_by_id(session_id)
+
 @app.delete("/chat/session/{session_id}")
 async def delete_chat_session(session_id: int):
     session = chat_session_repo.get_by_id(session_id)
@@ -690,6 +727,12 @@ async def send_chat_message(session_id: int, req: ChatMessageRequest):
     session = chat_session_repo.get_by_id(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Chat session not found")
+
+    # Auto-title on first message
+    if session.title == "New Chat":
+        auto_title = req.content.strip()[:40]
+        if auto_title:
+            chat_session_repo.update_title(session_id, auto_title)
 
     # Store user message
     chat_message_repo.create(session_id, "user", req.content)
@@ -726,6 +769,20 @@ async def send_chat_message(session_id: int, req: ChatMessageRequest):
     # Store assistant message and return it
     assistant_msg = chat_message_repo.create(session_id, "assistant", assistant_text)
     return assistant_msg
+
+
+@app.post("/chat/upload")
+async def upload_chat_file(file: UploadFile = File(...)):
+    """Extract text from an uploaded PDF and return it."""
+    import pdfplumber
+    import io
+    data = await file.read()
+    try:
+        with pdfplumber.open(io.BytesIO(data)) as pdf:
+            text = "\n\n".join(p.extract_text() or "" for p in pdf.pages)
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=f"Could not extract PDF text: {e}")
+    return {"filename": file.filename, "text": text[:8000]}
 
 
 # ── Documents ─────────────────────────────────────────────────────

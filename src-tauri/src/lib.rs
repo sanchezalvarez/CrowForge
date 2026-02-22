@@ -20,8 +20,10 @@ pub fn run() {
             }
 
             let shell = app.shell();
-            let sidecar_command = shell.sidecar("crowforge-backend").unwrap();
-            let (_rx, child) = sidecar_command.spawn().unwrap();
+            let sidecar_command = shell.sidecar("crowforge-backend")
+                .expect("crowforge-backend sidecar not found in bundle");
+            let (_rx, child) = sidecar_command.spawn()
+                .expect("failed to spawn crowforge-backend sidecar");
 
             // Store child so it's killed when the app exits
             app.manage(BackendProcess(Mutex::new(Some(child))));

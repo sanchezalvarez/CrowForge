@@ -13,6 +13,20 @@ from fastapi.middleware.cors import CORSMiddleware
 from sse_starlette.sse import EventSourceResponse
 from dotenv import load_dotenv
 
+def get_app_data_dir() -> str:
+    """Return a user-writable data directory for CrowForge (created if absent)."""
+    if sys.platform == "win32":
+        base = os.environ.get("APPDATA") or os.path.expanduser("~")
+    elif sys.platform == "darwin":
+        base = os.path.expanduser("~/Library/Application Support")
+    else:
+        base = os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share")
+    app_dir = os.path.join(base, "CrowForge")
+    os.makedirs(app_dir, exist_ok=True)
+    return app_dir
+
+# Load .env from app-data dir first, then fall back to CWD (dev)
+load_dotenv(os.path.join(get_app_data_dir(), ".env"))
 load_dotenv()
 
 def get_resource_path(relative_path):
@@ -68,7 +82,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-db = DatabaseManager("campaigns.db")
+db = DatabaseManager(os.path.join(get_app_data_dir(), "campaigns.db"))
 db.initialize_schema(get_resource_path("backend/schema.sql"))
 
 app_repo = AppRepository(db)
@@ -250,7 +264,7 @@ async def get_ai_settings():
 
 
 @app.post("/settings/ai")
-async def save_ai_settings(data: dict):
+async def save_ai_settings(data: dict, background_tasks: BackgroundTasks):
     """Persist AI config to settings table, re-init engines, and write .env."""
     global LLM_MODELS_DIR
 
@@ -345,7 +359,7 @@ async def get_reinit_status():
 
 def _write_env(updates: dict[str, str]) -> None:
     """Merge updates into the .env file (create if missing)."""
-    env_path = os.path.abspath(".env")
+    env_path = os.path.join(get_app_data_dir(), ".env")
     existing: dict[str, str] = {}
     if os.path.exists(env_path):
         with open(env_path, "r", encoding="utf-8") as f:

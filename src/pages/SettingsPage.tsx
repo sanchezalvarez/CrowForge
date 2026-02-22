@@ -124,7 +124,7 @@ const GALLERY_MODELS: GalleryModel[] = [
 
 const ALL_TAGS = ["all", "chat", "translate", "multilingual", "coding", "reasoning", "math", "fast", "general"];
 
-type Section = "ai" | "models" | "about";
+type Section = "ai" | "models" | "appearance" | "about";
 
 interface DownloadState {
   progress: number;
@@ -141,7 +141,14 @@ function fmt_bytes(b: number) {
   return `${(b / 1024 / 1024 / 1024).toFixed(2)} GB`;
 }
 
-export function SettingsPage() {
+interface SettingsPageProps {
+  theme: "light" | "dark";
+  setTheme: (t: "light" | "dark") => void;
+  baseColor: string;
+  setBaseColor: (c: string) => void;
+}
+
+export function SettingsPage({ theme, setTheme, baseColor, setBaseColor }: SettingsPageProps) {
   const [section, setSection] = useState<Section>("ai");
   const [config, setConfig] = useState<AIConfig>({
     enable_llm: false,
@@ -264,6 +271,7 @@ export function SettingsPage() {
   const navItems: { id: Section; label: string }[] = [
     { id: "ai", label: "AI Configuration" },
     { id: "models", label: "Model Gallery" },
+    { id: "appearance", label: "Appearance" },
     { id: "about", label: "About" },
   ];
 
@@ -419,6 +427,72 @@ export function SettingsPage() {
             >
               {saving ? "Saving…" : "Save Changes"}
             </button>
+          </>
+        )}
+
+        {section === "appearance" && (
+          <>
+            <h2 className="text-lg font-semibold">Appearance</h2>
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Theme</label>
+                <div className="mt-2 grid grid-cols-2 gap-4">
+                  <button
+                    onClick={() => setTheme("light")}
+                    className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${
+                      theme === "light"
+                        ? "border-primary bg-primary/5 shadow-sm"
+                        : "border-transparent bg-muted/30 hover:bg-muted/50"
+                    }`}
+                  >
+                    <div className="w-full aspect-video rounded-md bg-white border shadow-sm flex items-center justify-center">
+                      <div className="w-3/4 h-2 bg-slate-100 rounded-full" />
+                    </div>
+                    <span className="text-sm font-medium">Light</span>
+                  </button>
+
+                  <button
+                    onClick={() => setTheme("dark")}
+                    className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${
+                      theme === "dark"
+                        ? "border-primary bg-primary/5 shadow-sm"
+                        : "border-transparent bg-muted/30 hover:bg-muted/50"
+                    }`}
+                  >
+                    <div className="w-full aspect-video rounded-md bg-slate-950 border border-slate-800 shadow-sm flex items-center justify-center">
+                      <div className="w-3/4 h-2 bg-slate-800 rounded-full" />
+                    </div>
+                    <span className="text-sm font-medium">Dark</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="pt-4">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Preset</label>
+                <div className="mt-3 grid grid-cols-3 gap-2">
+                  {[
+                    { id: "zinc", label: "Zinc", color: "bg-zinc-500" },
+                    { id: "slate", label: "Slate", color: "bg-slate-500" },
+                    { id: "stone", label: "Stone", color: "bg-stone-500" },
+                    { id: "rose", label: "Rose", color: "bg-rose-500" },
+                    { id: "orange", label: "Orange", color: "bg-orange-500" },
+                  ].map((preset) => (
+                    <button
+                      key={preset.id}
+                      onClick={() => setBaseColor(preset.id)}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-all ${
+                        baseColor === preset.id
+                          ? "border-primary bg-primary/5 ring-1 ring-primary"
+                          : "border-border bg-background hover:bg-muted"
+                      }`}
+                    >
+                      <div className={`h-3 w-3 rounded-full ${preset.color}`} />
+                      <span className="text-xs font-medium">{preset.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
           </>
         )}
 

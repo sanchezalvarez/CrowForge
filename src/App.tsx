@@ -38,6 +38,32 @@ export default function App() {
   const [currentPage, setCurrentPage] = useState<AppPage>("chat");
   const [docContext, setDocContext] = useState<DocumentContext | null>(null);
 
+  // Theme state — persisted to localStorage
+  const [theme, setTheme] = useState<"light" | "dark">(() => {
+    return (localStorage.getItem("theme") as "light" | "dark") || "light";
+  });
+
+  const [baseColor, setBaseColor] = useState<string>(() => {
+    return localStorage.getItem("base_color") || "zinc";
+  });
+
+  useEffect(() => {
+    localStorage.setItem("theme", theme);
+    if (theme === "dark") {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+    }
+  }, [theme]);
+
+  useEffect(() => {
+    localStorage.setItem("base_color", baseColor);
+    // Remove all possible theme classes
+    const themes = ["theme-zinc", "theme-slate", "theme-stone", "theme-rose", "theme-orange"];
+    document.documentElement.classList.remove(...themes);
+    document.documentElement.classList.add(`theme-${baseColor}`);
+  }, [baseColor]);
+
   // Tuning params state — persisted to localStorage
   const [tuningParams, setTuningParams] = useState<TuningParams>(() => {
     try {
@@ -181,7 +207,12 @@ export default function App() {
           ) : currentPage === "benchmark" ? (
             <BenchmarkPage />
           ) : currentPage === "settings" ? (
-            <SettingsPage />
+            <SettingsPage 
+              theme={theme} 
+              setTheme={setTheme} 
+              baseColor={baseColor} 
+              setBaseColor={setBaseColor} 
+            />
           ) : null}
         </main>
 

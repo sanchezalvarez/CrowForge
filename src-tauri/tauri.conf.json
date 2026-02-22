@@ -24,7 +24,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": [],
+    "targets": ["msi", "nsis"],
     "externalBin": [
       "bin/crowforge-backend"
     ],

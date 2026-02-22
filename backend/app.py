@@ -20,7 +20,7 @@ def get_resource_path(relative_path):
         return os.path.join(sys._MEIPASS, relative_path)
     return os.path.abspath(relative_path)
 
-from backend.models import PromptTemplate, BenchmarkRun, BenchmarkRequest, ChatSession, ChatMessage, ChatMessageRequest, Document, DocumentCreate, DocumentUpdate, DocumentAIRequest, Sheet, SheetCreate, SheetColumn, SheetAddColumn, SheetUpdateCell, SheetDeleteRow, SheetDeleteColumn, SheetAICellRequest
+from backend.models import PromptTemplate, BenchmarkRun, BenchmarkRequest, ChatSession, ChatMessage, ChatMessageRequest, Document, DocumentCreate, DocumentUpdate, DocumentAIRequest, Sheet, SheetCreate, SheetColumn, SheetAddColumn, SheetUpdateCell, SheetDeleteRow, SheetDeleteColumn, SheetAICellRequest, SheetAIBatchRequest
 from backend.storage import DatabaseManager, AppRepository, PromptTemplateRepository, BenchmarkRepository, ChatSessionRepository, ChatMessageRepository, DocumentRepository, SheetRepository
 from backend.ai_engine import MockAIEngine, HTTPAIEngine, LocalLLAMAEngine, AILogger
 from backend.ai.engine_manager import AIEngineManager
@@ -1163,51 +1163,165 @@ async def sort_sheet_column(sheet_id: str, req: dict):
     return sheet
 
 
-@app.post("/sheets/{sheet_id}/ai-cell", response_model=Sheet)
-async def ai_process_cell(sheet_id: str, req: SheetAICellRequest):
-    """Process a single cell's value with AI and update a target cell."""
+@app.get("/sheets/{sheet_id}/ai-op")
+async def ai_range_operation(
+    sheet_id: str,
+    request: Request,
+    mode: str,
+    r1: int, c1: int, r2: int, c2: int,
+    tr: int, tc: int,
+    instruction: str,
+    temperature: float = 0.7,
+    max_tokens: int = 1024,
+    model: Optional[str] = None
+):
+    """
+    Unified SSE endpoint for AI operations on ranges.
+    Modes:
+    - row-wise: Process each row in source range independently. Target = relative rows starting at tr, tc.
+    - aggregate: Concat all source cells -> Single AI call -> Write result to tr, tc.
+    - matrix: Process entire source range as a table -> Single AI call -> Write table starting at tr, tc.
+    """
     sheet = sheet_repo.get_by_id(sheet_id)
     if not sheet:
         raise HTTPException(status_code=404, detail="Sheet not found")
 
-    system_prompt = (
-        "You are a spreadsheet assistant.\n"
-        "TASK: Process the provided value based on the user's instruction.\n"
-        "RULES:\n"
-        "- Return ONLY the final result string.\n"
-        "- Do NOT include explanations, labels, or markdown.\n"
-        "- If the result should be a number, return only the number.\n"
-        "- If the instruction is to translate, return only the translation."
-    )
-    user_prompt = f"Value: \"{req.source_value}\"\nInstruction: {req.instruction}"
+    # Override model if requested (for local engine)
+    if model:
+        local = engine_manager._engines.get("local")
+        if isinstance(local, LocalLLAMAEngine):
+            # Check if already loaded
+            info = local.get_model_info()
+            if info.get("model_name") != model:
+                model_path = os.path.join(LLM_MODELS_DIR, model)
+                if os.path.exists(model_path):
+                    print(f"[AI-OP] Hot-swapping to model: {model}")
+                    # reload is sync in the current implementation (locks internally)
+                    # We should ideally run this in a thread or await it if it were async
+                    status, detail = local.reload(model_path)
+                    if status != "ok":
+                        print(f"[AI-OP] Model swap failed: {detail}")
+                else:
+                    print(f"[AI-OP] Model not found: {model_path}")
 
-    full_response = ""
-    try:
-        temperature = req.temperature if req.temperature is not None else 0.7
-        max_tokens = req.max_tokens if req.max_tokens is not None else 1024
-        async for chunk in engine_manager.get_active().generate_stream(
-            system_prompt, user_prompt,
-            temperature=temperature, max_tokens=max_tokens,
-            json_mode=False,
-        ):
-            full_response += chunk
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"AI generation failed: {e}")
+    # Helper to get source value
+    if r1 > r2 or c1 > c2:
+        raise HTTPException(status_code=400, detail="Invalid range coordinates")
+    
+    cell_count = (r2 - r1 + 1) * (c2 - c1 + 1)
+    if cell_count > 50:
+        raise HTTPException(status_code=400, detail="Operation exceeds limit of 50 cells")
 
-    result = full_response.strip()
-    if not result:
-        raise HTTPException(status_code=500, detail="AI returned empty response")
+    # Helper to get source value
+    def get_val(r, c):
+        if r < len(sheet.rows) and c < len(sheet.rows[r]):
+            return str(sheet.rows[r][c])
+        return ""
 
-    # Update the target cell in the sheet
-    try:
-        sheet = sheet_repo.update_cell(sheet_id, ri := req.target_row, ci := req.target_col, result)
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e))
+    async def event_generator():
+        try:
+            if mode == "row-wise":
+                # 1 AI call per row
+                for i, ri in enumerate(range(r1, r2 + 1)):
+                    if await request.is_disconnected():
+                        break
+                    
+                    row_vals = [get_val(ri, ci) for ci in range(c1, c2 + 1)]
+                    source_text = " | ".join(row_vals)
+                    
+                    if not source_text.strip():
+                        # Still yield something to maintain row sync if desired, or skip
+                        yield {"data": json.dumps({"type": "skip", "row": tr + i, "reason": "empty"})}
+                        continue
 
-    if not sheet:
-        raise HTTPException(status_code=404, detail="Target cell indices are invalid")
+                    sys_prompt = "You are a data assistant. Return ONLY plain text. No markdown. No explanations."
+                    user_prompt = f"Input: {source_text}\nInstruction: {instruction}"
+                    
+                    full_resp = ""
+                    try:
+                        async with asyncio.timeout(GENERATION_TIMEOUT):
+                            async for chunk in engine_manager.get_active().generate_stream(
+                                sys_prompt, user_prompt, temperature=temperature, max_tokens=max_tokens, json_mode=False
+                            ):
+                                full_resp += chunk
+                        
+                        result = full_resp.strip().replace('`', '')
+                        sheet_repo.update_cell(sheet_id, tr + i, tc, result)
+                        yield {"data": json.dumps({"type": "cell", "row": tr + i, "col": tc, "value": result})}
+                    except Exception as e:
+                        yield {"data": json.dumps({"type": "error", "row": tr + i, "error": str(e)})}
 
-    return sheet
+            elif mode == "aggregate":
+                # Concat ALL cells -> 1 AI call -> 1 Output cell
+                all_vals = []
+                for ri in range(r1, r2 + 1):
+                    row_v = [get_val(ri, ci) for ci in range(c1, c2 + 1)]
+                    all_vals.append(" | ".join(row_v))
+                source_text = "\n".join(all_vals)
+
+                sys_prompt = "You are a data analyst. Aggregate the input into a single result. Return ONLY plain text."
+                user_prompt = f"Data:\n{source_text}\n\nInstruction: {instruction}"
+
+                full_resp = ""
+                async with asyncio.timeout(GENERATION_TIMEOUT):
+                    async for chunk in engine_manager.get_active().generate_stream(
+                        sys_prompt, user_prompt, temperature=temperature, max_tokens=max_tokens, json_mode=False
+                    ):
+                        full_resp += chunk
+                
+                result = full_resp.strip().replace('`', '')
+                sheet_repo.update_cell(sheet_id, tr, tc, result)
+                yield {"data": json.dumps({"type": "cell", "row": tr, "col": tc, "value": result})}
+
+            elif mode == "matrix":
+                # N->N table transformation
+                rows_text = []
+                for ri in range(r1, r2 + 1):
+                    row_v = [get_val(ri, ci).replace('|', '/') for ci in range(c1, c2 + 1)]
+                    rows_text.append("| " + " | ".join(row_v) + " |")
+                source_table = "\n".join(rows_text)
+
+                sys_prompt = (
+                    "You are a table processor. Process the table below.\n"
+                    "Output format: Pipe-separated values (| col1 | col2 |).\n"
+                    "Maintain the same number of rows and columns.\n"
+                    "Return ONLY the table data. No markdown. No explanations."
+                )
+                user_prompt = f"Table:\n{source_table}\n\nInstruction: {instruction}"
+
+                full_resp = ""
+                async with asyncio.timeout(GENERATION_TIMEOUT):
+                    async for chunk in engine_manager.get_active().generate_stream(
+                        sys_prompt, user_prompt, temperature=temperature, max_tokens=max_tokens, json_mode=False
+                    ):
+                        full_resp += chunk
+                
+                # Parse output - filter lines to find actual table rows
+                lines = [l.strip() for l in full_resp.strip().split('\n') if '|' in l]
+                current_r = tr
+                for line in lines:
+                    # Split by pipe
+                    parts = [p.strip() for p in line.split('|')]
+                    # Remove empty start/end if pipe-surrounded (| a | b | -> ['', 'a', 'b', ''])
+                    if parts and not parts[0]: parts.pop(0)
+                    if parts and not parts[-1]: parts.pop()
+                    
+                    if not parts: continue
+
+                    for i, val in enumerate(parts):
+                        sheet_repo.update_cell(sheet_id, current_r, tc + i, val)
+                        yield {"data": json.dumps({"type": "cell", "row": current_r, "col": tc + i, "value": val})}
+                    current_r += 1
+
+            else:
+                yield {"data": json.dumps({"type": "error", "error": f"Unknown mode: {mode}"})}
+
+        except Exception as e:
+            yield {"data": json.dumps({"type": "error", "error": f"Global error: {str(e)}", "row": tr})}
+        
+        yield {"data": "[DONE]"}
+
+    return EventSourceResponse(event_generator())
 
 
 @app.get("/sheets/{sheet_id}/ai-fill")

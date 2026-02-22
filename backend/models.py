@@ -106,6 +106,13 @@ class SheetAICellRequest(BaseModel):
     temperature: Optional[float] = None
     max_tokens: Optional[int] = None
 
+class SheetAIBatchRequest(BaseModel):
+    source_range: dict  # {r1, c1, r2, c2}
+    target_col: int
+    instruction: str
+    temperature: Optional[float] = None
+    max_tokens: Optional[int] = None
+
 class PromptTemplate(BaseModel):
     id: Optional[int] = Field(default=None)
     name: str

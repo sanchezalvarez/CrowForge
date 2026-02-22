@@ -247,6 +247,27 @@ function resolveCellRef(ref: string): { row: number; col: number } | null {
   return { row, col };
 }
 
+function resolveRange(ref: string): { r1: number; c1: number; r2: number; c2: number } | null {
+  const parts = ref.split(":");
+  if (parts.length === 1) {
+    const res = resolveCellRef(parts[0]);
+    if (!res) return null;
+    return { r1: res.row, c1: res.col, r2: res.row, c2: res.col };
+  }
+  if (parts.length === 2) {
+    const res1 = resolveCellRef(parts[0]);
+    const res2 = resolveCellRef(parts[1]);
+    if (!res1 || !res2) return null;
+    return {
+      r1: Math.min(res1.row, res2.row),
+      c1: Math.min(res1.col, res2.col),
+      r2: Math.max(res1.row, res2.row),
+      c2: Math.max(res1.col, res2.col),
+    };
+  }
+  return null;
+}
+
 const idxToCol = (i: number) => { 
   let r="",n=i+1; 
   while(n>0){const m=(n-1)%26;r=String.fromCharCode(65+m)+r;n=Math.floor((n-1)/26);}
@@ -343,14 +364,29 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
   const aiFillRef = useRef<EventSource | null>(null);
   const aiFillInstructionRef = useRef<HTMLInputElement>(null);
 
-  // AI Cell state
-  const [aiCellOpen, setAiCellOpen] = useState(false);
-  const [aiCellSourceStr, setAiCellSourceStr] = useState("");
-  const [aiCellTargetStr, setAiCellTargetStr] = useState("");
-  const [aiCellInstruction, setAiCellInstruction] = useState("");
-  const [aiCellAction, setAiCellAction] = useState<"translate" | "rewrite" | "summarize" | "custom">("translate");
-  const [aiCellLanguage, setAiCellLanguage] = useState("Slovak");
-  const [aiCellLoading, setAiCellLoading] = useState(false);
+  // AI Operation state
+  const [aiOpOpen, setAiOpOpen] = useState(false);
+  const [aiOpMode, setAiOpMode] = useState<"row-wise" | "aggregate" | "matrix">("row-wise");
+  const [aiOpSourceStr, setAiOpSourceStr] = useState("");
+  const [aiOpTargetStr, setAiOpTargetStr] = useState("");
+  const [aiOpInstruction, setAiOpInstruction] = useState("");
+  const [aiOpAction, setAiOpAction] = useState<"translate" | "rewrite" | "summarize" | "custom">("translate");
+  const [aiOpLanguage, setAiOpLanguage] = useState("Slovak");
+  const [aiOpModel, setAiOpModel] = useState<string>("");
+  const [aiOpTemp, setAiOpTemp] = useState(0.7);
+  const [aiOpLoading, setAiOpLoading] = useState(false);
+  const [availableModels, setAvailableModels] = useState<{name: string, id: string}[]>([]);
+
+  // Load models on mount
+  useEffect(() => {
+    axios.get(`${API_BASE}/ai/models`).then(res => {
+      // res.data.models is a list of {filename, ...}
+      // backend/app.py: _scan_local_models returns dicts
+      const models = res.data.models.map((m: any) => ({ name: m.filename, id: m.filename }));
+      setAvailableModels(models);
+      if (models.length > 0) setAiOpModel(models[0].id);
+    }).catch(() => {});
+  }, []);
 
   // Column/row resize state
   const [colWidths, setColWidths] = useState<Record<number, number>>({});
@@ -1185,62 +1221,123 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
     runAiFillStream(aiFillCol, aiFillInstruction.trim());
   }
 
-  async function runAiCellOperation() {
+  async function runAiOp() {
     if (!activeSheet) return;
 
-    const source = resolveCellRef(aiCellSourceStr);
-    const target = resolveCellRef(aiCellTargetStr);
+    if (!aiOpSourceStr.trim() || !aiOpTargetStr.trim()) {
+      toast("Please specify both source and target cell references.", "error");
+      return;
+    }
+
+    let finalInstruction = aiOpInstruction.trim();
+    if (aiOpAction === "translate") {
+      finalInstruction = `Translate to ${aiOpLanguage}`;
+    } else if (aiOpAction === "rewrite") {
+      finalInstruction = "Rewrite this text to be clearer and more professional.";
+    } else if (aiOpAction === "summarize") {
+      finalInstruction = "Summarize this text concisely.";
+    }
+
+    if (!finalInstruction) {
+      toast("Please provide an instruction or prompt.", "error");
+      return;
+    }
+
+    const source = resolveRange(aiOpSourceStr);
+    const target = resolveCellRef(aiOpTargetStr);
 
     if (!source || !target) {
-      toast("Invalid source or target cell reference.", "error");
+      toast("Invalid source or target cell reference format (e.g. A1 or A1:B5).", "error");
       return;
     }
 
-    if (source.row === target.row && source.col === target.col) {
-      toast("Source and target cells cannot be the same.", "error");
+    // Cell count check
+    const cellCount = (source.r2 - source.r1 + 1) * (source.c2 - source.c1 + 1);
+    if (cellCount > 50) {
+      toast("Operation exceeds limit of 50 cells.", "error");
       return;
     }
 
-    const sourceValue = activeSheet.rows[source.row]?.[source.col]?.trim();
-    if (!sourceValue) {
-      toast("Source cell is empty.", "error");
+    // Overlap validation
+    // Source: {r1, c1, r2, c2}
+    // Target: depends on mode
+    let targetR2 = target.row;
+    let targetC2 = target.col;
+    if (aiOpMode === "row-wise") {
+      targetR2 = target.row + (source.r2 - source.r1);
+    } else if (aiOpMode === "matrix") {
+      targetR2 = target.row + (source.r2 - source.r1);
+      targetC2 = target.col + (source.c2 - source.c1);
+    }
+    // Rect intersection check
+    const overlap = !(target.col > source.c2 || targetC2 < source.c1 || target.row > source.r2 || targetR2 < source.r1);
+    if (overlap) {
+      toast("Target range overlaps with source range. Please choose a different target.", "error");
       return;
     }
 
-    let instruction = aiCellInstruction.trim();
-    if (aiCellAction === "translate") {
-      instruction = `Translate to ${aiCellLanguage}`;
-    } else if (aiCellAction === "rewrite") {
-      instruction = "Rewrite this text to be clearer and more professional.";
-    } else if (aiCellAction === "summarize") {
-      instruction = "Summarize this text concisely.";
-    }
+    setAiOpLoading(true);
+    setAiOpOpen(false); // Close dialog
 
-    if (!instruction) {
-      toast("Please provide an instruction.", "error");
-      return;
-    }
+    const params = new URLSearchParams({
+      mode: aiOpMode,
+      r1: String(source.r1),
+      c1: String(source.c1),
+      r2: String(source.r2),
+      c2: String(source.c2),
+      tr: String(target.row),
+      tc: String(target.col),
+      instruction: finalInstruction,
+      temperature: String(aiOpTemp),
+    });
+    if (aiOpModel) params.set("model", aiOpModel);
+    if (tuningParams?.maxTokens) params.set("max_tokens", String(tuningParams.maxTokens));
 
-    setAiCellLoading(true);
-    try {
-      const res = await axios.post(`${API_BASE}/sheets/${activeSheet.id}/ai-cell`, {
-        source_value: sourceValue,
-        instruction: instruction,
-        target_row: target.row,
-        target_col: target.col,
-        temperature: tuningParams?.temperature,
-        max_tokens: tuningParams?.maxTokens,
-      });
-      updateSheet(res.data);
-      setAiCellOpen(false);
-      setAiCellInstruction("");
-      toast("AI operation complete.");
-    } catch (err: any) {
-      const detail = err?.response?.data?.detail;
-      toast(detail || "AI operation failed.", "error");
-    } finally {
-      setAiCellLoading(false);
-    }
+    const es = new EventSource(`${API_BASE}/sheets/${activeSheet.id}/ai-op?${params}`);
+    aiFillRef.current = es; // Allow cancellation via Stop button
+    
+    setAiFilling(true);
+    setAiFillProgress("Starting AI operation...");
+
+    es.onmessage = (event) => {
+      const data = event.data;
+      if (data === "[DONE]") {
+        es.close();
+        aiFillRef.current = null;
+        setAiFilling(false);
+        setAiFillProgress(`Operation complete.`);
+        setAiOpLoading(false);
+        return;
+      }
+      try {
+        const msg = JSON.parse(data);
+        if (msg.type === "cell") {
+          setAiFillProgress(`Updating cell ${idxToCol(msg.col)}${msg.row + 1}...`);
+          setSheets((prev) =>
+            prev.map((s) => {
+              if (s.id !== activeSheet.id) return s;
+              const newRows = [...s.rows];
+              while (newRows.length <= msg.row) newRows.push([]);
+              newRows[msg.row] = [...(newRows[msg.row] || [])];
+              while (newRows[msg.row].length <= msg.col) newRows[msg.row].push("");
+              
+              newRows[msg.row][msg.col] = msg.value;
+              return { ...s, rows: newRows };
+            })
+          );
+        } else if (msg.type === "error") {
+           toast(`Error at ${msg.row !== undefined ? `row ${msg.row + 1}` : 'operation'}: ${msg.error}`, "error");
+        }
+      } catch { /* ignore */ }
+    };
+
+    es.onerror = () => {
+      es.close();
+      aiFillRef.current = null;
+      setAiFilling(false);
+      setAiOpLoading(false);
+      toast("AI operation interrupted.", "error");
+    };
   }
 
   // AI Column Tools — predefined instructions
@@ -1283,6 +1380,7 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
     setAiFillProgress(null);
     setAiFillErrors(new Map());
     setAiFilledRows(new Set());
+    setAiOpLoading(false);
   }
 
   // ── Alignment helpers ──────────────────────────────────────────
@@ -1700,23 +1798,30 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
                     className="h-7 text-xs gap-1"
                     onClick={() => {
                       if (selection) {
-                        setAiCellTargetStr(`${idxToCol(selection.c1)}${selection.r1 + 1}`);
-                        if (selection.c1 > 0) {
-                          setAiCellSourceStr(`${idxToCol(selection.c1 - 1)}${selection.r1 + 1}`);
+                        setAiOpTargetStr(`${idxToCol(selection.c1)}${selection.r1 + 1}`);
+                        if (selection.r1 !== selection.r2 || selection.c1 !== selection.c2) {
+                          // Range selection -> default to row-wise on selection
+                          setAiOpMode("row-wise");
+                          setAiOpSourceStr(`${idxToCol(selection.c1)}${selection.r1 + 1}:${idxToCol(selection.c2)}${selection.r2 + 1}`);
+                        } else if (selection.c1 > 0) {
+                          // Single cell -> try to pick left neighbor as source
+                          setAiOpMode("row-wise");
+                          setAiOpSourceStr(`${idxToCol(selection.c1 - 1)}${selection.r1 + 1}`);
                         } else {
-                          setAiCellSourceStr(`${idxToCol(selection.c1)}${selection.r1 + 1}`);
+                          // Fallback
+                          setAiOpSourceStr(`${idxToCol(selection.c1)}${selection.r1 + 1}`);
                         }
                       } else {
-                        setAiCellTargetStr("");
-                        setAiCellSourceStr("");
+                        setAiOpTargetStr("");
+                        setAiOpSourceStr("");
                       }
-                      setAiCellOpen(true);
+                      setAiOpOpen(true);
                     }}
                     disabled={aiDisabled}
-                    title="Process a single cell with AI"
+                    title="Process a single cell or range with AI"
                   >
                     <Sparkles className="h-3 w-3" />
-                    AI Cell
+                    AI Range
                   </Button>
                 </>
               )}
@@ -1869,13 +1974,18 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => {
                       if (selection) {
-                        setAiCellSourceStr(`${idxToCol(selection.c1)}${selection.r1 + 1}`);
-                        setAiCellTargetStr(`${idxToCol(selection.c1)}${selection.r1 + 1}`);
+                        setAiOpTargetStr(`${idxToCol(selection.c1)}${selection.r1 + 1}`);
+                        if (selection.r1 !== selection.r2 || selection.c1 !== selection.c2) {
+                          setAiOpMode("row-wise");
+                          setAiOpSourceStr(`${idxToCol(selection.c1)}${selection.r1 + 1}:${idxToCol(selection.c2)}${selection.r2 + 1}`);
+                        } else {
+                          setAiOpSourceStr(`${idxToCol(selection.c1)}${selection.r1 + 1}`);
+                        }
                       } else {
-                        setAiCellSourceStr("");
-                        setAiCellTargetStr("");
+                        setAiOpSourceStr("");
+                        setAiOpTargetStr("");
                       }
-                      setAiCellOpen(true);
+                      setAiOpOpen(true);
                     }}
                     title="AI Cell Action"
                   >
@@ -2130,7 +2240,7 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
                     {filteredRowIndices.length > ROW_RENDER_LIMIT && scrollRowStart > 0 && (
                       <tr><td colSpan={activeSheet.columns.length + 2} style={{ height: filteredRowIndices.slice(0, scrollRowStart).reduce((sum, ri) => sum + (rowHeights[ri] ?? DEFAULT_ROW_HEIGHT) + 1, 0), padding: 0, border: "none" }} /></tr>
                     )}
-                    {/* Compute formula ref highlights once per render */}
+                    {/* Compute formula ref highlights and AI ghost overlay once per render */}
                     {(() => {
                       const formulaRefMap = new Map<string, number>();
                       let refGroups: RefGroup[] = [];
@@ -2144,6 +2254,29 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
                           }
                         }
                       } catch { /* never crash rendering */ }
+
+                      // AI Ghost Overlay Calculation
+                      let aiTargetRect: { r1: number, c1: number, r2: number, c2: number } | null = null;
+                      if (aiOpOpen && aiOpSourceStr && aiOpTargetStr) {
+                        const s = resolveRange(aiOpSourceStr);
+                        const t = resolveCellRef(aiOpTargetStr);
+                        if (s && t) {
+                          if (aiOpMode === "row-wise") {
+                            // Target is height of source, but only 1 column wide
+                            const h = s.r2 - s.r1;
+                            aiTargetRect = { r1: t.row, c1: t.col, r2: t.row + h, c2: t.col }; 
+                          } else if (aiOpMode === "aggregate") {
+                            // Target is single cell
+                            aiTargetRect = { r1: t.row, c1: t.col, r2: t.row, c2: t.col };
+                          } else if (aiOpMode === "matrix") {
+                            // Target shape usually matches source (N->N)
+                            const h = s.r2 - s.r1;
+                            const w = s.c2 - s.c1;
+                            aiTargetRect = { r1: t.row, c1: t.col, r2: t.row + h, c2: t.col + w };
+                          }
+                        }
+                      }
+
                       return visibleRowIndices.map((ri) => {
                       const row = activeSheet.rows[ri];
                       return (
@@ -2178,27 +2311,36 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
                           const hasFormula = !!activeSheet.formulas?.[`${ri},${ci}`];
                           const isErrorValue = hasFormula && typeof cell === 'string' && cell.startsWith("#");
                           const refColor = isFormulaRef ? REF_COLORS[refColorIdx] : null;
+                          
+                          const isAiTarget = aiTargetRect && ri >= aiTargetRect.r1 && ri <= aiTargetRect.r2 && ci >= aiTargetRect.c1 && ci <= aiTargetRect.c2;
+
                           return (
                             <td
                               key={ci}
                               className={cn(
-                                "border p-0 overflow-hidden",
+                                "border p-0 overflow-hidden relative", // Added relative for overlay if needed, though using classes
                                 !isFormulaRef && "border-border",
                                 isEditing && "ring-2 ring-primary/40 ring-inset",
                                 isEditing && cellError && "ring-destructive/60",
                                 selected && !isFormulaRef && "bg-primary/10",
                                 justFilled && "bg-green-500/10",
-                                fillError && "bg-destructive/10"
+                                fillError && "bg-destructive/10",
+                                isAiTarget && "bg-purple-500/10" // Ghost highlight
                               )}
                               style={(() => {
                                 const fmt: CellFormat = activeSheet.formats?.[`${ri},${ci}`] ?? {};
-                                return {
+                                const baseStyle = {
                                   width: colWidths[ci] ?? DEFAULT_COL_WIDTH,
                                   minWidth: MIN_COL_WIDTH,
                                   ...(isFormulaRef && !isEditing
                                     ? { backgroundColor: refColor!.bg, borderColor: refColor!.border }
                                     : fmt.bg ? { backgroundColor: fmt.bg } : {}),
                                 };
+                                // Overlay dashed border for AI target
+                                if (isAiTarget) {
+                                    return { ...baseStyle, outline: "2px dashed rgba(168,85,247,0.4)", outlineOffset: "-2px" };
+                                }
+                                return baseStyle;
                               })()}
                               onContextMenu={(e) => {
                                 if (hasFormula) {
@@ -2554,65 +2696,14 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
               <button
                 className="w-full px-3 py-1.5 text-left hover:bg-muted"
                 onClick={() => {
-                  setAiCellSourceStr(`${idxToCol(cellMenu.col)}${cellMenu.row + 1}`);
-                  setAiCellTargetStr(`${idxToCol(cellMenu.col)}${cellMenu.row + 1}`);
-                  setAiCellAction("translate");
-                  setAiCellLanguage("Slovak");
-                  setAiCellOpen(true);
+                  setAiOpSourceStr(`${idxToCol(cellMenu.col)}${cellMenu.row + 1}`);
+                  setAiOpTargetStr(`${idxToCol(cellMenu.col)}${cellMenu.row + 1}`);
+                  setAiOpMode("row-wise");
+                  setAiOpOpen(true);
                   setCellMenu(null);
                 }}
               >
-                Translate to Slovak
-              </button>
-              <button
-                className="w-full px-3 py-1.5 text-left hover:bg-muted"
-                onClick={() => {
-                  setAiCellSourceStr(`${idxToCol(cellMenu.col)}${cellMenu.row + 1}`);
-                  setAiCellTargetStr(`${idxToCol(cellMenu.col)}${cellMenu.row + 1}`);
-                  setAiCellAction("translate");
-                  setAiCellLanguage("English");
-                  setAiCellOpen(true);
-                  setCellMenu(null);
-                }}
-              >
-                Translate to English
-              </button>
-              <button
-                className="w-full px-3 py-1.5 text-left hover:bg-muted"
-                onClick={() => {
-                  setAiCellSourceStr(`${idxToCol(cellMenu.col)}${cellMenu.row + 1}`);
-                  setAiCellTargetStr(`${idxToCol(cellMenu.col)}${cellMenu.row + 1}`);
-                  setAiCellAction("translate");
-                  setAiCellOpen(true);
-                  setCellMenu(null);
-                }}
-              >
-                Translate to...
-              </button>
-              <div className="border-t border-border my-1" />
-              <button
-                className="w-full px-3 py-1.5 text-left hover:bg-muted"
-                onClick={() => {
-                  setAiCellSourceStr(`${idxToCol(cellMenu.col)}${cellMenu.row + 1}`);
-                  setAiCellTargetStr(`${idxToCol(cellMenu.col)}${cellMenu.row + 1}`);
-                  setAiCellAction("rewrite");
-                  setAiCellOpen(true);
-                  setCellMenu(null);
-                }}
-              >
-                Rewrite
-              </button>
-              <button
-                className="w-full px-3 py-1.5 text-left hover:bg-muted"
-                onClick={() => {
-                  setAiCellSourceStr(`${idxToCol(cellMenu.col)}${cellMenu.row + 1}`);
-                  setAiCellTargetStr(`${idxToCol(cellMenu.col)}${cellMenu.row + 1}`);
-                  setAiCellAction("summarize");
-                  setAiCellOpen(true);
-                  setCellMenu(null);
-                }}
-              >
-                Summarize
+                Apply to selection...
               </button>
             </div>
           </div>
@@ -2858,70 +2949,51 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
       )}
 
       {/* AI Cell overlay */}
-      {aiCellOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => { if (!aiCellLoading) setAiCellOpen(false); }}>
-          <div className="bg-background border rounded-lg shadow-lg w-[400px] p-4" onClick={(e) => e.stopPropagation()}>
+      {/* AI Range Operation Modal */}
+      {aiOpOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => { if (!aiOpLoading) setAiOpOpen(false); }}>
+          <div className="bg-background border rounded-lg shadow-lg w-[440px] p-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center gap-2 mb-3">
               <Sparkles className="h-4 w-4 text-primary" />
-              <h3 className="text-sm font-medium">AI Cell Operation</h3>
+              <h3 className="text-sm font-medium">AI Range Operation</h3>
             </div>
-            <p className="text-xs text-muted-foreground mb-4">
-              Process a source cell's value with AI and write the result to a target cell.
-            </p>
-
-            <div className="space-y-3 mb-4">
+            
+            <div className="space-y-4 mb-4">
+              {/* Mode Selection */}
               <div className="grid grid-cols-4 items-center gap-3">
-                <label className="text-xs text-muted-foreground text-right">Source</label>
-                <div className="col-span-3 flex gap-2">
-                  <input
-                    className="flex-1 h-8 px-2 text-sm border border-border rounded-md bg-background outline-none focus:ring-1 focus:ring-primary/40"
-                    placeholder="e.g. A1"
-                    value={aiCellSourceStr}
-                    onChange={(e) => setAiCellSourceStr(e.target.value)}
-                  />
-                  <Button variant="outline" size="sm" className="h-8 text-[10px] px-2" onClick={() => {
-                    if (selection) {
-                      setAiCellSourceStr(`${idxToCol(selection.c1)}${selection.r1 + 1}`);
-                    }
-                  }}>Set Selection</Button>
+                <label className="text-xs text-muted-foreground text-right">Mode</label>
+                <div className="col-span-3">
+                  <select
+                    className="w-full h-8 px-2 text-sm border border-border rounded-md bg-background outline-none focus:ring-1 focus:ring-primary/40"
+                    value={aiOpMode}
+                    onChange={(e) => setAiOpMode(e.target.value as any)}
+                  >
+                    <option value="row-wise">Row-wise (1 → 1)</option>
+                    <option value="aggregate">Aggregate (Range → 1)</option>
+                    <option value="matrix">Matrix (Table → Table)</option>
+                  </select>
                 </div>
               </div>
 
-              <div className="grid grid-cols-4 items-center gap-3">
-                <label className="text-xs text-muted-foreground text-right">Target</label>
-                <div className="col-span-3 flex gap-2">
-                  <input
-                    className="flex-1 h-8 px-2 text-sm border border-border rounded-md bg-background outline-none focus:ring-1 focus:ring-primary/40"
-                    placeholder="e.g. B1"
-                    value={aiCellTargetStr}
-                    onChange={(e) => setAiCellTargetStr(e.target.value)}
-                  />
-                  <Button variant="outline" size="sm" className="h-8 text-[10px] px-2" onClick={() => {
-                    if (selection) {
-                      setAiCellTargetStr(`${idxToCol(selection.c1)}${selection.r1 + 1}`);
-                    }
-                  }}>Set Selection</Button>
-                </div>
-              </div>
-
+              {/* Action Selection */}
               <div className="grid grid-cols-4 items-center gap-3">
                 <label className="text-xs text-muted-foreground text-right">Action</label>
                 <div className="col-span-3 flex gap-2">
                   <select
                     className="flex-1 h-8 px-2 text-sm border border-border rounded-md bg-background outline-none focus:ring-1 focus:ring-primary/40"
-                    value={aiCellAction}
-                    onChange={(e) => setAiCellAction(e.target.value as any)}
+                    value={aiOpAction}
+                    onChange={(e) => setAiOpAction(e.target.value as any)}
                   >
                     <option value="translate">Translate</option>
                     <option value="rewrite">Rewrite</option>
                     <option value="summarize">Summarize</option>
                     <option value="custom">Custom Instruction</option>
                   </select>
-                  {aiCellAction === "translate" && (
+                  {aiOpAction === "translate" && (
                     <select
                       className="flex-1 h-8 px-2 text-sm border border-border rounded-md bg-background outline-none focus:ring-1 focus:ring-primary/40"
-                      value={aiCellLanguage}
-                      onChange={(e) => setAiCellLanguage(e.target.value)}
+                      value={aiOpLanguage}
+                      onChange={(e) => setAiOpLanguage(e.target.value)}
                     >
                       <option value="Slovak">Slovak</option>
                       <option value="English">English</option>
@@ -2936,25 +3008,96 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
                 </div>
               </div>
 
+              {/* Source & Target */}
+              <div className="grid grid-cols-4 items-center gap-3">
+                <label className="text-xs text-muted-foreground text-right">Source</label>
+                <div className="col-span-3 flex gap-2">
+                  <input
+                    className="flex-1 h-8 px-2 text-sm border border-border rounded-md bg-background outline-none focus:ring-1 focus:ring-primary/40"
+                    placeholder="e.g. A1:A10"
+                    value={aiOpSourceStr}
+                    onChange={(e) => setAiOpSourceStr(e.target.value)}
+                  />
+                  <Button variant="outline" size="sm" className="h-8 text-[10px] px-2" onClick={() => {
+                    if (selection) {
+                      if (selection.r1 === selection.r2 && selection.c1 === selection.c2) {
+                        setAiOpSourceStr(`${idxToCol(selection.c1)}${selection.r1 + 1}`);
+                      } else {
+                        setAiOpSourceStr(`${idxToCol(selection.c1)}${selection.r1 + 1}:${idxToCol(selection.c2)}${selection.r2 + 1}`);
+                      }
+                    }
+                  }}>Select</Button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-4 items-center gap-3">
+                <label className="text-xs text-muted-foreground text-right">Target</label>
+                <div className="col-span-3 flex gap-2">
+                  <input
+                    className="flex-1 h-8 px-2 text-sm border border-border rounded-md bg-background outline-none focus:ring-1 focus:ring-primary/40"
+                    placeholder="Start cell (e.g. B1)"
+                    value={aiOpTargetStr}
+                    onChange={(e) => setAiOpTargetStr(e.target.value)}
+                  />
+                  <Button variant="outline" size="sm" className="h-8 text-[10px] px-2" onClick={() => {
+                    if (selection) {
+                      setAiOpTargetStr(`${idxToCol(selection.c1)}${selection.r1 + 1}`);
+                    }
+                  }}>Select</Button>
+                </div>
+              </div>
+
+              {/* Instruction */}
               <div className="grid grid-cols-4 items-start gap-3">
-                <label className="text-xs text-muted-foreground text-right mt-1.5">Instruction</label>
+                <label className="text-xs text-muted-foreground text-right mt-1.5">Prompt</label>
                 <textarea
                   className="col-span-3 min-h-[80px] w-full p-2 text-sm border border-border rounded-md bg-background outline-none focus:ring-1 focus:ring-primary/40 resize-none"
-                  placeholder={aiCellAction === "custom" ? 'e.g. "Fix formatting", "Make it more professional"' : 'Autogenerated from action'}
-                  value={aiCellAction === "custom" ? aiCellInstruction : ""}
-                  onChange={(e) => setAiCellInstruction(e.target.value)}
-                  disabled={aiCellAction !== "custom"}
+                  placeholder={aiOpAction === "custom" ? 'e.g. "Fix formatting", "Make it more professional"' : 'Autogenerated from action'}
+                  value={aiOpAction === "custom" ? aiOpInstruction : ""}
+                  onChange={(e) => setAiOpInstruction(e.target.value)}
+                  disabled={aiOpAction !== "custom"}
                 />
+              </div>
+
+              {/* Model & Creativity */}
+              <div className="grid grid-cols-4 items-center gap-3">
+                <label className="text-xs text-muted-foreground text-right">Model</label>
+                <div className="col-span-3">
+                  <select
+                    className="w-full h-8 px-2 text-sm border border-border rounded-md bg-background outline-none focus:ring-1 focus:ring-primary/40"
+                    value={aiOpModel}
+                    onChange={(e) => setAiOpModel(e.target.value)}
+                  >
+                    <option value="">Default (Auto)</option>
+                    {availableModels.map((m) => (
+                      <option key={m.id} value={m.id}>{m.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-4 items-center gap-3">
+                <label className="text-xs text-muted-foreground text-right">Creativity</label>
+                <div className="col-span-3 flex items-center gap-3">
+                  <input
+                    type="range"
+                    min="0" max="1" step="0.1"
+                    className="flex-1 h-2"
+                    value={aiOpTemp}
+                    onChange={(e) => setAiOpTemp(parseFloat(e.target.value))}
+                  />
+                  <span className="text-xs text-muted-foreground w-8 text-right">{aiOpTemp}</span>
+                </div>
               </div>
             </div>
 
             <div className="flex justify-end gap-2">
-              <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setAiCellOpen(false)} disabled={aiCellLoading}>
+              <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setAiOpOpen(false)} disabled={aiOpLoading}>
                 Cancel
               </Button>
-              <Button variant="default" size="sm" className="h-8 text-xs gap-1.5" onClick={runAiCellOperation} disabled={aiCellLoading || !aiCellSourceStr.trim() || !aiCellTargetStr.trim() || (aiCellAction === "custom" && !aiCellInstruction.trim())}>
-                {aiCellLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-                Run AI
+              <Button variant="default" size="sm" className="h-8 text-xs gap-1.5" onClick={runAiOp} disabled={aiOpLoading}>
+                {aiOpLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                Run
               </Button>
             </div>
           </div>

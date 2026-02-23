@@ -21,6 +21,7 @@ export function OnboardingPage({ onComplete }: Props) {
   const [modelsDir, setModelsDir] = useState("C:/models");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [skipped, setSkipped] = useState(false);
 
   async function handleApply() {
     setSaving(true);
@@ -151,6 +152,13 @@ export function OnboardingPage({ onComplete }: Props) {
             >
               {saving ? "Saving…" : "Apply & Continue"}
             </button>
+            <button
+              type="button"
+              onClick={() => { setSkipped(true); setStep(3); }}
+              className="w-full text-xs text-muted-foreground hover:underline"
+            >
+              Skip for now — configure in Settings later
+            </button>
           </>
         )}
 
@@ -160,6 +168,11 @@ export function OnboardingPage({ onComplete }: Props) {
             <div className="flex flex-col items-center gap-3 text-center">
               <CheckCircle2 className="h-12 w-12 text-green-500" />
               <h2 className="text-xl font-bold">You're all set!</h2>
+              {skipped && (
+                <p className="text-xs text-muted-foreground mt-2">
+                  You can configure your AI engine anytime in <strong>Settings → AI Configuration</strong>.
+                </p>
+              )}
             </div>
             <ul className="space-y-1 text-sm text-muted-foreground">
               <li>• Chat — conversational AI assistant</li>

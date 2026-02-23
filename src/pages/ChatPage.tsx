@@ -81,6 +81,7 @@ interface AttachedFile {
 
 interface ChatPageProps {
   documentContext?: DocumentContext | null;
+  onDisconnectDoc?: () => void;
   tuningParams?: TuningParams;
 }
 
@@ -126,7 +127,7 @@ function CodeBlock({ code, language, isDark }: { code: string; language: string;
   );
 }
 
-export function ChatPage({ documentContext, tuningParams }: ChatPageProps) {
+export function ChatPage({ documentContext, onDisconnectDoc, tuningParams }: ChatPageProps) {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<number | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -476,15 +477,28 @@ export function ChatPage({ documentContext, tuningParams }: ChatPageProps) {
                 </span>
               )}
 
-              {documentContext && (
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
-                  <FileText className="h-3 w-3" />
-                  <span className="truncate max-w-[120px]">{documentContext.title}</span>
-                  {documentContext.selectedText && (
-                    <span className="text-[10px] text-primary font-medium">sel</span>
-                  )}
-                </div>
-              )}
+              {documentContext && (() => {
+                const parts: string[] = ["title"];
+                if (documentContext.outline.length > 0) parts.push(`outline (${documentContext.outline.length} headings)`);
+                if (documentContext.selectedText) parts.push("selected text");
+                const tip = `Connected: "${documentContext.title}"\nSending: ${parts.join(", ")}\nClick × to disconnect`;
+                return (
+                  <div
+                    className="flex items-center gap-1 text-xs bg-blue-500/10 border border-blue-500/30 text-blue-700 dark:text-blue-300 px-2 py-1 rounded-full"
+                    title={tip}
+                  >
+                    <FileText className="h-3 w-3 shrink-0" />
+                    <span className="truncate max-w-[120px]">{documentContext.title}</span>
+                    <button
+                      onClick={onDisconnectDoc}
+                      className="ml-0.5 hover:text-blue-900 dark:hover:text-blue-100 transition-colors"
+                      title="Disconnect document"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                );
+              })()}
 
               <span className="text-xs font-medium text-muted-foreground shrink-0">Mode</span>
               <Select value={activeMode} onValueChange={changeMode}>

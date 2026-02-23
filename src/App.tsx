@@ -37,6 +37,9 @@ export default function App() {
   const [appStatus, setAppStatus] = useState<AppStatus>("loading");
   const [currentPage, setCurrentPage] = useState<AppPage>("chat");
   const [docContext, setDocContext] = useState<DocumentContext | null>(null);
+  const [docContextLocked, setDocContextLocked] = useState(false);
+
+  useEffect(() => { setDocContextLocked(false); }, [docContext]);
 
   // Theme state — persisted to localStorage
   const [theme, setTheme] = useState<"light" | "dark">(() => {
@@ -208,7 +211,7 @@ export default function App() {
       <div className="flex flex-1 min-w-0 flex-col lg:flex-row overflow-hidden">
         <main className="flex-1 min-w-0 overflow-y-auto">
           {currentPage === "chat" ? (
-            <ChatPage documentContext={docContext} tuningParams={tuningParams} />
+            <ChatPage documentContext={docContextLocked ? null : docContext} onDisconnectDoc={() => setDocContextLocked(true)} tuningParams={tuningParams} />
           ) : currentPage === "documents" ? (
             <DocumentsPage onContextChange={setDocContext} tuningParams={tuningParams} />
           ) : currentPage === "sheets" ? (

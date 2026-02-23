@@ -541,11 +541,17 @@ async def get_download_status():
 
 @app.delete("/ai/models/download/{filename}")
 async def cancel_model_download(filename: str):
-    """Mark a download as cancelled (best-effort; partial file removed on next download attempt)."""
+    """Mark a download as cancelled and delete the partial file from disk."""
     state = _download_state.get(filename)
     if state:
         state["running"] = False
         state["error"] = "Cancelled"
+    dest_path = os.path.join(LLM_MODELS_DIR, filename)
+    if os.path.exists(dest_path):
+        try:
+            os.remove(dest_path)
+        except Exception:
+            pass
     return {"status": "cancelled"}
 
 

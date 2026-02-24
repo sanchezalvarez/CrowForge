@@ -6,7 +6,7 @@ import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark, oneLight } from "react-syntax-highlighter/dist/esm/styles/prism";
 import {
   PlusCircle, Send, Trash2, MessageSquare, Loader2, FileText,
-  Paperclip, X, Copy, Check, Info,
+  Paperclip, X, Copy, Check, Info, Upload,
   User, Smile, Star, Zap, Heart, Coffee, Code2, Flame, Moon, Sun, Ghost, Bot,
 } from "lucide-react";
 import { Button } from "../components/ui/button";
@@ -82,6 +82,7 @@ interface AttachedFile {
 interface ChatPageProps {
   documentContext?: DocumentContext | null;
   onDisconnectDoc?: () => void;
+  onConnectDoc?: (ctx: DocumentContext) => void;
   tuningParams?: TuningParams;
 }
 
@@ -127,7 +128,7 @@ function CodeBlock({ code, language, isDark }: { code: string; language: string;
   );
 }
 
-export function ChatPage({ documentContext, onDisconnectDoc, tuningParams }: ChatPageProps) {
+export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tuningParams }: ChatPageProps) {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<number | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -141,6 +142,8 @@ export function ChatPage({ documentContext, onDisconnectDoc, tuningParams }: Cha
   const [renamingSessionId, setRenamingSessionId] = useState<number | null>(null);
   const [renameInput, setRenameInput] = useState("");
   const [isDragging, setIsDragging] = useState(false);
+  const [docList, setDocList] = useState<{ id: string; title: string }[]>([]);
+  const [showDocPicker, setShowDocPicker] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -165,6 +168,10 @@ export function ChatPage({ documentContext, onDisconnectDoc, tuningParams }: Cha
   const activeSession = sessions.find((s) => s.id === activeSessionId) ?? null;
 
   useEffect(() => { loadSessions(); }, []);
+
+  useEffect(() => {
+    axios.get(`${API_BASE}/documents`).then(r => setDocList(r.data.documents ?? [])).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (activeSessionId) {
@@ -357,7 +364,11 @@ export function ChatPage({ documentContext, onDisconnectDoc, tuningParams }: Cha
     e.preventDefault();
     setIsDragging(true);
   }
-  function handleDragLeave() { setIsDragging(false); }
+  function handleDragLeave(e: React.DragEvent) {
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+      setIsDragging(false);
+    }
+  }
   function handleDrop(e: React.DragEvent) {
     e.preventDefault();
     setIsDragging(false);
@@ -445,11 +456,19 @@ export function ChatPage({ documentContext, onDisconnectDoc, tuningParams }: Cha
 
       {/* Main chat area */}
       <div
-        className={cn("flex-1 flex flex-col min-w-0", isDragging && "ring-2 ring-inset ring-primary/50")}
+        className="relative flex-1 flex flex-col min-w-0"
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
+        {isDragging && (
+          <div className="absolute inset-0 z-50 flex items-center justify-center bg-primary/10 border-2 border-dashed border-primary rounded-lg pointer-events-none">
+            <div className="flex flex-col items-center gap-2 text-primary">
+              <Upload className="h-8 w-8" />
+              <span className="text-sm font-medium">Drop PDF here</span>
+            </div>
+          </div>
+        )}
         {activeSessionId ? (
           <>
             {/* Header */}
@@ -488,7 +507,7 @@ export function ChatPage({ documentContext, onDisconnectDoc, tuningParams }: Cha
                     title={tip}
                   >
                     <FileText className="h-3 w-3 shrink-0" />
-                    <span className="truncate max-w-[120px]">{documentContext.title}</span>
+                    <span className="truncate max-w-[200px]">{documentContext.title}</span>
                     <button
                       onClick={onDisconnectDoc}
                       className="ml-0.5 hover:text-blue-900 dark:hover:text-blue-100 transition-colors"
@@ -499,6 +518,30 @@ export function ChatPage({ documentContext, onDisconnectDoc, tuningParams }: Cha
                   </div>
                 );
               })()}
+
+              {!documentContext && docList.length > 0 && (
+                <div className="relative">
+                  <button
+                    onClick={() => setShowDocPicker(!showDocPicker)}
+                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                  >
+                    <FileText className="h-3.5 w-3.5" /> Connect document
+                  </button>
+                  {showDocPicker && (
+                    <div className="absolute bottom-full mb-1 left-0 z-50 bg-background border rounded-md shadow-lg min-w-[200px] max-h-[240px] overflow-y-auto">
+                      {docList.map(doc => (
+                        <button
+                          key={doc.id}
+                          className="w-full text-left px-3 py-2 text-sm hover:bg-muted truncate"
+                          onClick={() => { onConnectDoc?.({ title: doc.title, outline: [], selectedText: null }); setShowDocPicker(false); }}
+                        >
+                          {doc.title}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
 
               <span className="text-xs font-medium text-muted-foreground shrink-0">Mode</span>
               <Select value={activeMode} onValueChange={changeMode}>
@@ -578,8 +621,8 @@ export function ChatPage({ documentContext, onDisconnectDoc, tuningParams }: Cha
               <div className="max-w-3xl mx-auto space-y-2">
                 {/* Attached file chip */}
                 {attachedFile && (
-                  <div className="flex items-center gap-1.5 text-xs bg-muted px-2.5 py-1.5 rounded-md w-fit max-w-full">
-                    <FileText className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                  <div className="flex items-center gap-1.5 text-xs bg-primary/10 border border-primary/30 text-primary px-2.5 py-1.5 rounded-md w-fit max-w-full font-medium">
+                    <FileText className="h-3.5 w-3.5 shrink-0" />
                     <span className="truncate max-w-[200px]">{attachedFile.name}</span>
                     <button
                       onClick={() => setAttachedFile(null)}

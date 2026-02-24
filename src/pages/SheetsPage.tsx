@@ -377,7 +377,16 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
   const [aiOpLoading, setAiOpLoading] = useState(false);
   const [availableModels, setAvailableModels] = useState<{name: string, id: string}[]>([]);
 
+  const [activeEngine, setActiveEngine] = useState<string>("mock");
+
   // Load models on mount
+  useEffect(() => {
+    axios.get(`${API_BASE}/ai/engines`).then(res => {
+      const active = (res.data as { name: string; active: boolean }[]).find(e => e.active);
+      if (active) setActiveEngine(active.name);
+    }).catch(() => {});
+  }, []);
+
   useEffect(() => {
     axios.get(`${API_BASE}/ai/models`).then(res => {
       // res.data.models is a list of {filename, ...}
@@ -465,8 +474,18 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
     if (editingCell && cellInputRef.current) {
       cellInputRef.current.focus();
       cellInputRef.current.select();
+    } else if (!editingCell && selection) {
+      // Return focus to grid so arrow keys work
+      gridRef.current?.focus();
     }
   }, [editingCell]);
+
+  // Keep grid focused whenever a selection exists and we're not editing
+  useEffect(() => {
+    if (selection && !editingCell) {
+      gridRef.current?.focus();
+    }
+  }, [selection]);
 
   // Auto-focus column name input
   useEffect(() => {
@@ -584,6 +603,7 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
       setSelection({ r1: ri, c1: ci, r2: ri, c2: ci });
       setIsDragging(true);
     }
+    gridRef.current?.focus();
   }, [editingCell, commitEdit, selAnchor, makeRect]);
 
   const handleCellMouseEnter = useCallback((ri: number, ci: number) => {
@@ -1778,53 +1798,6 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
                   ))}
                 </>
               )}
-              {activeSheet.columns.length > 0 && (
-                <>
-                  <div className="w-px h-5 bg-border mx-1" />
-                  <Button
-                    variant={aiFillOpen ? "default" : "outline"}
-                    size="sm"
-                    className="h-7 text-xs gap-1"
-                    onClick={() => { setAiFillOpen(!aiFillOpen); if (aiFillOpen) cancelAiFill(); }}
-                    disabled={aiDisabled}
-                    title={aiDisabled ? `AI disabled for tables > ${ROW_AI_LIMIT.toLocaleString()} rows` : undefined}
-                  >
-                    <Sparkles className="h-3 w-3" />
-                    AI Fill
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-7 text-xs gap-1"
-                    onClick={() => {
-                      if (selection) {
-                        setAiOpTargetStr(`${idxToCol(selection.c1)}${selection.r1 + 1}`);
-                        if (selection.r1 !== selection.r2 || selection.c1 !== selection.c2) {
-                          // Range selection -> default to row-wise on selection
-                          setAiOpMode("row-wise");
-                          setAiOpSourceStr(`${idxToCol(selection.c1)}${selection.r1 + 1}:${idxToCol(selection.c2)}${selection.r2 + 1}`);
-                        } else if (selection.c1 > 0) {
-                          // Single cell -> try to pick left neighbor as source
-                          setAiOpMode("row-wise");
-                          setAiOpSourceStr(`${idxToCol(selection.c1 - 1)}${selection.r1 + 1}`);
-                        } else {
-                          // Fallback
-                          setAiOpSourceStr(`${idxToCol(selection.c1)}${selection.r1 + 1}`);
-                        }
-                      } else {
-                        setAiOpTargetStr("");
-                        setAiOpSourceStr("");
-                      }
-                      setAiOpOpen(true);
-                    }}
-                    disabled={aiDisabled}
-                    title="Process a single cell or range with AI"
-                  >
-                    <Sparkles className="h-3 w-3" />
-                    AI Range
-                  </Button>
-                </>
-              )}
               <div className="flex-1" />
               {/* Export dropdown — active sheet only */}
               <div className="relative" onClick={(e) => e.stopPropagation()}>
@@ -1854,6 +1827,48 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
                 )}
               </div>
             </div>
+
+            {/* AI bar */}
+            {activeSheet.columns.length > 0 && (
+              <div className="sticky top-0 z-10 border-b px-4 py-1.5 flex items-center gap-2 bg-background/95 backdrop-blur-sm">
+                <Sparkles className="h-3.5 w-3.5 text-primary" />
+                <span className="text-xs font-medium text-primary mr-1">AI</span>
+                <Button
+                  size="sm"
+                  className="h-7 text-xs"
+                  variant={aiFillOpen ? "default" : "outline"}
+                  onClick={() => { setAiFillOpen(!aiFillOpen); if (aiFillOpen) cancelAiFill(); }}
+                  disabled={aiDisabled}
+                  title={aiDisabled ? `AI disabled for tables > ${ROW_AI_LIMIT.toLocaleString()} rows` : undefined}
+                >Fill</Button>
+                <Button
+                  size="sm"
+                  className="h-7 text-xs"
+                  variant="outline"
+                  onClick={() => {
+                    if (selection) {
+                      setAiOpTargetStr(`${idxToCol(selection.c1)}${selection.r1 + 1}`);
+                      if (selection.r1 !== selection.r2 || selection.c1 !== selection.c2) {
+                        setAiOpMode("row-wise");
+                        setAiOpSourceStr(`${idxToCol(selection.c1)}${selection.r1 + 1}:${idxToCol(selection.c2)}${selection.r2 + 1}`);
+                      } else if (selection.c1 > 0) {
+                        setAiOpMode("row-wise");
+                        setAiOpSourceStr(`${idxToCol(selection.c1 - 1)}${selection.r1 + 1}`);
+                      } else {
+                        setAiOpSourceStr(`${idxToCol(selection.c1)}${selection.r1 + 1}`);
+                      }
+                    } else {
+                      setAiOpTargetStr("");
+                      setAiOpSourceStr("");
+                    }
+                    setAiOpOpen(true);
+                  }}
+                  disabled={aiDisabled}
+                  title="Process a single cell or range with AI"
+                >Range</Button>
+                <span className="ml-auto text-[10px] text-muted-foreground font-mono">{activeEngine}</span>
+              </div>
+            )}
 
             {/* AI Fill panel */}
             {aiFillOpen && (

@@ -98,7 +98,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-db = DatabaseManager(os.path.join(get_app_data_dir(), "campaigns.db"))
+db = DatabaseManager(os.path.join(get_app_data_dir(), "crowforge.db"))
 db.initialize_schema(get_resource_path("backend/schema.sql"))
 
 app_repo = AppRepository(db)

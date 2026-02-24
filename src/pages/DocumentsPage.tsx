@@ -4,6 +4,7 @@ import {
   PlusCircle, FileText, Trash2, Loader2, Type, RefreshCw, AlignLeft,
   Maximize2, SpellCheck, Check, X, AlertCircle, Bold, Italic, Heading1,
   Heading2, List, Upload, Download, ChevronDown, PackageOpen, Pencil, Copy,
+  Sparkles,
 } from "lucide-react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
@@ -267,8 +268,10 @@ export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPagePr
       const content = activeDoc.content_json;
       if (content && Object.keys(content).length > 0) {
         editor.commands.setContent(content);
+        editor.commands.focus("end");
       } else {
         editor.commands.setContent("");
+        editor.commands.focus("start");
       }
     } else {
       editor.commands.setContent("");
@@ -836,17 +839,17 @@ export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPagePr
 
             {/* AI toolbar */}
             <div className="sticky top-0 z-10 border-b px-4 py-1.5 flex items-center gap-2 bg-background/95 backdrop-blur-sm">
-              <span className="text-xs text-muted-foreground mr-1">AI</span>
+              <Sparkles className="h-3.5 w-3.5 text-primary" />
+              <span className="text-xs font-medium text-primary mr-1">AI</span>
               {AI_ACTIONS.map((a) => (
                 <Button
                   key={a.key}
                   variant="outline"
                   size="sm"
-                  className="h-7 text-xs gap-1.5"
+                  className="h-7 text-xs"
                   disabled={!selection || aiLoading}
                   onClick={() => runAiAction(a.key)}
                 >
-                  <a.icon className="h-3 w-3" />
                   {a.label}
                   {a.key === "rewrite" && (
                     <kbd className="ml-1 text-[9px] text-muted-foreground/60 font-sans">

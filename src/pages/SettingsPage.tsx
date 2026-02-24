@@ -661,7 +661,7 @@ export function SettingsPage({ theme, setTheme, baseColor, setBaseColor }: Setti
               <h2 className="text-lg font-semibold">About CrowForge</h2>
               <div className="mt-2 space-y-1 text-sm text-muted-foreground">
                 <p><span className="text-foreground font-medium">Version</span>&nbsp; 0.1.0</p>
-                <p><span className="text-foreground font-medium">Data storage</span>&nbsp; Local SQLite (campaigns.db)</p>
+                <p><span className="text-foreground font-medium">Data storage</span>&nbsp; Local SQLite (crowforge.db)</p>
                 <p><span className="text-foreground font-medium">Architecture</span>&nbsp; Tauri + React + FastAPI</p>
               </div>
             </div>

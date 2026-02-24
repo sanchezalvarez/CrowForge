@@ -49,7 +49,9 @@
       "Bash(netstat:*)",
       "Bash(cmd:*)",
       "WebFetch(domain:www.sanchez.sk)",
-      "Bash(cd /c/unity/CrowForge && python -m PyInstaller --onefile --name crowforge-backend --add-data \"backend/schema.sql;backend\" backend/app.py 2>&1)"
+      "Bash(cd /c/unity/CrowForge && python -m PyInstaller --onefile --name crowforge-backend --add-data \"backend/schema.sql;backend\" backend/app.py 2>&1)",
+      "Bash(cd C:/unity/CrowForge && npm run tauri build 2>&1)",
+      "Bash(cat:*)"
     ]
   }
 }

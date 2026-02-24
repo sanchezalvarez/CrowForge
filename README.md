@@ -2,7 +2,7 @@
 
 A local-first AI workspace with **Chat**, **Documents**, **Sheets**, and **Benchmarking**. Everything runs on your machine — no cloud services, no telemetry, no subscriptions.
 
-Bring your own model: connect a local GGUF file, any OpenAI-compatible API, or just use the built-in mock engine to explore the UI.
+Write and edit documents with AI assistance, manage spreadsheets with AI-powered cell fill, chat with an AI that can reference your documents, and benchmark multiple models side-by-side. Bring your own model: connect a local GGUF file, any OpenAI-compatible API, or just use the built-in mock engine to explore the UI.
 
 Built with **Tauri v2** · **React 19 / TypeScript** · **Python FastAPI** · **SQLite**
 
@@ -169,7 +169,7 @@ Tauri (Rust shell)
         ├── Frontend  React 19 / Vite — port 1420
         │     └── axios (REST) + EventSource (SSE streaming)
         └── Backend   FastAPI / uvicorn — port 8000
-              ├── SQLite  campaigns.db  (raw sqlite3)
+              ├── SQLite  crowforge.db  (raw sqlite3)
               └── AI engines: Mock · HTTP/OpenAI · Local GGUF
 ```
 
@@ -192,6 +192,12 @@ Place downloaded `.gguf` files in your configured Models Directory, then select 
 
 ---
 
+## Credits
+
+**Made by Lubomir Timko** ([sanchez.sk](https://www.sanchez.sk)), with AI assistance from **Claude** (Anthropic).
+
+---
+
 ## License
 
-MIT
+Private — all rights reserved.

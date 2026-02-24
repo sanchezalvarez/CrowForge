@@ -211,7 +211,12 @@ export default function App() {
       <div className="flex flex-1 min-w-0 flex-col lg:flex-row overflow-hidden">
         <main className="flex-1 min-w-0 overflow-y-auto">
           {currentPage === "chat" ? (
-            <ChatPage documentContext={docContextLocked ? null : docContext} onDisconnectDoc={() => setDocContextLocked(true)} tuningParams={tuningParams} />
+            <ChatPage
+              documentContext={docContextLocked ? null : docContext}
+              onDisconnectDoc={() => setDocContextLocked(true)}
+              onConnectDoc={(ctx) => { setDocContext(ctx); setDocContextLocked(false); }}
+              tuningParams={tuningParams}
+            />
           ) : currentPage === "documents" ? (
             <DocumentsPage onContextChange={setDocContext} tuningParams={tuningParams} />
           ) : currentPage === "sheets" ? (

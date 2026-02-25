@@ -154,7 +154,7 @@ export function OnboardingPage({ onComplete }: Props) {
             </button>
             <button
               type="button"
-              onClick={() => { setSkipped(true); setStep(3); }}
+              onClick={() => { setError(null); setSkipped(true); axios.post(`${API_BASE}/state`, { onboarding_completed: true }).catch(() => {}); setStep(3); }}
               className="w-full text-xs text-muted-foreground hover:underline"
             >
               Skip for now — configure in Settings later

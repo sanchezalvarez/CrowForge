@@ -306,6 +306,13 @@ export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPagePr
     []
   );
 
+  // Cleanup debounce timer on unmount to prevent saving after component is gone
+  useEffect(() => {
+    return () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+    };
+  }, []);
+
   async function loadDocuments() {
     try {
       const res = await axios.get(`${API_BASE}/documents`);

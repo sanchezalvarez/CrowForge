@@ -67,6 +67,7 @@ async def lifespan(app: FastAPI):
         try:
             engine_manager.clear()
             engine_manager.register("mock", MockAIEngine())
+            engine_manager.set_active("mock")  # Safe default while configuring
             if enable_llm:
                 if engine_type == "local":
                     local_engine = LocalLLAMAEngine(
@@ -82,8 +83,6 @@ async def lifespan(app: FastAPI):
                     http_engine = HTTPAIEngine()
                     engine_manager.register("openai", http_engine)
                     engine_manager.set_active("openai")
-            else:
-                engine_manager.set_active("mock")
             print(f"[LIFESPAN] Engine restored from DB: {engine_manager.active_name}")
         except Exception as e:
             print(f"[LIFESPAN] Failed to restore engine from DB: {e}")
@@ -377,6 +376,7 @@ async def save_ai_settings(data: dict, background_tasks: BackgroundTasks):
         try:
             engine_manager.clear()
             engine_manager.register("mock", MockAIEngine())
+            engine_manager.set_active("mock")  # Safe default while reinitializing
             if enable_llm:
                 if engine_type == "local":
                     local_engine = LocalLLAMAEngine(
@@ -402,7 +402,11 @@ async def save_ai_settings(data: dict, background_tasks: BackgroundTasks):
             print(f"[SETTINGS] Re-init failed: {e}")
 
     background_tasks.add_task(_do_reinit)
-    return {"status": "reinitializing", "active_engine": engine_manager.active_name}
+    try:
+        active = engine_manager.active_name
+    except RuntimeError:
+        active = "reinitializing"
+    return {"status": "reinitializing", "active_engine": active}
 
 
 # Shared state for background re-init progress
@@ -412,10 +416,14 @@ _reinit_state: dict = {"status": "ready", "error": None}
 @app.get("/settings/ai/status")
 async def get_reinit_status():
     """Poll this after saving settings to know when engine re-init is done."""
+    try:
+        active = engine_manager.active_name
+    except RuntimeError:
+        active = "reinitializing"
     return {
         "status": _reinit_state["status"],   # "ready" | "reinitializing" | "error"
         "error": _reinit_state["error"],
-        "active_engine": engine_manager.active_name,
+        "active_engine": active,
     }
 
 

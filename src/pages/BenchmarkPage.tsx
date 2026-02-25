@@ -446,6 +446,15 @@ export function BenchmarkPage() {
                     </>
                   )}
                 </Button>
+                {running && (
+                  <Button
+                    variant="outline"
+                    onClick={() => { abortRef.current = true; }}
+                  >
+                    <XCircle className="mr-2 h-4 w-4" />
+                    Cancel
+                  </Button>
+                )}
                 {currentBatchIds.size > 0 && !running && (
                   <Button
                     variant="outline"

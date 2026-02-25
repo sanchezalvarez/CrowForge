@@ -16,9 +16,15 @@ function emit() {
   listeners.forEach((l) => l());
 }
 
+const MAX_TOASTS = 10;
+
 export function toast(message: string, variant: ToastVariant = "success") {
   const id = nextId++;
   toasts = [...toasts, { id, message, variant }];
+  // Keep only the most recent toasts to prevent memory buildup
+  if (toasts.length > MAX_TOASTS) {
+    toasts = toasts.slice(-MAX_TOASTS);
+  }
   emit();
   setTimeout(() => {
     toasts = toasts.filter((t) => t.id !== id);

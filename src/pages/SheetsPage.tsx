@@ -424,6 +424,12 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
     }
   }, [activeSheetId]);
 
+  // Refs to hold latest sizes for resize mouseup handler (avoids re-attaching listeners on every drag frame)
+  const colWidthsRef = useRef(colWidths);
+  const rowHeightsRef = useRef(rowHeights);
+  useEffect(() => { colWidthsRef.current = colWidths; }, [colWidths]);
+  useEffect(() => { rowHeightsRef.current = rowHeights; }, [rowHeights]);
+
   // Global mousemove/mouseup for resize dragging
   useEffect(() => {
     if (!resizing) return;
@@ -437,10 +443,9 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
       }
     };
     const onUp = () => {
-      // Persist sizes to backend
+      // Persist sizes to backend using refs for latest values
       if (activeSheet) {
-        const sizes = { colWidths: resizing.type === 'col' ? { ...colWidths } : colWidths, rowHeights: resizing.type === 'row' ? { ...rowHeights } : rowHeights };
-        // Read latest from state via closure — we need to grab current values
+        const sizes = { colWidths: colWidthsRef.current, rowHeights: rowHeightsRef.current };
         axios.put(`${API_BASE}/sheets/${activeSheet.id}/sizes`, sizes).catch(() => {});
       }
       setResizing(null);
@@ -451,7 +456,7 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseup', onUp);
     };
-  }, [resizing, activeSheet, colWidths, rowHeights]);
+  }, [resizing, activeSheet]);
 
   // Auto-focus sheet rename input
   useEffect(() => {
@@ -512,9 +517,25 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
     if (prevSheetId.current) {
       selectionMap.current.set(prevSheetId.current, { sel: selection, anchor: selAnchor });
     }
+
+    // Commit any pending cell edit before switching sheets (fire-and-forget)
+    if (editingCell && prevSheetId.current) {
+      const prevSheet = sheets.find(s => s.id === prevSheetId.current);
+      if (prevSheet) {
+        const { row, col } = editingCell;
+        const original = prevSheet.rows[row]?.[col] ?? "";
+        if (editValue !== original) {
+          axios.put(`${API_BASE}/sheets/${prevSheet.id}/cell`, {
+            row_index: row, col_index: col, value: editValue,
+          }).catch(() => {});
+        }
+      }
+    }
+
     prevSheetId.current = activeSheetId;
 
     setEditingCell(null);
+    setCellError(null);
     setAddingColumn(false);
     cancelAiFill();
     setAiFillOpen(false);
@@ -1944,9 +1965,9 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
               const selKey = singleSel ? `${selection!.r1},${selection!.c1}` : null;
               const selFormula = selKey ? activeSheet.formulas?.[selKey] : null;
               const displayLabel = editingCell
-                ? `${String.fromCharCode(65 + Math.min(editingCell.col, 25))}${editingCell.row + 1}`
+                ? `${idxToCol(editingCell.col)}${editingCell.row + 1}`
                 : singleSel
-                  ? `${String.fromCharCode(65 + Math.min(selection!.c1, 25))}${selection!.r1 + 1}`
+                  ? `${idxToCol(selection!.c1)}${selection!.r1 + 1}`
                   : "—";
               const displayValue = editingCell
                 ? editValue
@@ -2483,7 +2504,7 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
               )}
               {selection && selection.r1 === selection.r2 && selection.c1 === selection.c2 && (
                 <span className="text-muted-foreground/60">
-                  Cell {String.fromCharCode(65 + Math.min(selection.c1, 25))}{selection.r1 + 1}
+                  Cell {idxToCol(selection.c1)}{selection.r1 + 1}
                 </span>
               )}
               {filters.size > 0 && (
@@ -2795,8 +2816,8 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
                 setRowHeights(next);
                 const sizes = activeSheet!.sizes ?? {};
                 const updated = { ...sizes, colWidths: sizes.colWidths ?? {}, rowHeights: next };
-                activeSheet!.sizes = updated;
-                axios.put(`${API_BASE}/sheets/${activeSheetId}/sizes`, updated);
+                setSheets(prev => prev.map(s => s.id === activeSheetId ? { ...s, sizes: updated } : s));
+                axios.put(`${API_BASE}/sheets/${activeSheetId}/sizes`, updated).catch(() => {});
                 setRowMenu(null);
               }}
             >

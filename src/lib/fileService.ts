@@ -194,6 +194,8 @@ function inlineToTextRun(node: TiptapNode): TextRun {
     text: node.text ?? "",
     bold: marks.some((m) => m.type === "bold"),
     italics: marks.some((m) => m.type === "italic"),
+    underline: marks.some((m) => m.type === "underline") ? {} : undefined,
+    strike: marks.some((m) => m.type === "strike"),
   });
 }
 
@@ -368,6 +370,7 @@ interface PdfToken {
   text: string;
   bold: boolean;
   italic: boolean;
+  color?: string;      // CSS hex color, e.g. "#ff0000"
   isBreak?: boolean;   // hard line-break (shift-enter in Tiptap)
 }
 
@@ -385,9 +388,12 @@ function buildTokens(content: TiptapNode[]): PdfToken[] {
     const marks = node.marks ?? [];
     const bold   = marks.some((m) => m.type === "bold");
     const italic = marks.some((m) => m.type === "italic");
+    // Extract text color from textStyle mark if present
+    const textStyleMark = marks.find((m) => m.type === "textStyle") as { type: string; attrs?: Record<string, unknown> } | undefined;
+    const color = textStyleMark?.attrs?.color as string | undefined;
     // Split on whitespace so each word can be individually measured.
     for (const part of (node.text ?? "").split(/(\s+)/)) {
-      if (part.length > 0) tokens.push({ text: part, bold, italic });
+      if (part.length > 0) tokens.push({ text: part, bold, italic, color });
     }
   }
   return tokens;
@@ -449,9 +455,27 @@ function renderTokenLines(s: PdfState, lines: PdfLine[], fontSize: number, leftX
     for (const seg of line.segments) {
       s.doc.setFont("helvetica", pdfFontStyle(seg.bold, seg.italic));
       s.doc.setFontSize(fontSize);
+      if (seg.color) {
+        // Parse CSS hex color "#rrggbb" or "#rgb"
+        const hex = seg.color.replace("#", "");
+        if (hex.length === 6) {
+          const r = parseInt(hex.slice(0, 2), 16);
+          const g = parseInt(hex.slice(2, 4), 16);
+          const b = parseInt(hex.slice(4, 6), 16);
+          s.doc.setTextColor(r, g, b);
+        } else if (hex.length === 3) {
+          const r = parseInt(hex[0] + hex[0], 16);
+          const g = parseInt(hex[1] + hex[1], 16);
+          const b = parseInt(hex[2] + hex[2], 16);
+          s.doc.setTextColor(r, g, b);
+        }
+      } else {
+        s.doc.setTextColor(0, 0, 0);
+      }
       s.doc.text(seg.text, x, s.y);
       x += s.doc.getTextWidth(seg.text);
     }
+    s.doc.setTextColor(0, 0, 0);
     s.y += lineH;
   }
 }
@@ -468,8 +492,8 @@ function renderHeading(s: PdfState, node: TiptapNode): void {
   const level = (node.attrs?.level as number) ?? 1;
   const cfg   = HEADING_CFG[level] ?? HEADING_CFG[3];
 
-  // H1 always starts a new page (except when already at the top)
-  if (level === 1 && s.y > A4.margin + 10) {
+  // H1 always starts a new page (except when already at the top of a fresh page)
+  if (level === 1 && s.y > A4.margin + 40) {
     pdfNewPage(s);
   } else {
     s.y += cfg.spaceBefore;
@@ -487,11 +511,45 @@ function renderHeading(s: PdfState, node: TiptapNode): void {
 
 function renderParagraphNode(s: PdfState, node: TiptapNode, indent = 0): void {
   const tokens  = buildTokens(node.content ?? []);
+  // Skip empty paragraphs (no text content) to avoid blank leading pages
+  if (tokens.length === 0) return;
   const maxW    = CONTENT_W - indent;
   const lines   = layoutLines(s.doc, tokens, BODY_SIZE, maxW);
   const height  = measureTokenBlock(s.doc, tokens, BODY_SIZE, maxW);
   pdfNeedSpace(s, height + 5);
-  renderTokenLines(s, lines, BODY_SIZE, A4.margin + indent);
+  const textAlign = (node.attrs?.textAlign as string | undefined) ?? "left";
+  if (textAlign === "center" || textAlign === "right") {
+    // For center/right aligned paragraphs, render each line with jsPDF alignment
+    const lineH = BODY_SIZE * LINE_RATIO;
+    if (lines.length === 0 || (lines.length === 1 && lines[0].segments.length === 0)) {
+      s.y += lineH * 0.6;
+    } else {
+      for (const line of lines) {
+        const lineText = line.segments.map((seg) => seg.text).join("");
+        const firstSeg = line.segments[0];
+        if (firstSeg) {
+          s.doc.setFont("helvetica", pdfFontStyle(firstSeg.bold, firstSeg.italic));
+          if (firstSeg.color) {
+            const hex = firstSeg.color.replace("#", "");
+            if (hex.length === 6) {
+              s.doc.setTextColor(parseInt(hex.slice(0, 2), 16), parseInt(hex.slice(2, 4), 16), parseInt(hex.slice(4, 6), 16));
+            }
+          } else {
+            s.doc.setTextColor(0, 0, 0);
+          }
+        }
+        s.doc.setFontSize(BODY_SIZE);
+        const xPos = textAlign === "center"
+          ? A4.margin + indent + maxW / 2
+          : A4.w - A4.margin;
+        s.doc.text(lineText, xPos, s.y, { align: textAlign as "center" | "right" });
+        s.doc.setTextColor(0, 0, 0);
+        s.y += lineH;
+      }
+    }
+  } else {
+    renderTokenLines(s, lines, BODY_SIZE, A4.margin + indent);
+  }
   s.y += 5; // paragraph spacing
 }
 

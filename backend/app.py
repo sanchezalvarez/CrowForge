@@ -47,11 +47,47 @@ MODEL_IDLE_TIMEOUT = float(os.getenv("MODEL_IDLE_TIMEOUT", "600"))  # 10 minutes
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Apply DB-saved models_dir over the env-var default on startup
+    # Restore full AI config from DB settings (overrides env-var defaults)
     global LLM_MODELS_DIR
     saved_dir = app_repo.get_setting("ai_models_dir")
     if saved_dir:
         LLM_MODELS_DIR = saved_dir
+
+    # Restore engine configuration from DB if user has saved settings before
+    db_enable = app_repo.get_setting("ai_enable_llm")
+    if db_enable is not None:
+        enable_llm = db_enable == "true"
+        engine_type = app_repo.get_setting("ai_engine") or "mock"
+        base_url = app_repo.get_setting("ai_base_url") or os.getenv("LLM_BASE_URL", "https://api.openai.com/v1")
+        api_key = app_repo.get_setting("ai_api_key") or os.getenv("LLM_API_KEY", "")
+        model = app_repo.get_setting("ai_model") or os.getenv("LLM_MODEL", "gpt-4o-mini")
+        model_path = app_repo.get_setting("ai_model_path") or ""
+        ctx_size = int(app_repo.get_setting("ai_ctx_size") or "2048")
+
+        try:
+            engine_manager.clear()
+            engine_manager.register("mock", MockAIEngine())
+            if enable_llm:
+                if engine_type == "local":
+                    local_engine = LocalLLAMAEngine(
+                        model_path=model_path if model_path else None,
+                        n_ctx=ctx_size,
+                    )
+                    engine_manager.register("local", local_engine)
+                    engine_manager.set_active("local")
+                else:
+                    os.environ["LLM_BASE_URL"] = base_url
+                    os.environ["LLM_API_KEY"] = api_key
+                    os.environ["LLM_MODEL"] = model
+                    http_engine = HTTPAIEngine()
+                    engine_manager.register("openai", http_engine)
+                    engine_manager.set_active("openai")
+            else:
+                engine_manager.set_active("mock")
+            print(f"[LIFESPAN] Engine restored from DB: {engine_manager.active_name}")
+        except Exception as e:
+            print(f"[LIFESPAN] Failed to restore engine from DB: {e}")
+
     # Start background tasks
     idle_task = asyncio.create_task(_idle_unload_watcher())
     parent_task = asyncio.create_task(_parent_watchdog())
@@ -275,7 +311,7 @@ async def get_ai_settings():
     def _get(key: str, env_fallback: str = "") -> str:
         """Settings DB first, then provided env_fallback (already resolved)."""
         val = app_repo.get_setting(key)
-        return val if val else env_fallback
+        return val if val is not None else env_fallback
 
     return {
         "enable_llm": (_get("ai_enable_llm", os.getenv("ENABLE_LLM", "false"))).lower() == "true",
@@ -285,7 +321,7 @@ async def get_ai_settings():
         "model": _get("ai_model", os.getenv("LLM_MODEL", "gpt-4o-mini")),
         "model_path": _get("ai_model_path", os.getenv("LLM_MODEL_PATH", "")),
         "models_dir": _get("ai_models_dir", LLM_MODELS_DIR),
-        "ctx_size": int(_get("ai_ctx_size", os.getenv("LLM_CTX_SIZE", "2048"))),
+        "ctx_size": int(_get("ai_ctx_size", os.getenv("LLM_CTX_SIZE", "2048")) or "2048"),
     }
 
 
@@ -512,9 +548,19 @@ async def start_model_download(data: dict, background_tasks: BackgroundTasks):
                     downloaded = 0
                     with open(dest_path, "wb") as f:
                         async for chunk in resp.aiter_bytes(chunk_size=1024 * 256):
+                            if not _download_state.get(filename, {}).get("running"):
+                                break
                             f.write(chunk)
                             downloaded += len(chunk)
                             _download_state[filename]["progress"] = downloaded
+                    # Check if cancelled mid-download
+                    if not _download_state.get(filename, {}).get("running"):
+                        if os.path.exists(dest_path):
+                            try:
+                                os.remove(dest_path)
+                            except Exception:
+                                pass
+                        return
             _download_state[filename]["done"] = True
             _download_state[filename]["running"] = False
             print(f"[DOWNLOAD] Completed: {filename}")
@@ -537,6 +583,16 @@ async def start_model_download(data: dict, background_tasks: BackgroundTasks):
 async def get_download_status():
     """Return current state of all active/recent downloads."""
     return {"downloads": _download_state}
+
+
+@app.delete("/ai/models/{filename}")
+async def delete_installed_model(filename: str):
+    """Delete an installed GGUF model file from models_dir."""
+    path = os.path.join(LLM_MODELS_DIR, filename)
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="Model not found")
+    os.remove(path)
+    return {"status": "deleted"}
 
 
 @app.delete("/ai/models/download/{filename}")

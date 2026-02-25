@@ -76,7 +76,7 @@ export default function App() {
     document.documentElement.classList.add(`theme-${baseColor}`);
   }, [baseColor]);
 
-  // Tuning params state — persisted to localStorage
+  // Tuning params state — persisted to both localStorage and backend DB
   const [tuningParams, setTuningParams] = useState<TuningParams>(() => {
     try {
       const stored = localStorage.getItem("ai_tuning");
@@ -84,9 +84,26 @@ export default function App() {
     } catch { /* ignore */ }
     return { temperature: 0.7, topP: 0.95, maxTokens: 1024, seed: null };
   });
+  const tuningLoadedFromBackend = useRef(false);
 
+  // Load tuning from backend on startup (backend DB is the source of truth)
+  useEffect(() => {
+    if (appStatus !== "ready") return;
+    axios.get(`${API_BASE}/ai/tuning`).then((r) => {
+      tuningLoadedFromBackend.current = true;
+      setTuningParams(r.data);
+    }).catch(() => {});
+  }, [appStatus]);
+
+  // Persist tuning to localStorage + backend on change
+  const tuningDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     localStorage.setItem("ai_tuning", JSON.stringify(tuningParams));
+    // Debounce backend save to avoid hammering during slider drags
+    if (tuningDebounceRef.current) clearTimeout(tuningDebounceRef.current);
+    tuningDebounceRef.current = setTimeout(() => {
+      axios.post(`${API_BASE}/ai/tuning`, tuningParams).catch(() => {});
+    }, 500);
   }, [tuningParams]);
 
   // AI panel visibility

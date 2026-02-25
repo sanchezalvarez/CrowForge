@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import axios from "axios";
-import { Download, CheckCircle2, Loader2, X, AlertCircle, User, Smile, Star, Zap, Heart, Coffee, Code2, Flame, Moon, Sun, Ghost, Bot } from "lucide-react";
+import { Download, CheckCircle2, Loader2, X, AlertCircle, User, Smile, Star, Zap, Heart, Coffee, Code2, Flame, Moon, Sun, Ghost, Bot, Trash2 } from "lucide-react";
 import { toast } from "../hooks/useToast";
 import { openUrl } from "@tauri-apps/plugin-opener";
 
@@ -197,6 +197,16 @@ export function SettingsPage({ theme, setTheme, baseColor, setBaseColor }: Setti
     axios.get(`${API_BASE}/ai/models`).then((r) => {
       setInstalledFiles(r.data.models.map((m: { filename: string }) => m.filename));
     }).catch(() => {});
+  }
+
+  async function handleDeleteModel(filename: string) {
+    try {
+      await axios.delete(`${API_BASE}/ai/models/${encodeURIComponent(filename)}`);
+      toast(`"${filename}" deleted.`);
+      refreshModels();
+    } catch {
+      toast(`Failed to delete "${filename}".`, "error");
+    }
   }
 
   function refreshDownloads() {
@@ -588,10 +598,19 @@ export function SettingsPage({ theme, setTheme, baseColor, setBaseColor }: Setti
 
                       <div className="shrink-0">
                         {installed && !dl?.running ? (
-                          <span className="flex items-center gap-1 text-xs font-medium text-green-600">
-                            <CheckCircle2 size={14} />
-                            Installed
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className="flex items-center gap-1 text-xs font-medium text-green-600">
+                              <CheckCircle2 size={14} />
+                              Installed
+                            </span>
+                            <button
+                              onClick={() => handleDeleteModel(m.filename)}
+                              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive transition-colors"
+                              title="Delete model"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
                         ) : dl?.running ? (
                           <button
                             onClick={() => handleCancelDownload(m.filename)}

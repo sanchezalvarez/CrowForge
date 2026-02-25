@@ -4,11 +4,18 @@ import {
   PlusCircle, FileText, Trash2, Loader2, Type, RefreshCw, AlignLeft,
   Maximize2, SpellCheck, Check, X, AlertCircle, Bold, Italic, Heading1,
   Heading2, List, Upload, Download, ChevronDown, PackageOpen, Pencil, Copy,
-  Sparkles,
+  Sparkles, Underline as UnderlineIcon, Strikethrough, AlignLeft as AlignLeftIcon,
+  AlignCenter, AlignRight, Highlighter,
 } from "lucide-react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { Markdown } from "tiptap-markdown";
+import { Color } from "@tiptap/extension-color";
+import { TextStyle } from "@tiptap/extension-text-style";
+import Underline from "@tiptap/extension-underline";
+import TextAlign from "@tiptap/extension-text-align";
+import Highlight from "@tiptap/extension-highlight";
+import FontFamily from "@tiptap/extension-font-family";
 import { DOMParser as PmDOMParser, Fragment } from "@tiptap/pm/model";
 import { Button } from "../components/ui/button";
 import { ScrollArea } from "../components/ui/scroll-area";
@@ -28,7 +35,16 @@ import {
   type DocExportFormat,
 } from "../lib/fileService";
 
-const editorExtensions = [StarterKit, Markdown];
+const editorExtensions = [
+  StarterKit,
+  Markdown,
+  TextStyle,
+  Color,
+  Underline,
+  TextAlign.configure({ types: ["heading", "paragraph"] }),
+  Highlight.configure({ multicolor: false }),
+  FontFamily,
+];
 
 interface OutlineItem {
   level: number;
@@ -798,6 +814,79 @@ export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPagePr
                 >
                   <Italic className="h-3.5 w-3.5" />
                 </Button>
+                <Button
+                  variant={editor.isActive("underline") ? "secondary" : "ghost"}
+                  size="sm" className="h-7 w-7 p-0"
+                  onClick={() => editor.chain().focus().toggleUnderline().run()}
+                  title="Underline"
+                >
+                  <UnderlineIcon className="h-3.5 w-3.5" />
+                </Button>
+                <Button
+                  variant={editor.isActive("strike") ? "secondary" : "ghost"}
+                  size="sm" className="h-7 w-7 p-0"
+                  onClick={() => editor.chain().focus().toggleStrike().run()}
+                  title="Strikethrough"
+                >
+                  <Strikethrough className="h-3.5 w-3.5" />
+                </Button>
+                <div className="w-px h-4 bg-border mx-1" />
+                <Button
+                  variant={editor.isActive({ textAlign: "left" }) ? "secondary" : "ghost"}
+                  size="sm" className="h-7 w-7 p-0"
+                  onClick={() => editor.chain().focus().setTextAlign("left").run()}
+                  title="Align left"
+                >
+                  <AlignLeftIcon className="h-3.5 w-3.5" />
+                </Button>
+                <Button
+                  variant={editor.isActive({ textAlign: "center" }) ? "secondary" : "ghost"}
+                  size="sm" className="h-7 w-7 p-0"
+                  onClick={() => editor.chain().focus().setTextAlign("center").run()}
+                  title="Align center"
+                >
+                  <AlignCenter className="h-3.5 w-3.5" />
+                </Button>
+                <Button
+                  variant={editor.isActive({ textAlign: "right" }) ? "secondary" : "ghost"}
+                  size="sm" className="h-7 w-7 p-0"
+                  onClick={() => editor.chain().focus().setTextAlign("right").run()}
+                  title="Align right"
+                >
+                  <AlignRight className="h-3.5 w-3.5" />
+                </Button>
+                <div className="w-px h-4 bg-border mx-1" />
+                <Button
+                  variant={editor.isActive("highlight") ? "secondary" : "ghost"}
+                  size="sm" className="h-7 w-7 p-0"
+                  onClick={() => editor.chain().focus().toggleHighlight().run()}
+                  title="Highlight"
+                >
+                  <Highlighter className="h-3.5 w-3.5" />
+                </Button>
+                <input
+                  type="color"
+                  className="w-6 h-6 rounded cursor-pointer border-0 p-0"
+                  title="Text color"
+                  onChange={(e) => editor.chain().focus().setColor(e.target.value).run()}
+                />
+                <select
+                  className="h-7 text-xs border border-border rounded bg-background px-1 cursor-pointer"
+                  title="Font family"
+                  defaultValue=""
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (!val) {
+                      editor.chain().focus().unsetFontFamily().run();
+                    } else {
+                      editor.chain().focus().setFontFamily(val).run();
+                    }
+                  }}
+                >
+                  <option value="">Default</option>
+                  <option value="serif">Serif</option>
+                  <option value="monospace">Mono</option>
+                </select>
                 <div className="w-px h-4 bg-border mx-1" />
                 <Button
                   variant={editor.isActive("bulletList") ? "secondary" : "ghost"}

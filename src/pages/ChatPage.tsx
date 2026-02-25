@@ -144,6 +144,7 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
   const [isDragging, setIsDragging] = useState(false);
   const [docList, setDocList] = useState<{ id: string; title: string }[]>([]);
   const [showDocPicker, setShowDocPicker] = useState(false);
+  const docPickerRef = useRef<HTMLDivElement>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -170,7 +171,10 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
   useEffect(() => { loadSessions(); }, []);
 
   useEffect(() => {
-    axios.get(`${API_BASE}/documents`).then(r => setDocList(r.data.documents ?? [])).catch(() => {});
+    axios.get(`${API_BASE}/documents`).then(r => {
+      const docs = Array.isArray(r.data) ? r.data : r.data.documents ?? [];
+      setDocList(docs);
+    }).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -200,6 +204,18 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
       renameInputRef.current.select();
     }
   }, [renamingSessionId]);
+
+  // Close doc picker on outside click
+  useEffect(() => {
+    if (!showDocPicker) return;
+    function onClickOutside(e: MouseEvent) {
+      if (docPickerRef.current && !docPickerRef.current.contains(e.target as Node)) {
+        setShowDocPicker(false);
+      }
+    }
+    document.addEventListener("mousedown", onClickOutside);
+    return () => document.removeEventListener("mousedown", onClickOutside);
+  }, [showDocPicker]);
 
   async function loadSessions() {
     try {
@@ -520,7 +536,7 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
               })()}
 
               {!documentContext && docList.length > 0 && (
-                <div className="relative">
+                <div className="relative" ref={docPickerRef}>
                   <button
                     onClick={() => setShowDocPicker(!showDocPicker)}
                     className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"

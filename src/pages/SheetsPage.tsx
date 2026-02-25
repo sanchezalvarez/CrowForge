@@ -2151,7 +2151,8 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
                 // Start editing on printable character
                 if (selection && !e.ctrlKey && !e.metaKey && !e.altKey && e.key.length === 1) {
                   startEditing(selection.r1, selection.c1, "");
-                  // Let the character propagate to the new input
+                  // Set the typed character as initial value (focus effect runs after render)
+                  setEditValue(e.key);
                 }
               }}
             >

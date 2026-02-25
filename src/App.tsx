@@ -142,8 +142,8 @@ export default function App() {
   // Backend polling on startup
   useEffect(() => {
     let cancelled = false;
-    const MAX_ATTEMPTS = 25;
-    const INTERVAL_MS = 600;
+    const MAX_ATTEMPTS = 60;
+    const INTERVAL_MS = 1000;
 
     async function poll(attempt: number) {
       if (cancelled) return;

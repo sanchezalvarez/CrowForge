@@ -103,6 +103,7 @@ npm run dev             # Terminal 2 → http://localhost:1420
 ```bash
 python -m PyInstaller --onefile --name crowforge-backend \
   --add-data "backend/schema.sql;backend" \
+  --collect-all llama_cpp \
   backend/app.py
 ```
 

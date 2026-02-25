@@ -2,7 +2,13 @@ import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import crowforgeLogo from "../assets/crowforge_ico.png";
 
-const STATUS_MESSAGES = ["Starting backend…", "Almost ready…", "Hang tight…"];
+const STATUS_MESSAGES = [
+  "Starting backend…",
+  "Almost ready…",
+  "Hang tight…",
+  "First launch may take a moment…",
+  "Still loading, please wait…",
+];
 
 export function SplashScreen({ failed }: { failed?: boolean }) {
   const [msgIndex, setMsgIndex] = useState(0);

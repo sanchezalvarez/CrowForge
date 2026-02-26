@@ -99,6 +99,8 @@ export default function App() {
   const tuningDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     localStorage.setItem("ai_tuning", JSON.stringify(tuningParams));
+    // Don't save to backend until we've loaded the backend value first
+    if (!tuningLoadedFromBackend.current) return;
     // Debounce backend save to avoid hammering during slider drags
     if (tuningDebounceRef.current) clearTimeout(tuningDebounceRef.current);
     tuningDebounceRef.current = setTimeout(() => {

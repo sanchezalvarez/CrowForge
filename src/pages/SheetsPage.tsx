@@ -306,6 +306,7 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
   const skipHistory = useRef(false); // flag to skip pushing history during undo/redo restore
+  const undoRedoInFlight = useRef(false);
 
   // Multi-cell selection: normalized rectangle {r1<=r2, c1<=c2}
   // Per-table selection preservation
@@ -571,8 +572,12 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
   const commitEdit = useCallback(async () => {
     if (!editingCell || !activeSheet) return;
     const { row, col } = editingCell;
-    const original = activeSheet.rows[row]?.[col] ?? "";
+    const formulaKey = `${row},${col}`;
+    const original = activeSheet.formulas?.[formulaKey] ?? activeSheet.rows[row]?.[col] ?? "";
     if (editValue !== original) {
+      // Clear editing state synchronously first to prevent clobbering a new edit session
+      setEditingCell(null);
+      setCellError(null);
       try {
         const res = await axios.put(`${API_BASE}/sheets/${activeSheet.id}/cell`, {
           row_index: row,
@@ -580,15 +585,17 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
           value: editValue,
         });
         updateSheet(res.data);
-        setCellError(null);
       } catch (err: any) {
         const detail = err?.response?.data?.detail;
         setCellError(detail || "Invalid value");
-        return; // keep editing open on error
+        // Re-open edit on error so user can fix
+        setEditingCell({ row, col });
+        return;
       }
+    } else {
+      setEditingCell(null);
+      setCellError(null);
     }
-    setEditingCell(null);
-    setCellError(null);
   }, [editingCell, editValue, activeSheet]);
 
   const cancelEdit = useCallback(() => {
@@ -679,7 +686,10 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
     if (!activeSheet) return;
     const startRow = selection?.r1 ?? 0;
     const startCol = selection?.c1 ?? 0;
-    const data = clipText.split(/\r?\n/).filter((line) => line.length > 0).map((line) => line.split("\t"));
+    const lines = clipText.split(/\r?\n/);
+    // Strip only trailing empty lines (e.g. trailing newline from clipboard)
+    while (lines.length > 0 && lines[lines.length - 1].length === 0) lines.pop();
+    const data = lines.map((line) => line.split("\t"));
     if (data.length === 0) return;
     try {
       const payload: Record<string, unknown> = {
@@ -1046,7 +1056,7 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
   }
 
   async function undoSheet() {
-    if (!activeSheet) return;
+    if (!activeSheet || undoRedoInFlight.current) return;
     const stack = undoStacks.current.get(activeSheet.id);
     if (!stack || stack.length === 0) return;
     const snapshot = stack.pop()!;
@@ -1057,6 +1067,7 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
     redoStacks.current.set(activeSheet.id, redoStack);
     // Restore via API
     skipHistory.current = true;
+    undoRedoInFlight.current = true;
     try {
       const res = await axios.put(`${API_BASE}/sheets/${activeSheet.id}/data`, {
         columns: snapshot.columns,
@@ -1071,11 +1082,12 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
       setRowHeights(snapshot.sizes?.rowHeights ?? {});
     } catch { /* ignore */ }
     skipHistory.current = false;
+    undoRedoInFlight.current = false;
     syncUndoRedoState(activeSheet.id);
   }
 
   async function redoSheet() {
-    if (!activeSheet) return;
+    if (!activeSheet || undoRedoInFlight.current) return;
     const stack = redoStacks.current.get(activeSheet.id);
     if (!stack || stack.length === 0) return;
     const snapshot = stack.pop()!;
@@ -1086,6 +1098,7 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
     undoStacks.current.set(activeSheet.id, undoStack);
     // Restore via API
     skipHistory.current = true;
+    undoRedoInFlight.current = true;
     try {
       const res = await axios.put(`${API_BASE}/sheets/${activeSheet.id}/data`, {
         columns: snapshot.columns,
@@ -1100,6 +1113,7 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
       setRowHeights(snapshot.sizes?.rowHeights ?? {});
     } catch { /* ignore */ }
     skipHistory.current = false;
+    undoRedoInFlight.current = false;
     syncUndoRedoState(activeSheet.id);
   }
 
@@ -2393,7 +2407,7 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
                               }}
                               onMouseEnter={() => handleCellMouseEnter(ri, ci)}
                               onClick={() => {
-                                if (colType === "boolean") {
+                                if (colType === "boolean" && !isEditing) {
                                   const next = cell.toLowerCase() === "true" ? "false" : "true";
                                   axios.put(`${API_BASE}/sheets/${activeSheet.id}/cell`, {
                                     row_index: ri, col_index: ci, value: next,

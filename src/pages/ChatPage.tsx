@@ -146,6 +146,7 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
   const [showDocPicker, setShowDocPicker] = useState(false);
   const docPickerRef = useRef<HTMLDivElement>(null);
 
+  const sendingRef = useRef(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
@@ -327,14 +328,16 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
   }
 
   async function sendMessage() {
-    if (!input.trim() || !activeSessionId) return;
+    if (!input.trim() || !activeSessionId || sendingRef.current) return;
     const userText = input.trim();
+    const sessionId = activeSessionId; // capture to avoid stale closure
     setInput("");
     setSending(true);
+    sendingRef.current = true;
 
     const tempUserMsg: ChatMessage = {
       id: Date.now(),
-      session_id: activeSessionId,
+      session_id: sessionId,
       role: "user",
       content: userText,
       created_at: new Date().toISOString(),
@@ -346,10 +349,10 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
 
     try {
       await axios.post(
-        `${API_BASE}/chat/session/${activeSessionId}/message`,
+        `${API_BASE}/chat/session/${sessionId}/message`,
         { content, temperature: tuningParams?.temperature, max_tokens: tuningParams?.maxTokens }
       );
-      await loadMessages(activeSessionId);
+      await loadMessages(sessionId);
       // Refresh sessions to pick up auto-title
       await loadSessions();
     } catch {
@@ -357,7 +360,7 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
         ...prev,
         {
           id: Date.now() + 1,
-          session_id: activeSessionId,
+          session_id: sessionId,
           role: "assistant",
           content: "(Failed to get response. Is the backend running?)",
           created_at: new Date().toISOString(),
@@ -365,6 +368,7 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
       ]);
     } finally {
       setSending(false);
+      sendingRef.current = false;
     }
   }
 

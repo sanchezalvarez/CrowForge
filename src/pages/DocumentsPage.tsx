@@ -278,6 +278,8 @@ export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPagePr
   }
 
   useEffect(() => {
+    // Cancel any pending debounced save from the previous document
+    if (saveTimer.current) { clearTimeout(saveTimer.current); saveTimer.current = null; }
     if (!editor) return;
     setSelection(null);
     if (activeDoc) {
@@ -768,7 +770,7 @@ export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPagePr
                     )
                   );
                 }}
-                onBlur={() => updateTitle(activeDoc.id, activeDoc.title)}
+                onBlur={(e) => updateTitle(activeDoc.id, e.target.value)}
                 className="flex-1 text-sm font-medium bg-transparent border-none outline-none text-foreground placeholder:text-muted-foreground"
                 placeholder="Untitled document"
               />

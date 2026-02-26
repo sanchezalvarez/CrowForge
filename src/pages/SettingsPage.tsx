@@ -221,6 +221,9 @@ export function SettingsPage({ theme, setTheme, baseColor, setBaseColor }: Setti
   useEffect(() => {
     axios.get(`${API_BASE}/settings/ai`).then((r) => setConfig(r.data)).catch(() => {});
     refreshModels();
+    return () => {
+      if (reinitPollRef.current) { clearInterval(reinitPollRef.current); reinitPollRef.current = null; }
+    };
   }, []);
 
   useEffect(() => {
@@ -258,12 +261,14 @@ export function SettingsPage({ theme, setTheme, baseColor, setBaseColor }: Setti
             clearInterval(reinitPollRef.current!);
             reinitPollRef.current = null;
             setReinitStatus("done");
+            setSaving(false);
             toast(`Settings applied — engine: ${r.data.active_engine}`, "success");
             setTimeout(() => setReinitStatus("idle"), 2500);
           } else if (r.data.status === "error") {
             clearInterval(reinitPollRef.current!);
             reinitPollRef.current = null;
             setReinitStatus("error");
+            setSaving(false);
             setReinitError(r.data.error ?? "Unknown error");
           }
         } catch { /* backend might be briefly busy */ }
@@ -271,7 +276,6 @@ export function SettingsPage({ theme, setTheme, baseColor, setBaseColor }: Setti
     } catch {
       toast("Failed to save settings", "error");
       setReinitStatus("idle");
-    } finally {
       setSaving(false);
     }
   }

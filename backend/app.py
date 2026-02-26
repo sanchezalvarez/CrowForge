@@ -267,12 +267,23 @@ async def get_tuning():
     top_p = app_repo.get_setting("tuning_top_p") or "0.95"
     max_tokens = app_repo.get_setting("tuning_max_tokens") or "1024"
     seed = app_repo.get_setting("tuning_seed")
-    return {
-        "temperature": float(temp),
-        "topP": float(top_p),
-        "maxTokens": int(max_tokens),
-        "seed": int(seed) if seed else None,
-    }
+    try:
+        t = float(temp)
+    except (ValueError, TypeError):
+        t = 0.7
+    try:
+        tp = float(top_p)
+    except (ValueError, TypeError):
+        tp = 0.95
+    try:
+        mt = int(max_tokens)
+    except (ValueError, TypeError):
+        mt = 1024
+    try:
+        s = int(seed) if seed else None
+    except (ValueError, TypeError):
+        s = None
+    return {"temperature": t, "topP": tp, "maxTokens": mt, "seed": s}
 
 @app.post("/ai/tuning")
 async def set_tuning(data: dict):
@@ -596,7 +607,12 @@ async def get_download_status():
 @app.delete("/ai/models/{filename}")
 async def delete_installed_model(filename: str):
     """Delete an installed GGUF model file from models_dir."""
-    path = os.path.join(LLM_MODELS_DIR, filename)
+    # Path traversal protection
+    if os.sep in filename or "/" in filename or "\\" in filename or filename.startswith("."):
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    path = os.path.realpath(os.path.join(LLM_MODELS_DIR, filename))
+    if not path.startswith(os.path.realpath(LLM_MODELS_DIR)):
+        raise HTTPException(status_code=400, detail="Invalid path")
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="Model not found")
     os.remove(path)
@@ -606,11 +622,16 @@ async def delete_installed_model(filename: str):
 @app.delete("/ai/models/download/{filename}")
 async def cancel_model_download(filename: str):
     """Mark a download as cancelled and delete the partial file from disk."""
+    # Path traversal protection
+    if os.sep in filename or "/" in filename or "\\" in filename or filename.startswith("."):
+        raise HTTPException(status_code=400, detail="Invalid filename")
     state = _download_state.get(filename)
     if state:
         state["running"] = False
         state["error"] = "Cancelled"
-    dest_path = os.path.join(LLM_MODELS_DIR, filename)
+    dest_path = os.path.realpath(os.path.join(LLM_MODELS_DIR, filename))
+    if not dest_path.startswith(os.path.realpath(LLM_MODELS_DIR)):
+        raise HTTPException(status_code=400, detail="Invalid path")
     if os.path.exists(dest_path):
         try:
             os.remove(dest_path)
@@ -846,7 +867,10 @@ async def upload_chat_file(file: UploadFile = File(...)):
     """Extract text from an uploaded PDF and return it."""
     import pdfplumber
     import io
-    data = await file.read()
+    MAX_UPLOAD = 20 * 1024 * 1024  # 20 MB
+    data = await file.read(MAX_UPLOAD + 1)
+    if len(data) > MAX_UPLOAD:
+        raise HTTPException(status_code=413, detail="File too large (max 20 MB)")
     try:
         with pdfplumber.open(io.BytesIO(data)) as pdf:
             text = "\n\n".join(p.extract_text() or "" for p in pdf.pages)

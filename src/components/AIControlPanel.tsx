@@ -349,7 +349,7 @@ export function AIControlPanel({ showDebug, onShowDebugChange, tuningParams, onT
                     max="8192"
                     step="64"
                     value={tuningParams.maxTokens}
-                    onChange={(e) => onTuningChange({ ...tuningParams, maxTokens: parseInt(e.target.value) })}
+                    onChange={(e) => onTuningChange({ ...tuningParams, maxTokens: parseInt(e.target.value, 10) || 1024 })}
                     className="w-full h-2 accent-primary cursor-pointer"
                   />
                   <p className="text-[10px] text-muted-foreground/60 text-right">64 – 8192</p>
@@ -375,7 +375,8 @@ export function AIControlPanel({ showDebug, onShowDebugChange, tuningParams, onT
                       value={tuningParams.seed !== null ? tuningParams.seed : ""}
                       onChange={(e) => {
                         const val = e.target.value.trim();
-                        onTuningChange({ ...tuningParams, seed: val ? parseInt(val) : null });
+                        const parsed = parseInt(val, 10);
+                        onTuningChange({ ...tuningParams, seed: val && !isNaN(parsed) ? parsed : null });
                       }}
                       className="flex-1 h-7 rounded-md border border-input bg-background px-2 text-xs font-mono text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
                     />

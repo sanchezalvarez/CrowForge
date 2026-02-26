@@ -70,6 +70,7 @@ export function BenchmarkPage() {
   // Tracks IDs of runs from the current in-progress batch (for live highlighting)
   const [currentBatchIds, setCurrentBatchIds] = useState<Set<number>>(new Set());
   const abortRef = useRef(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // Fetch engines, models, and history on mount
   useEffect(() => {
@@ -192,6 +193,7 @@ export function BenchmarkPage() {
     setRunning(true);
     setRunningLabel(null);
     abortRef.current = false;
+    abortControllerRef.current = new AbortController();
 
     const engineList = Array.from(selectedEngines);
     const modelList = Array.from(selectedModels);
@@ -226,7 +228,8 @@ export function BenchmarkPage() {
             models: job.models,
             temperature,
             max_tokens: maxTokens,
-          }
+          },
+          { signal: abortControllerRef.current?.signal }
         );
         const newRuns = (res.data.runs || []).map(normalizeRun);
         for (const r of newRuns) {
@@ -238,13 +241,18 @@ export function BenchmarkPage() {
         setRuns((prev) => [...newRuns, ...prev]);
         completed++;
       } catch (err: any) {
+        if (axios.isCancel(err) || err?.name === "CanceledError" || err?.code === "ERR_CANCELED") {
+          break; // cancelled by user — stop cleanly
+        }
         failed++;
         toast(`${job.label}: ${err?.response?.data?.detail || "Request failed"}`, "error");
         completed++;
       }
     }
 
-    if (failed > 0) {
+    if (abortRef.current) {
+      toast(`Benchmark cancelled after ${completed} of ${jobs.length} run(s)`, "error");
+    } else if (failed > 0) {
       toast(`Benchmark done: ${failed} of ${jobs.length} had errors`, "error");
     } else {
       toast(`Benchmark complete: ${jobs.length} run(s)`, "success");
@@ -252,6 +260,7 @@ export function BenchmarkPage() {
 
     setRunning(false);
     setRunningLabel(null);
+    abortControllerRef.current = null;
     // Keep batch IDs so the reset button stays visible (highlight fades via CSS)
   };
 
@@ -449,7 +458,7 @@ export function BenchmarkPage() {
                 {running && (
                   <Button
                     variant="outline"
-                    onClick={() => { abortRef.current = true; }}
+                    onClick={() => { abortRef.current = true; abortControllerRef.current?.abort(); }}
                   >
                     <XCircle className="mr-2 h-4 w-4" />
                     Cancel

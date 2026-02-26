@@ -289,19 +289,20 @@ class SheetRepository:
         )
 
     def create(self, title: str = "Untitled Sheet", columns: List[SheetColumn] = None,
-               rows: List[List[str]] = None, formulas: dict = None) -> Sheet:
+               rows: List[List[str]] = None, formulas: dict = None, formats: dict = None) -> Sheet:
         from backend.formula import recalculate
         sheet_id = str(uuid.uuid4())
         cols = columns or []
         row_data = rows or []
         form_data = formulas or {}
+        fmt_data = formats or {}
         if form_data:
             recalculate(row_data, form_data)
         with self.db.get_connection() as conn:
             conn.execute(
                 "INSERT INTO sheets (id, title, columns_json, rows_json, formulas_json, sizes_json, alignments_json, formats_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                 (sheet_id, title, json.dumps([c.model_dump() for c in cols]),
-                 json.dumps(row_data), json.dumps(form_data), '{}', '{}', '{}'),
+                 json.dumps(row_data), json.dumps(form_data), '{}', '{}', json.dumps(fmt_data)),
             )
             conn.commit()
         return self.get_by_id(sheet_id)

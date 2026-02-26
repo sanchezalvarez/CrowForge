@@ -168,13 +168,13 @@ class LocalLLAMAEngine(AIEngine):
                 print(f"[LOCAL_LLM] Loaded: {os.path.basename(model_path)} (ctx={n_ctx})")
             except Exception as e:
                 print(f"[AI_ERROR] Local model failed to load: {e}")
+                # Free partially-constructed model if different from old
+                failed_llm = self.llm if self.llm is not old else None
                 self.llm = old
                 if old is not None:
                     self.is_ready = True
-                # Free partially-constructed model if different from old
-                if self.llm is not old and self.llm is not None:
-                    del self.llm
-                    self.llm = old
+                if failed_llm is not None:
+                    del failed_llm
                 raise
 
             # Free old model memory
@@ -247,16 +247,31 @@ class LocalLLAMAEngine(AIEngine):
 
             # Run blocking llama-cpp inference in a thread so we don't
             # starve the asyncio event loop (keeps SSE heartbeats alive).
-            response = await asyncio.to_thread(
-                self.llm.create_chat_completion, **kwargs
-            )
+            queue: asyncio.Queue = asyncio.Queue()
+            loop = asyncio.get_event_loop()
 
-            for chunk in response:
-                delta = chunk["choices"][0].get("delta", {})
-                if "content" in delta:
-                    yield delta["content"]
-                    # Yield control so SSE frames flush promptly
-                    await asyncio.sleep(0)
+            def _run_inference():
+                try:
+                    response = self.llm.create_chat_completion(**kwargs)
+                    for chunk in response:
+                        delta = chunk["choices"][0].get("delta", {})
+                        if "content" in delta:
+                            loop.call_soon_threadsafe(queue.put_nowait, delta["content"])
+                    loop.call_soon_threadsafe(queue.put_nowait, None)  # sentinel
+                except Exception as exc:
+                    loop.call_soon_threadsafe(queue.put_nowait, exc)
+
+            # Start inference thread concurrently, drain chunks as they arrive
+            inference_task = asyncio.get_event_loop().run_in_executor(None, _run_inference)
+            while True:
+                item = await queue.get()
+                if item is None:
+                    break
+                if isinstance(item, Exception):
+                    raise item
+                yield item
+                await asyncio.sleep(0)
+            await inference_task  # ensure thread completed
         # WinError 10054: client closed connection — harmless on Windows
         except ConnectionResetError as e:
             if getattr(e, 'winerror', None) == 10054:

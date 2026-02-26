@@ -1046,7 +1046,7 @@ async def ai_generate_schema(req: dict):
 
 @app.post("/sheets", response_model=Sheet)
 async def create_sheet(req: SheetCreate):
-    return sheet_repo.create(title=req.title, columns=req.columns, rows=req.rows if req.rows else None)
+    return sheet_repo.create(title=req.title, columns=req.columns, rows=req.rows if req.rows else None, formats=req.formats if req.formats else None)
 
 @app.get("/sheets", response_model=List[Sheet])
 async def list_sheets():

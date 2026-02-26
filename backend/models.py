@@ -82,6 +82,7 @@ class SheetCreate(BaseModel):
     title: str = "Untitled Sheet"
     columns: List[SheetColumn] = Field(default_factory=list)
     rows: List[List[str]] = Field(default_factory=list)
+    formats: dict = Field(default_factory=dict)
 
 class SheetAddColumn(BaseModel):
     name: str

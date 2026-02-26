@@ -11,6 +11,7 @@ export interface Toast {
 let toasts: Toast[] = [];
 let nextId = 0;
 const listeners = new Set<() => void>();
+const timers = new Map<number, ReturnType<typeof setTimeout>>();
 
 function emit() {
   listeners.forEach((l) => l());
@@ -26,13 +27,16 @@ export function toast(message: string, variant: ToastVariant = "success") {
     toasts = toasts.slice(-MAX_TOASTS);
   }
   emit();
-  setTimeout(() => {
+  timers.set(id, setTimeout(() => {
+    timers.delete(id);
     toasts = toasts.filter((t) => t.id !== id);
     emit();
-  }, 3500);
+  }, 3500));
 }
 
 export function dismissToast(id: number) {
+  const timer = timers.get(id);
+  if (timer) { clearTimeout(timer); timers.delete(id); }
   toasts = toasts.filter((t) => t.id !== id);
   emit();
 }

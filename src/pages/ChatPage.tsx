@@ -7,7 +7,6 @@ import { oneDark, oneLight } from "react-syntax-highlighter/dist/esm/styles/pris
 import {
   PlusCircle, Send, Trash2, MessageSquare, Loader2, FileText,
   Paperclip, X, Copy, Check, Info, Upload,
-  User, Smile, Star, Zap, Heart, Coffee, Code2, Flame, Moon, Sun, Ghost, Bot,
 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Textarea } from "../components/ui/textarea";
@@ -43,20 +42,20 @@ const MODE_DESCRIPTIONS: Record<string, string> = {
   brainstorm: "Creative ideation partner — generates ideas and explores possibilities.",
 };
 
-// 12 predefined user avatars (Lucide icon + bg color)
+// 12 predefined user avatars — cute animals
 const USER_AVATARS = [
-  { icon: User,   color: "bg-blue-500" },
-  { icon: Smile,  color: "bg-purple-500" },
-  { icon: Star,   color: "bg-yellow-500" },
-  { icon: Zap,    color: "bg-orange-500" },
-  { icon: Heart,  color: "bg-pink-500" },
-  { icon: Coffee, color: "bg-amber-700" },
-  { icon: Code2,  color: "bg-green-600" },
-  { icon: Flame,  color: "bg-red-500" },
-  { icon: Moon,   color: "bg-indigo-500" },
-  { icon: Sun,    color: "bg-yellow-400" },
-  { icon: Ghost,  color: "bg-slate-500" },
-  { icon: Bot,    color: "bg-teal-500" },
+  { emoji: "🐱", label: "Cat" },
+  { emoji: "🐶", label: "Dog" },
+  { emoji: "🐰", label: "Rabbit" },
+  { emoji: "🦜", label: "Parrot" },
+  { emoji: "🐟", label: "Fish" },
+  { emoji: "🦊", label: "Fox" },
+  { emoji: "🐢", label: "Turtle" },
+  { emoji: "🐸", label: "Frog" },
+  { emoji: "🐼", label: "Panda" },
+  { emoji: "🦋", label: "Butterfly" },
+  { emoji: "🐧", label: "Penguin" },
+  { emoji: "🦔", label: "Hedgehog" },
 ];
 
 interface ChatSession {
@@ -548,7 +547,7 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
                     <FileText className="h-3.5 w-3.5" /> Connect document
                   </button>
                   {showDocPicker && (
-                    <div className="absolute bottom-full mb-1 left-0 z-50 bg-background border rounded-md shadow-lg min-w-[200px] max-h-[240px] overflow-y-auto">
+                    <div className="absolute top-full mt-1 left-0 z-50 bg-background border rounded-md shadow-lg min-w-[200px] max-h-[240px] overflow-y-auto">
                       {docList.map(doc => (
                         <button
                           key={doc.id}
@@ -596,8 +595,8 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
                         <img src={crowforgeIco} alt="CrowForge" className="w-5 h-5 object-contain" />
                       </div>
                     ) : (
-                      <div className={cn("shrink-0 w-7 h-7 rounded-full flex items-center justify-center", userAvatar.color)}>
-                        <userAvatar.icon className="h-3.5 w-3.5 text-white" />
+                      <div className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-lg leading-none bg-muted">
+                        {userAvatar.emoji}
                       </div>
                     )}
 

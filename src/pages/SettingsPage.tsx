@@ -1,24 +1,24 @@
 import { useState, useEffect, useRef } from "react";
 import axios from "axios";
-import { Download, CheckCircle2, Loader2, X, AlertCircle, User, Smile, Star, Zap, Heart, Coffee, Code2, Flame, Moon, Sun, Ghost, Bot, Trash2 } from "lucide-react";
+import { Download, CheckCircle2, Loader2, X, AlertCircle, Trash2 } from "lucide-react";
 import { toast } from "../hooks/useToast";
 import { openUrl } from "@tauri-apps/plugin-opener";
 
 const API_BASE = "http://127.0.0.1:8000";
 
 const USER_AVATARS = [
-  { icon: User,   color: "bg-blue-500" },
-  { icon: Smile,  color: "bg-purple-500" },
-  { icon: Star,   color: "bg-yellow-500" },
-  { icon: Zap,    color: "bg-orange-500" },
-  { icon: Heart,  color: "bg-pink-500" },
-  { icon: Coffee, color: "bg-amber-700" },
-  { icon: Code2,  color: "bg-green-600" },
-  { icon: Flame,  color: "bg-red-500" },
-  { icon: Moon,   color: "bg-indigo-500" },
-  { icon: Sun,    color: "bg-yellow-400" },
-  { icon: Ghost,  color: "bg-slate-500" },
-  { icon: Bot,    color: "bg-teal-500" },
+  { emoji: "🐱", label: "Cat" },
+  { emoji: "🐶", label: "Dog" },
+  { emoji: "🐰", label: "Rabbit" },
+  { emoji: "🦜", label: "Parrot" },
+  { emoji: "🐟", label: "Fish" },
+  { emoji: "🦊", label: "Fox" },
+  { emoji: "🐢", label: "Turtle" },
+  { emoji: "🐸", label: "Frog" },
+  { emoji: "🐼", label: "Panda" },
+  { emoji: "🦋", label: "Butterfly" },
+  { emoji: "🐧", label: "Penguin" },
+  { emoji: "🦔", label: "Hedgehog" },
 ];
 
 type EngineType = "mock" | "http" | "local";
@@ -538,12 +538,12 @@ export function SettingsPage({ theme, setTheme, baseColor, setBaseColor }: Setti
                     <button
                       key={i}
                       onClick={() => selectAvatar(i)}
-                      className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${av.color} ${
+                      className={`w-10 h-10 rounded-full flex items-center justify-center transition-all text-2xl bg-muted hover:bg-muted/80 ${
                         avatarIndex === i ? "ring-2 ring-offset-2 ring-primary" : "opacity-70 hover:opacity-100"
                       }`}
-                      title={`Avatar ${i + 1}`}
+                      title={av.label}
                     >
-                      <av.icon className="h-5 w-5 text-white" />
+                      {av.emoji}
                     </button>
                   ))}
                 </div>

@@ -12,7 +12,7 @@ Built with **Tauri v2** · **React 19 / TypeScript** · **Python FastAPI** · **
 
 | Platform | Installer |
 |----------|-----------|
-| Windows x64 | [CrowForge_0.1.0_x64-setup.exe](http://sanchez.sk/tools/CrowForge_0.1.0_x64-setup.exe) |
+| Windows x64 | [CrowForge_0.1.0_x64-setup.exe](https://sanchez.sk/tools/CrowForge_0.1.0_x64-setup.exe) |
 
 ---
 

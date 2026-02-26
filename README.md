@@ -8,12 +8,6 @@ Built with **Tauri v2** · **React 19 / TypeScript** · **Python FastAPI** · **
 
 > **🚧 Early Access** — CrowForge is actively being developed. Things may break, features are still being added, and the project is evolving fast. Feedback, issues, and contributions are very welcome!
 
-## Download
-
-| Platform | Installer |
-|----------|-----------|
-| Windows x64 | [CrowForge_0.1.0_x64-setup.exe](http://sanchez.sk/tools/CrowForge_0.1.0_x64-setup.exe) |
-
 ---
 
 ## Screenshots

@@ -6,6 +6,8 @@ Bring your own model: connect a local GGUF file, any OpenAI-compatible API (Open
 
 Built with **Tauri v2** · **React 19 / TypeScript** · **Python FastAPI** · **SQLite**
 
+> **🚧 Early Access** — CrowForge is actively being developed. Things may break, features are still being added, and the project is evolving fast. Feedback, issues, and contributions are very welcome!
+
 ---
 
 ## Screenshots
@@ -237,4 +239,4 @@ All frontend ↔ backend communication is HTTP/SSE — no Tauri IPC is used for 
 
 ## License
 
-Private — all rights reserved.
+MIT — see [LICENSE](LICENSE) for details.

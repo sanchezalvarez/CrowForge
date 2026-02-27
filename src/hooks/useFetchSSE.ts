@@ -36,6 +36,26 @@ export function useFetchSSE() {
 
         const decoder = new TextDecoder();
         let buffer = "";
+        // SSE spec: multi-line data fields are joined with "\n",
+        // events are delimited by blank lines.
+        let dataLines: string[] = [];
+
+        function dispatchEvent(callbacks: FetchSSECallbacks): "done" | "error" | "token" | null {
+          if (dataLines.length === 0) return null;
+          const payload = dataLines.join("\n");
+          dataLines = [];
+
+          if (payload === "[DONE]") {
+            callbacks.onDone();
+            return "done";
+          }
+          if (payload.startsWith("[ERROR]")) {
+            callbacks.onError(payload.slice(8));
+            return "error";
+          }
+          callbacks.onToken(payload);
+          return "token";
+        }
 
         while (true) {
           const { done, value } = await reader.read();
@@ -46,22 +66,26 @@ export function useFetchSSE() {
           buffer = lines.pop() ?? "";
 
           for (const line of lines) {
-            const trimmed = line.trim();
-            if (!trimmed || !trimmed.startsWith("data:")) continue;
-            const payload = trimmed.slice(5).trim();
-            if (!payload) continue;
+            const stripped = line.replace(/\r$/, "");
 
-            if (payload === "[DONE]") {
-              callbacks.onDone();
-              return;
+            // Blank line = end of SSE event
+            if (stripped === "") {
+              const result = dispatchEvent(callbacks);
+              if (result === "done" || result === "error") return;
+              continue;
             }
-            if (payload.startsWith("[ERROR]")) {
-              callbacks.onError(payload.slice(8));
-              return;
+
+            if (stripped.startsWith("data:")) {
+              // Per SSE spec: strip exactly one optional space after "data:"
+              const raw = stripped.slice(5);
+              dataLines.push(raw.startsWith(" ") ? raw.slice(1) : raw);
             }
-            callbacks.onToken(payload);
+            // Ignore other SSE fields (event:, id:, retry:)
           }
         }
+
+        // Flush any remaining event
+        dispatchEvent(callbacks);
 
         // Stream ended without [DONE] — treat as done
         callbacks.onDone();

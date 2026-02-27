@@ -652,13 +652,13 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
                   </div>
                 ))}
                 {sending && (
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 min-w-0">
                     <div className="shrink-0 w-7 h-7 rounded-full bg-muted border flex items-center justify-center overflow-hidden">
                       <img src={crowforgeIco} alt="CrowForge" className="w-5 h-5 object-contain" />
                     </div>
-                    <Card className="px-4 py-2.5 bg-muted text-sm max-w-[80%]">
+                    <Card className="px-4 py-2.5 bg-muted text-sm max-w-[80%] min-w-0 overflow-hidden">
                       {isStreaming && streamingContent ? (
-                        <div className="prose prose-sm dark:prose-invert max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
+                        <div className="prose prose-sm dark:prose-invert max-w-none break-words [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
                           <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents as never}>
                             {streamingContent}
                           </ReactMarkdown>

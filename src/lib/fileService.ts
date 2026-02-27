@@ -663,12 +663,23 @@ export async function parseSheetImport(file: File): Promise<ParsedSheetImport> {
   const ext = getFileExt(file);
   const title = getFileStem(file);
   const buf = await file.arrayBuffer();
-  const wb = XLSX.read(buf, {
-    type: "array",
-    cellFormula: true,
-    cellStyles: false,
-    cellDates: true,
-  });
+
+  // For CSV/TSV: detect encoding from BOM, otherwise assume UTF-8.
+  // SheetJS defaults to Latin-1 for text files which breaks Slovak/Polish/Chinese etc.
+  const isCsvLike = ext === "csv" || ext === "tsv";
+  const bytes = new Uint8Array(buf);
+  const hasUtf8Bom = bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf;
+  const hasUtf16LeBom = bytes[0] === 0xff && bytes[1] === 0xfe;
+  const hasUtf16BeBom = bytes[0] === 0xfe && bytes[1] === 0xff;
+
+  let wb: XLSX.WorkBook;
+  if (isCsvLike && !hasUtf8Bom && !hasUtf16LeBom && !hasUtf16BeBom) {
+    // No BOM — decode manually as UTF-8 then hand the string to SheetJS
+    const text = new TextDecoder("utf-8").decode(buf);
+    wb = XLSX.read(text, { type: "string", cellFormula: true, cellStyles: false, cellDates: true });
+  } else {
+    wb = XLSX.read(buf, { type: "array", cellFormula: true, cellStyles: false, cellDates: true });
+  }
 
   const ws = wb.Sheets[wb.SheetNames[0]];
   if (!ws) throw new Error("Workbook contains no sheets.");

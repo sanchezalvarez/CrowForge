@@ -2,6 +2,17 @@
 @plugin "tailwindcss-animate";
 @plugin "@tailwindcss/typography";
 
+/* ── Multilingual fonts ─────────────────────────────────────────────────────
+ * Noto Sans Variable — Latin, Latin-Ext (SK, PL, DE, TR, etc.), Cyrillic, Greek
+ * Noto Sans SC — Simplified Chinese
+ * Loaded as @font-face via index.css / 400.css from fontsource packages.
+ * All subsets use unicode-range so only needed glyphs are downloaded.
+ * ─────────────────────────────────────────────────────────────────────────── */
+@import "@fontsource-variable/noto-sans";
+@import "@fontsource/noto-sans-sc/400.css";
+@import "@fontsource/noto-sans-sc/500.css";
+@import "@fontsource/noto-sans-sc/700.css";
+
 @custom-variant dark (&:is(.dark *));
 
 /*
@@ -146,6 +157,11 @@
  * @theme tells Tailwind v4 about custom utility values.
  * e.g. bg-background → background-color: hsl(var(--background))
  */
+/* Override default Tailwind sans-serif stack with multilingual Noto fonts */
+@theme {
+  --font-sans: "Noto Sans Variable", "Noto Sans SC", ui-sans-serif, system-ui, sans-serif;
+}
+
 @theme inline {
   --color-background: hsl(var(--background));
   --color-foreground: hsl(var(--foreground));

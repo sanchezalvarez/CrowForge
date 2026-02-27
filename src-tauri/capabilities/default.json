@@ -21,6 +21,12 @@
       "allow": [
         { "args": [], "name": "bin/crowforge-backend" }
       ]
+    },
+    {
+      "identifier": "shell:allow-spawn",
+      "allow": [
+        { "args": [], "name": "bin/crowforge-backend" }
+      ]
     }
   ]
 }

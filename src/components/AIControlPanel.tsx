@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import axios from "axios";
-import { Cpu, Sliders, Bug, Loader2, RefreshCw } from "lucide-react";
+import { Cpu, Sliders, Bug, Loader2, RefreshCw, RotateCcw, Terminal } from "lucide-react";
 import { Card, CardContent } from "./ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./ui/tabs";
 import { Separator } from "./ui/separator";
@@ -15,6 +15,11 @@ import {
 import { toast } from "../hooks/useToast";
 
 const API_BASE = "http://127.0.0.1:8000";
+
+/** Check if running inside Tauri (vs plain browser / Vite dev server) */
+function isTauri(): boolean {
+  return typeof window !== "undefined" && !!(window as any).__TAURI__;
+}
 
 export interface TuningParams {
   temperature: number;
@@ -47,6 +52,83 @@ interface LocalModel {
  * Right-side AI control panel with 3 tabs: Engine & Model, Tuning, Debug.
  */
 export function AIControlPanel({ showDebug, onShowDebugChange, tuningParams, onTuningChange }: AIControlPanelProps) {
+  // ── Backend status ────────────────────────────────────────────
+  type BackendStatus = "online" | "offline" | "restarting";
+  const [backendStatus, setBackendStatus] = useState<BackendStatus>("online");
+  const [restartAttempt, setRestartAttempt] = useState(0);
+  const [responseTime, setResponseTime] = useState<number | null>(null);
+  const restartingRef = useRef(false);
+
+  const checkBackend = useCallback(async () => {
+    const t0 = performance.now();
+    try {
+      await axios.get(`${API_BASE}/state`, { timeout: 2000 });
+      setResponseTime(Math.round(performance.now() - t0));
+      setBackendStatus("online");
+      return true;
+    } catch {
+      setResponseTime(null);
+      if (!restartingRef.current) setBackendStatus("offline");
+      return false;
+    }
+  }, []);
+
+  useEffect(() => {
+    checkBackend();
+    const interval = setInterval(checkBackend, 5_000);
+    return () => clearInterval(interval);
+  }, [checkBackend]);
+
+  const handleRestartBackend = useCallback(async () => {
+    setBackendStatus("restarting");
+    restartingRef.current = true;
+    setRestartAttempt(0);
+
+    if (isTauri()) {
+      // Use Tauri IPC to restart the sidecar
+      try {
+        const { invoke } = await import("@tauri-apps/api/core");
+        await invoke("restart_backend");
+      } catch (err: any) {
+        restartingRef.current = false;
+        setBackendStatus("offline");
+        toast(`Restart failed: ${err}`, "error");
+        return;
+      }
+    } else {
+      // Dev mode: just try to hit /shutdown — backend won't come back
+      try {
+        await axios.post(`${API_BASE}/shutdown`, {}, { timeout: 2000 }).catch(() => {});
+      } catch { /* expected */ }
+    }
+
+    // Poll until backend comes back (up to 30s)
+    let attempts = 0;
+    const poll = () => {
+      setTimeout(async () => {
+        attempts++;
+        setRestartAttempt(attempts);
+        const alive = await checkBackend();
+        if (alive) {
+          restartingRef.current = false;
+          setBackendStatus("online");
+          setRestartAttempt(0);
+          toast("Backend restarted", "success");
+          fetchEngines();
+          fetchModels();
+        } else if (attempts < 30) {
+          poll();
+        } else {
+          restartingRef.current = false;
+          setBackendStatus("offline");
+          setRestartAttempt(0);
+          toast("Backend did not come back — check manually", "error");
+        }
+      }, 1000);
+    };
+    poll();
+  }, [checkBackend]);
+
   // ── Engine state ───────────────────────────────────────────────
   const [engines, setEngines] = useState<EngineInfo[]>([]);
   const [activeEngine, setActiveEngine] = useState<string | null>(null);
@@ -148,6 +230,86 @@ export function AIControlPanel({ showDebug, onShowDebugChange, tuningParams, onT
   const activeEngineInfo = engines.find((e) => e.name === activeEngine);
   const showModelSelector = activeEngineInfo?.type === "local";
 
+  // ── Status banner rendering ────────────────────────────────────
+  const renderStatusBanner = () => {
+    if (backendStatus === "online") {
+      return (
+        <div className="rounded-lg border-l-4 border-l-emerald-500 border border-emerald-500/20 bg-emerald-500/5 px-3 py-2.5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="h-2.5 w-2.5 rounded-full bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.4)]" />
+              <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">
+                Backend Online
+              </span>
+            </div>
+            <button
+              onClick={handleRestartBackend}
+              className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+              title="Restart backend"
+            >
+              <RotateCcw size={11} />
+              Restart
+            </button>
+          </div>
+          {responseTime !== null && (
+            <p className="text-[10px] text-emerald-600/70 dark:text-emerald-500/60 mt-1 ml-[18px]">
+              Response: {responseTime}ms
+            </p>
+          )}
+        </div>
+      );
+    }
+
+    if (backendStatus === "restarting") {
+      return (
+        <div className="rounded-lg border-l-4 border-l-amber-500 border border-amber-500/20 bg-amber-500/5 px-3 py-2.5">
+          <div className="flex items-center gap-2">
+            <Loader2 size={14} className="animate-spin text-amber-500" />
+            <span className="text-xs font-semibold text-amber-700 dark:text-amber-400">
+              Restarting backend...
+            </span>
+          </div>
+          <p className="text-[10px] text-amber-600/70 dark:text-amber-500/60 mt-1 ml-[22px]">
+            Attempt {restartAttempt}/30 — waiting for backend to respond
+          </p>
+        </div>
+      );
+    }
+
+    // Offline
+    return (
+      <div className="rounded-lg border-l-4 border-l-red-500 border border-red-500/20 bg-red-500/5 px-3 py-2.5">
+        <div className="flex items-center gap-2">
+          <div className="h-2.5 w-2.5 rounded-full bg-red-500 shadow-[0_0_6px_rgba(239,68,68,0.4)]" />
+          <span className="text-xs font-semibold text-red-700 dark:text-red-400">
+            Backend Offline
+          </span>
+        </div>
+        <div className="mt-2 ml-[18px]">
+          {isTauri() ? (
+            <button
+              onClick={handleRestartBackend}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-red-500 text-white hover:bg-red-600 transition-colors"
+            >
+              <RotateCcw size={12} />
+              Restart Backend
+            </button>
+          ) : (
+            <div className="space-y-1">
+              <p className="text-[11px] text-red-600/80 dark:text-red-400/80">
+                Start the backend manually:
+              </p>
+              <code className="flex items-center gap-1.5 text-[10px] font-mono bg-muted/60 rounded px-2 py-1 text-foreground/80">
+                <Terminal size={10} className="shrink-0 text-muted-foreground" />
+                python -m backend.app
+              </code>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <aside className="w-full lg:w-[280px] shrink-0 border-t lg:border-t-0 lg:border-l bg-background flex flex-col overflow-hidden max-h-[40vh] lg:max-h-none">
       {/* Header */}
@@ -156,11 +318,16 @@ export function AIControlPanel({ showDebug, onShowDebugChange, tuningParams, onT
         <span className="text-xs font-semibold tracking-wide uppercase text-muted-foreground">
           AI Controls
         </span>
-        {isBusy && <Loader2 size={13} className="ml-auto animate-spin text-muted-foreground" />}
+        <div className="ml-auto flex items-center gap-2">
+          {isBusy && <Loader2 size={13} className="animate-spin text-muted-foreground" />}
+        </div>
       </div>
 
       {/* Scrollable content */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {/* Backend Status Banner */}
+        {renderStatusBanner()}
+
         <Tabs defaultValue="engine-model" className="w-full">
           <TabsList className="w-full grid grid-cols-3 h-8">
             <TabsTrigger value="engine-model" className="text-xs px-1.5 gap-1">

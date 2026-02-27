@@ -20,6 +20,36 @@ impl Drop for BackendProcess {
     }
 }
 
+#[tauri::command]
+async fn restart_backend(
+    state: tauri::State<'_, BackendProcess>,
+    app: tauri::AppHandle,
+) -> Result<(), String> {
+    // Kill current process
+    state.kill_inner();
+
+    // Small delay to let the port free up
+    std::thread::sleep(std::time::Duration::from_millis(500));
+
+    // Spawn new sidecar
+    let shell = app.shell();
+    let sidecar_command = shell
+        .sidecar("crowforge-backend")
+        .map_err(|e| format!("Failed to create sidecar command: {}", e))?;
+    let (_rx, child) = sidecar_command
+        .spawn()
+        .map_err(|e| format!("Failed to spawn sidecar: {}", e))?;
+
+    // Store the new child
+    if let Ok(mut guard) = state.0.lock() {
+        *guard = Some(child);
+    } else {
+        return Err("Failed to acquire backend process lock".into());
+    }
+
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -56,7 +86,7 @@ pub fn run() {
                 _ => {}
             }
         })
-        .invoke_handler(tauri::generate_handler![])
+        .invoke_handler(tauri::generate_handler![restart_backend])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

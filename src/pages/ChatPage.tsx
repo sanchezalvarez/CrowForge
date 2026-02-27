@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import axios from "axios";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -8,7 +8,7 @@ import {
   PlusCircle, Send, Trash2, MessageSquare, Loader2, FileText,
   Paperclip, X, Copy, Check, Info, Upload, Square,
 } from "lucide-react";
-import { useFetchSSE } from "../hooks/useFetchSSE";
+import { useChatStream } from "../contexts/ChatStreamContext";
 import { Button } from "../components/ui/button";
 import { Textarea } from "../components/ui/textarea";
 import { ScrollArea } from "../components/ui/scroll-area";
@@ -133,7 +133,6 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
   const [activeSessionId, setActiveSessionId] = useState<number | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
-  const [sending, setSending] = useState(false);
   const [activeMode, setActiveMode] = useState("general");
   const [attachedFile, setAttachedFile] = useState<AttachedFile | null>(null);
   const [uploadingFile, setUploadingFile] = useState(false);
@@ -144,12 +143,13 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
   const [isDragging, setIsDragging] = useState(false);
   const [docList, setDocList] = useState<{ id: string; title: string }[]>([]);
   const [showDocPicker, setShowDocPicker] = useState(false);
-  const [streamingContent, setStreamingContent] = useState("");
-  const [isStreaming, setIsStreaming] = useState(false);
   const docPickerRef = useRef<HTMLDivElement>(null);
 
-  const sendingRef = useRef(false);
-  const { start: startSSE, cancel: cancelSSE } = useFetchSSE();
+  const {
+    streamingSessionId, streamingContent, isStreaming, isSending,
+    sendMessage: contextSendMessage, stopStreaming, onStreamDone, onStreamError,
+  } = useChatStream();
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
@@ -181,12 +181,10 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
     }).catch(() => {});
   }, []);
 
+  // Derive sending state: context is sending AND it's for our active session
+  const sending = isSending && streamingSessionId === activeSessionId;
+
   useEffect(() => {
-    cancelSSE();
-    setStreamingContent("");
-    setIsStreaming(false);
-    setSending(false);
-    sendingRef.current = false;
     if (activeSessionId) {
       loadMessages(activeSessionId);
       const s = sessions.find((s) => s.id === activeSessionId);
@@ -195,6 +193,39 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
       setMessages([]);
     }
   }, [activeSessionId]);
+
+  // Register stream callbacks — reload messages/sessions when stream completes
+  const activeSessionIdRef = useRef(activeSessionId);
+  activeSessionIdRef.current = activeSessionId;
+
+  const handleStreamDone = useCallback(async () => {
+    const sid = activeSessionIdRef.current;
+    if (sid) await loadMessages(sid);
+    await loadSessions();
+  }, []);
+
+  const handleStreamError = useCallback((error: string) => {
+    const sid = activeSessionIdRef.current;
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: Date.now() + 1,
+        session_id: sid ?? 0,
+        role: "assistant",
+        content: `(Error: ${error})`,
+        created_at: new Date().toISOString(),
+      },
+    ]);
+  }, []);
+
+  useEffect(() => {
+    onStreamDone.current = handleStreamDone;
+    onStreamError.current = handleStreamError;
+    return () => {
+      onStreamDone.current = null;
+      onStreamError.current = null;
+    };
+  }, [handleStreamDone, handleStreamError]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -335,15 +366,11 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
     return parts.length > 0 ? parts.join("\n") + "\n\n" : "";
   }
 
-  async function sendMessage() {
-    if (!input.trim() || !activeSessionId || sendingRef.current) return;
+  function sendMessage() {
+    if (!input.trim() || !activeSessionId || isSending) return;
     const userText = input.trim();
     const sessionId = activeSessionId;
     setInput("");
-    setSending(true);
-    setIsStreaming(false);
-    setStreamingContent("");
-    sendingRef.current = true;
 
     const tempUserMsg: ChatMessage = {
       id: Date.now(),
@@ -357,48 +384,12 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
 
     const content = buildContextPrefix() + userText;
 
-    await startSSE(
-      `${API_BASE}/chat/session/${sessionId}/message/stream`,
-      { content, temperature: tuningParams?.temperature, max_tokens: tuningParams?.maxTokens },
-      {
-        onToken: (token) => {
-          setIsStreaming(true);
-          setStreamingContent((prev) => prev + token);
-        },
-        onDone: async () => {
-          setStreamingContent("");
-          setIsStreaming(false);
-          setSending(false);
-          sendingRef.current = false;
-          await loadMessages(sessionId);
-          await loadSessions();
-        },
-        onError: (error) => {
-          setStreamingContent("");
-          setIsStreaming(false);
-          setSending(false);
-          sendingRef.current = false;
-          setMessages((prev) => [
-            ...prev,
-            {
-              id: Date.now() + 1,
-              session_id: sessionId,
-              role: "assistant",
-              content: `(Error: ${error})`,
-              created_at: new Date().toISOString(),
-            },
-          ]);
-        },
-      }
-    );
-  }
-
-  function stopStreaming() {
-    cancelSSE();
-    setStreamingContent("");
-    setIsStreaming(false);
-    setSending(false);
-    sendingRef.current = false;
+    contextSendMessage({
+      sessionId,
+      content,
+      temperature: tuningParams?.temperature,
+      maxTokens: tuningParams?.maxTokens,
+    });
   }
 
   function handleKeyDown(e: React.KeyboardEvent) {

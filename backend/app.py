@@ -891,6 +891,7 @@ async def stream_chat_message(session_id: int, req: ChatMessageRequest, request:
 
     async def event_generator():
         full_response = ""
+        saved = False
         try:
             async for chunk in engine_manager.get_active().generate_stream(
                 system_prompt, user_prompt,
@@ -898,16 +899,21 @@ async def stream_chat_message(session_id: int, req: ChatMessageRequest, request:
                 json_mode=False,
             ):
                 if await request.is_disconnected():
-                    return
+                    break
                 full_response += chunk
                 yield {"data": chunk}
-        except Exception as e:
-            yield {"data": f"[ERROR] {e}"}
-            return
 
-        assistant_text = full_response.strip() or "(No response generated)"
-        chat_message_repo.create(session_id, "assistant", assistant_text)
-        yield {"data": "[DONE]"}
+            assistant_text = full_response.strip() or "(No response generated)"
+            chat_message_repo.create(session_id, "assistant", assistant_text)
+            saved = True
+            yield {"data": "[DONE]"}
+        except Exception as e:
+            saved = True  # don't double-save on error
+            yield {"data": f"[ERROR] {e}"}
+        finally:
+            # Save partial response on client disconnect (navigation away)
+            if not saved and full_response.strip():
+                chat_message_repo.create(session_id, "assistant", full_response.strip())
 
     return EventSourceResponse(event_generator())
 

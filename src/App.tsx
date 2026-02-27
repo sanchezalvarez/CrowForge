@@ -21,6 +21,7 @@ import { SplashScreen } from "./components/SplashScreen";
 import { OnboardingPage } from "./pages/OnboardingPage";
 import { Toaster } from "./components/ui/toaster";
 import { AIControlPanel, TuningParams } from "./components/AIControlPanel";
+import { ChatStreamProvider } from "./contexts/ChatStreamContext";
 
 const API_BASE = "http://127.0.0.1:8000";
 
@@ -197,6 +198,7 @@ export default function App() {
   if (appStatus === "onboarding") return <OnboardingPage onComplete={() => setAppStatus("ready")} />;
 
   return (
+    <ChatStreamProvider>
     <div className="flex h-screen w-full overflow-hidden bg-muted/40 text-foreground font-sans antialiased">
       {/* SIDEBAR */}
       <aside className="hidden lg:flex w-[220px] shrink-0 flex-col border-r bg-background">
@@ -285,5 +287,6 @@ export default function App() {
         </div>
       )}
     </div>
+    </ChatStreamProvider>
   );
 }

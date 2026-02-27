@@ -862,6 +862,56 @@ async def send_chat_message(session_id: int, req: ChatMessageRequest):
     return assistant_msg
 
 
+@app.post("/chat/session/{session_id}/message/stream")
+async def stream_chat_message(session_id: int, req: ChatMessageRequest, request: Request):
+    session = chat_session_repo.get_by_id(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Chat session not found")
+
+    # Auto-title on first message
+    if session.title == "New Chat":
+        auto_title = req.content.strip()[:40]
+        if auto_title:
+            chat_session_repo.update_title(session_id, auto_title)
+
+    # Store user message
+    chat_message_repo.create(session_id, "user", req.content)
+
+    # Build context from history
+    history = chat_message_repo.get_by_session_id(session_id)
+    context_parts = []
+    for msg in history:
+        prefix = "User" if msg.role == "user" else "Assistant"
+        context_parts.append(f"{prefix}: {msg.content}")
+    user_prompt = "\n".join(context_parts)
+
+    system_prompt = CHAT_MODES.get(session.mode, CHAT_MODES["general"])
+    temperature = req.temperature if req.temperature is not None else 0.7
+    max_tokens = req.max_tokens if req.max_tokens is not None else 1024
+
+    async def event_generator():
+        full_response = ""
+        try:
+            async for chunk in engine_manager.get_active().generate_stream(
+                system_prompt, user_prompt,
+                temperature=temperature, max_tokens=max_tokens,
+                json_mode=False,
+            ):
+                if await request.is_disconnected():
+                    return
+                full_response += chunk
+                yield {"data": chunk}
+        except Exception as e:
+            yield {"data": f"[ERROR] {e}"}
+            return
+
+        assistant_text = full_response.strip() or "(No response generated)"
+        chat_message_repo.create(session_id, "assistant", assistant_text)
+        yield {"data": "[DONE]"}
+
+    return EventSourceResponse(event_generator())
+
+
 @app.post("/chat/upload")
 async def upload_chat_file(file: UploadFile = File(...)):
     """Extract text from an uploaded PDF and return it."""

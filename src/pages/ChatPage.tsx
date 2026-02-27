@@ -6,8 +6,9 @@ import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark, oneLight } from "react-syntax-highlighter/dist/esm/styles/prism";
 import {
   PlusCircle, Send, Trash2, MessageSquare, Loader2, FileText,
-  Paperclip, X, Copy, Check, Info, Upload,
+  Paperclip, X, Copy, Check, Info, Upload, Square,
 } from "lucide-react";
+import { useFetchSSE } from "../hooks/useFetchSSE";
 import { Button } from "../components/ui/button";
 import { Textarea } from "../components/ui/textarea";
 import { ScrollArea } from "../components/ui/scroll-area";
@@ -143,9 +144,12 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
   const [isDragging, setIsDragging] = useState(false);
   const [docList, setDocList] = useState<{ id: string; title: string }[]>([]);
   const [showDocPicker, setShowDocPicker] = useState(false);
+  const [streamingContent, setStreamingContent] = useState("");
+  const [isStreaming, setIsStreaming] = useState(false);
   const docPickerRef = useRef<HTMLDivElement>(null);
 
   const sendingRef = useRef(false);
+  const { start: startSSE, cancel: cancelSSE } = useFetchSSE();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
@@ -178,6 +182,11 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
   }, []);
 
   useEffect(() => {
+    cancelSSE();
+    setStreamingContent("");
+    setIsStreaming(false);
+    setSending(false);
+    sendingRef.current = false;
     if (activeSessionId) {
       loadMessages(activeSessionId);
       const s = sessions.find((s) => s.id === activeSessionId);
@@ -189,7 +198,7 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [messages, streamingContent]);
 
   useEffect(() => {
     if (editingTitle && titleInputRef.current) {
@@ -329,9 +338,11 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
   async function sendMessage() {
     if (!input.trim() || !activeSessionId || sendingRef.current) return;
     const userText = input.trim();
-    const sessionId = activeSessionId; // capture to avoid stale closure
+    const sessionId = activeSessionId;
     setInput("");
     setSending(true);
+    setIsStreaming(false);
+    setStreamingContent("");
     sendingRef.current = true;
 
     const tempUserMsg: ChatMessage = {
@@ -346,29 +357,48 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
 
     const content = buildContextPrefix() + userText;
 
-    try {
-      await axios.post(
-        `${API_BASE}/chat/session/${sessionId}/message`,
-        { content, temperature: tuningParams?.temperature, max_tokens: tuningParams?.maxTokens }
-      );
-      await loadMessages(sessionId);
-      // Refresh sessions to pick up auto-title
-      await loadSessions();
-    } catch {
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: Date.now() + 1,
-          session_id: sessionId,
-          role: "assistant",
-          content: "(Failed to get response. Is the backend running?)",
-          created_at: new Date().toISOString(),
+    await startSSE(
+      `${API_BASE}/chat/session/${sessionId}/message/stream`,
+      { content, temperature: tuningParams?.temperature, max_tokens: tuningParams?.maxTokens },
+      {
+        onToken: (token) => {
+          setIsStreaming(true);
+          setStreamingContent((prev) => prev + token);
         },
-      ]);
-    } finally {
-      setSending(false);
-      sendingRef.current = false;
-    }
+        onDone: async () => {
+          setStreamingContent("");
+          setIsStreaming(false);
+          setSending(false);
+          sendingRef.current = false;
+          await loadMessages(sessionId);
+          await loadSessions();
+        },
+        onError: (error) => {
+          setStreamingContent("");
+          setIsStreaming(false);
+          setSending(false);
+          sendingRef.current = false;
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: Date.now() + 1,
+              session_id: sessionId,
+              role: "assistant",
+              content: `(Error: ${error})`,
+              created_at: new Date().toISOString(),
+            },
+          ]);
+        },
+      }
+    );
+  }
+
+  function stopStreaming() {
+    cancelSSE();
+    setStreamingContent("");
+    setIsStreaming(false);
+    setSending(false);
+    sendingRef.current = false;
   }
 
   function handleKeyDown(e: React.KeyboardEvent) {
@@ -626,8 +656,16 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
                     <div className="shrink-0 w-7 h-7 rounded-full bg-muted border flex items-center justify-center overflow-hidden">
                       <img src={crowforgeIco} alt="CrowForge" className="w-5 h-5 object-contain" />
                     </div>
-                    <Card className="px-4 py-2.5 bg-muted text-sm">
-                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                    <Card className="px-4 py-2.5 bg-muted text-sm max-w-[80%]">
+                      {isStreaming && streamingContent ? (
+                        <div className="prose prose-sm dark:prose-invert max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
+                          <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents as never}>
+                            {streamingContent}
+                          </ReactMarkdown>
+                        </div>
+                      ) : (
+                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                      )}
                     </Card>
                   </div>
                 )}
@@ -682,14 +720,25 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
                     rows={1}
                     disabled={sending}
                   />
-                  <Button
-                    onClick={sendMessage}
-                    disabled={!input.trim() || sending}
-                    size="icon"
-                    className="shrink-0 h-[44px] w-[44px]"
-                  >
-                    <Send className="h-4 w-4" />
-                  </Button>
+                  {sending ? (
+                    <Button
+                      onClick={stopStreaming}
+                      variant="destructive"
+                      size="icon"
+                      className="shrink-0 h-[44px] w-[44px]"
+                    >
+                      <Square className="h-4 w-4" />
+                    </Button>
+                  ) : (
+                    <Button
+                      onClick={sendMessage}
+                      disabled={!input.trim()}
+                      size="icon"
+                      className="shrink-0 h-[44px] w-[44px]"
+                    >
+                      <Send className="h-4 w-4" />
+                    </Button>
+                  )}
                 </div>
               </div>
             </div>

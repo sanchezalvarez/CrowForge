@@ -168,6 +168,7 @@ export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPagePr
   const [wordCount, setWordCount] = useState({ words: 0, chars: 0 });
   const pendingRange = useRef<{ from: number; to: number } | null>(null);
   const pendingOriginalText = useRef<string | null>(null);
+  const pendingDocId = useRef<string | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeDoc = documents.find((d) => d.id === activeDocId) ?? null;
 
@@ -286,6 +287,12 @@ export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPagePr
   useEffect(() => {
     // Cancel any pending debounced save from the previous document
     if (saveTimer.current) { clearTimeout(saveTimer.current); saveTimer.current = null; }
+    // Dismiss any AI suggestions from the previous document
+    setAiBlocks([]);
+    setAiError(null);
+    pendingRange.current = null;
+    pendingOriginalText.current = null;
+    pendingDocId.current = null;
     if (!editor) return;
     setSelection(null);
     if (activeDoc) {
@@ -416,6 +423,7 @@ export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPagePr
     if (!selection) return;
     pendingRange.current = { from: selection.from, to: selection.to };
     pendingOriginalText.current = selection.text;
+    pendingDocId.current = activeDocId;
     setAiLoading(true);
     setAiBlocks([]);
     setAiError(null);
@@ -435,17 +443,20 @@ export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPagePr
           setAiError("AI returned empty response. No changes were made.");
           pendingRange.current = null;
           pendingOriginalText.current = null;
+          pendingDocId.current = null;
         }
       } else {
         setAiError("AI returned empty response. No changes were made.");
         pendingRange.current = null;
         pendingOriginalText.current = null;
+        pendingDocId.current = null;
       }
     } catch {
       setAiError("AI request failed. No changes were made.");
       setAiBlocks([]);
       pendingRange.current = null;
       pendingOriginalText.current = null;
+      pendingDocId.current = null;
     } finally {
       setAiLoading(false);
       fetchActiveEngine();
@@ -454,7 +465,11 @@ export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPagePr
 
   function insertBlock(block: SuggestionBlock) {
     if (!editor || !pendingRange.current) return;
-    const { from, to } = pendingRange.current;
+    // Guard: don't insert into a different document than where AI action was triggered
+    if (pendingDocId.current !== activeDocId) { dismissSuggestions(); return; }
+    const docSize = editor.state.doc.content.size;
+    const from = Math.min(pendingRange.current.from, docSize);
+    const to = Math.min(pendingRange.current.to, docSize);
 
     const parsed = htmlToFragment(editor.state.schema, block.html);
     const nodes: import("@tiptap/pm/model").Node[] = [];
@@ -484,7 +499,10 @@ export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPagePr
 
   function insertAll() {
     if (!editor || !pendingRange.current || aiBlocks.length === 0) return;
-    const { from, to } = pendingRange.current;
+    if (pendingDocId.current !== activeDocId) { dismissSuggestions(); return; }
+    const docSize = editor.state.doc.content.size;
+    const from = Math.min(pendingRange.current.from, docSize);
+    const to = Math.min(pendingRange.current.to, docSize);
 
     const fullHtml = aiBlocks.map((b) => b.html).join("");
     const parsed = htmlToFragment(editor.state.schema, fullHtml);
@@ -507,6 +525,7 @@ export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPagePr
     setAiError(null);
     pendingRange.current = null;
     pendingOriginalText.current = null;
+    pendingDocId.current = null;
   }
 
   function dismissSuggestions() {
@@ -514,6 +533,7 @@ export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPagePr
     setAiError(null);
     pendingRange.current = null;
     pendingOriginalText.current = null;
+    pendingDocId.current = null;
   }
 
   // ---- Import ----

@@ -955,6 +955,8 @@ async def get_document(doc_id: str):
 
 @app.put("/documents/{doc_id}", response_model=Document)
 async def update_document(doc_id: str, req: DocumentUpdate):
+    if req.title is None and req.content_json is None:
+        raise HTTPException(status_code=400, detail="At least one of title or content_json must be provided")
     doc = document_repo.get_by_id(doc_id)
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")

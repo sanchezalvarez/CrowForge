@@ -139,7 +139,7 @@ const GALLERY_MODELS: GalleryModel[] = [
 
 const ALL_TAGS = ["all", "chat", "translate", "multilingual", "coding", "reasoning", "math", "fast", "general"];
 
-type Section = "ai" | "models" | "appearance" | "about";
+type Section = "ai" | "models" | "appearance" | "user" | "about";
 
 interface DownloadState {
   progress: number;
@@ -168,11 +168,27 @@ export function SettingsPage({ theme, setTheme, baseColor, setBaseColor }: Setti
   const [avatarIndex, setAvatarIndex] = useState(() =>
     parseInt(localStorage.getItem("user_avatar_index") ?? "0", 10)
   );
+  const [confirmDelete, setConfirmDelete] = useState<"chat" | "documents" | "sheets" | "all" | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   function selectAvatar(index: number) {
     setAvatarIndex(index);
     localStorage.setItem("user_avatar_index", String(index));
     window.dispatchEvent(new Event("avatarchange"));
+  }
+
+  async function deleteData(target: "chat" | "documents" | "sheets" | "all") {
+    setDeleting(true);
+    try {
+      await axios.delete(`${API_BASE}/data/${target}`);
+      const labels: Record<string, string> = { chat: "Chat", documents: "Documents", sheets: "Sheets", all: "All data" };
+      toast(`${labels[target]} deleted.`);
+    } catch {
+      toast("Failed to delete data.", "error");
+    } finally {
+      setDeleting(false);
+      setConfirmDelete(null);
+    }
   }
   const [config, setConfig] = useState<AIConfig>({
     enable_llm: false,
@@ -310,6 +326,7 @@ export function SettingsPage({ theme, setTheme, baseColor, setBaseColor }: Setti
     { id: "ai", label: "AI Configuration" },
     { id: "models", label: "Model Gallery" },
     { id: "appearance", label: "Appearance" },
+    { id: "user", label: "User Settings" },
     { id: "about", label: "About" },
   ];
 
@@ -676,6 +693,95 @@ export function SettingsPage({ theme, setTheme, baseColor, setBaseColor }: Setti
               })}
             </div>
           </>
+        )}
+
+        {section === "user" && (
+          <div className="space-y-6 max-w-lg">
+            <div>
+              <h2 className="text-lg font-semibold">User Settings</h2>
+              <p className="text-sm text-muted-foreground mt-1">Manage your data and preferences.</p>
+            </div>
+
+            {/* Data Management */}
+            <div className="space-y-3">
+              <h3 className="text-sm font-medium">Data Management</h3>
+              <p className="text-xs text-muted-foreground">Permanently delete stored data. This cannot be undone.</p>
+
+              {/* Per-module rows */}
+              {([
+                { key: "chat" as const, label: "Chat history", description: "All chat sessions and messages" },
+                { key: "documents" as const, label: "Documents", description: "All documents and their content" },
+                { key: "sheets" as const, label: "Sheets", description: "All spreadsheets and their data" },
+              ]).map(({ key, label, description }) => (
+                <div key={key} className="flex items-center justify-between rounded-lg border border-border bg-muted/20 px-4 py-3">
+                  <div>
+                    <p className="text-sm font-medium">{label}</p>
+                    <p className="text-xs text-muted-foreground">{description}</p>
+                  </div>
+                  <button
+                    onClick={() => setConfirmDelete(key)}
+                    className="text-xs px-3 py-1.5 rounded-md border border-destructive/40 text-destructive hover:bg-destructive/10 transition-colors shrink-0"
+                  >
+                    <Trash2 className="h-3 w-3 inline mr-1" />
+                    Delete
+                  </button>
+                </div>
+              ))}
+
+              {/* Delete everything */}
+              <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-destructive">Delete everything</p>
+                  <p className="text-xs text-muted-foreground">Wipe all chat, documents and sheets</p>
+                </div>
+                <button
+                  onClick={() => setConfirmDelete("all")}
+                  className="text-xs px-3 py-1.5 rounded-md bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors shrink-0"
+                >
+                  <Trash2 className="h-3 w-3 inline mr-1" />
+                  Delete all
+                </button>
+              </div>
+            </div>
+
+            {/* Confirm dialog */}
+            {confirmDelete && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => !deleting && setConfirmDelete(null)}>
+                <div className="bg-background border border-border rounded-lg shadow-xl w-[360px] p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-start gap-3">
+                    <div className="h-9 w-9 rounded-full bg-destructive/10 flex items-center justify-center shrink-0">
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-sm">
+                        {confirmDelete === "all" ? "Delete all data?" : `Delete ${confirmDelete} data?`}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        This will permanently remove {confirmDelete === "all" ? "all chats, documents and sheets" : `all ${confirmDelete}`}. This action cannot be undone.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <button
+                      onClick={() => setConfirmDelete(null)}
+                      disabled={deleting}
+                      className="text-xs px-3 py-1.5 rounded-md border border-border hover:bg-muted transition-colors disabled:opacity-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => deleteData(confirmDelete)}
+                      disabled={deleting}
+                      className="text-xs px-3 py-1.5 rounded-md bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                    >
+                      {deleting && <Loader2 className="h-3 w-3 animate-spin" />}
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         )}
 
         {section === "about" && (

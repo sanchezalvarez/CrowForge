@@ -163,6 +163,14 @@ class ChatSessionRepository:
             conn.execute("DELETE FROM chat_sessions WHERE id = ?", (session_id,))
             conn.commit()
 
+    def delete_all(self) -> int:
+        with self.db.get_connection() as conn:
+            cur = conn.execute("SELECT COUNT(*) FROM chat_sessions")
+            count = cur.fetchone()[0]
+            conn.execute("DELETE FROM chat_sessions")
+            conn.commit()
+            return count
+
 
 class ChatMessageRepository:
     def __init__(self, db: DatabaseManager):
@@ -280,6 +288,14 @@ class DocumentRepository:
         with self.db.get_connection() as conn:
             conn.execute("DELETE FROM documents WHERE id = ?", (doc_id,))
             conn.commit()
+
+    def delete_all(self) -> int:
+        with self.db.get_connection() as conn:
+            cur = conn.execute("SELECT COUNT(*) FROM documents")
+            count = cur.fetchone()[0]
+            conn.execute("DELETE FROM documents")
+            conn.commit()
+            return count
 
 
 class SheetRepository:
@@ -676,3 +692,11 @@ class SheetRepository:
             conn.execute("DELETE FROM sheets WHERE id = ?", (sheet_id,))
             conn.commit()
             return True
+
+    def delete_all(self) -> int:
+        with self.db.get_connection() as conn:
+            cur = conn.execute("SELECT COUNT(*) FROM sheets")
+            count = cur.fetchone()[0]
+            conn.execute("DELETE FROM sheets")
+            conn.commit()
+            return count

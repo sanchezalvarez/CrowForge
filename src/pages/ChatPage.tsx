@@ -6,7 +6,7 @@ import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark, oneLight } from "react-syntax-highlighter/dist/esm/styles/prism";
 import {
   PlusCircle, Send, Trash2, MessageSquare, Loader2, FileText,
-  Paperclip, X, Copy, Check, Info, Upload, Square,
+  Paperclip, X, Copy, Check, Info, Upload, Square, Pencil,
 } from "lucide-react";
 import { useChatStream } from "../contexts/ChatStreamContext";
 import { Button } from "../components/ui/button";
@@ -145,6 +145,11 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
   const [docList, setDocList] = useState<{ id: string; title: string }[]>([]);
   const [showDocPicker, setShowDocPicker] = useState(false);
   const docPickerRef = useRef<HTMLDivElement>(null);
+  const [sessionMenu, setSessionMenu] = useState<{ sessionId: number; x: number; y: number } | null>(null);
+  const [sidebarWidth, setSidebarWidth] = useState(220);
+  const sidebarResizing = useRef(false);
+  const sidebarResizeStart = useRef(0);
+  const sidebarWidthStart = useRef(220);
 
   const {
     streamingSessionId, streamingContent, isStreaming, isSending,
@@ -258,6 +263,30 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
     return () => document.removeEventListener("mousedown", onClickOutside);
   }, [showDocPicker]);
 
+  // Close session context menu on outside click
+  useEffect(() => {
+    if (!sessionMenu) return;
+    const close = () => setSessionMenu(null);
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [sessionMenu]);
+
+  // Sidebar resize via mouse drag
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (!sidebarResizing.current) return;
+      const delta = e.clientX - sidebarResizeStart.current;
+      setSidebarWidth(Math.max(160, Math.min(400, sidebarWidthStart.current + delta)));
+    };
+    const onUp = () => { sidebarResizing.current = false; };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+    return () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+    };
+  }, []);
+
   async function loadSessions() {
     try {
       const res = await axios.get(`${API_BASE}/chat/sessions`);
@@ -350,6 +379,20 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
       setAttachedFile({ name: res.data.filename, text: res.data.text });
     } catch { /* ignore */ }
     setUploadingFile(false);
+  }
+
+  /** Strip the context prefix that was prepended before sending to AI.
+   *  The prefix always ends with \n\n before the actual user text.
+   *  Returns { text, hasContext, docTitle } */
+  function parseUserMessage(content: string): { text: string; hasContext: boolean; docTitle: string | null; pdfName: string | null } {
+    if (!content.startsWith("[")) return { text: content, hasContext: false, docTitle: null, pdfName: null };
+    const sep = content.indexOf("\n\n");
+    if (sep === -1) return { text: content, hasContext: false, docTitle: null, pdfName: null };
+    const prefix = content.slice(0, sep);
+    const text = content.slice(sep + 2);
+    const docMatch = prefix.match(/\[Active Document: "([^"]+)"/);
+    const pdfMatch = prefix.match(/\[Attached PDF: ([^\]]+)\]/);
+    return { text, hasContext: true, docTitle: docMatch?.[1] ?? null, pdfName: pdfMatch?.[1] ?? null };
   }
 
   function buildContextPrefix(): string {
@@ -455,7 +498,7 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
   return (
     <div className="flex h-full">
       {/* Sessions sidebar */}
-      <div className="w-[220px] shrink-0 border-r bg-background flex flex-col">
+      <div className="shrink-0 border-r bg-background flex flex-col relative" style={{ width: sidebarWidth }}>
         <div className="p-3 border-b">
           <Button variant="outline" size="sm" className="w-full" onClick={createSession}>
             <PlusCircle className="h-4 w-4 mr-1.5" />
@@ -475,6 +518,7 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
                 )}
                 onClick={() => { if (renamingSessionId !== s.id) setActiveSessionId(s.id); }}
                 onDoubleClick={() => startRenameSession(s.id, s.title)}
+                onContextMenu={(e) => { e.preventDefault(); setSessionMenu({ sessionId: s.id, x: e.clientX, y: e.clientY }); }}
               >
                 <MessageSquare className="h-3.5 w-3.5 shrink-0" />
                 {renamingSessionId === s.id ? (
@@ -493,12 +537,6 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
                 ) : (
                   <span className="flex-1 truncate">{s.title}</span>
                 )}
-                <button
-                  onClick={(e) => { e.stopPropagation(); deleteSession(s.id); }}
-                  className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
               </div>
             ))}
             {sessions.length === 0 && (
@@ -506,7 +544,40 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
             )}
           </div>
         </ScrollArea>
+        {/* Resize handle */}
+        <div
+          className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-primary/40 z-10 transition-colors"
+          onMouseDown={(e) => {
+            e.preventDefault();
+            sidebarResizing.current = true;
+            sidebarResizeStart.current = e.clientX;
+            sidebarWidthStart.current = sidebarWidth;
+          }}
+        />
       </div>
+
+      {/* Session context menu */}
+      {sessionMenu && (
+        <div
+          className="fixed z-50 bg-background border border-border rounded-md shadow-lg py-1 min-w-[150px] text-sm"
+          style={{ left: sessionMenu.x, top: sessionMenu.y }}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <button
+            className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2"
+            onClick={() => { startRenameSession(sessionMenu.sessionId, sessions.find(s => s.id === sessionMenu.sessionId)?.title ?? ""); setSessionMenu(null); }}
+          >
+            <Pencil className="h-3.5 w-3.5 text-muted-foreground" /> Rename
+          </button>
+          <div className="border-t border-border my-1" />
+          <button
+            className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2 text-destructive"
+            onClick={() => { deleteSession(sessionMenu.sessionId); setSessionMenu(null); }}
+          >
+            <Trash2 className="h-3.5 w-3.5" /> Delete
+          </button>
+        </div>
+      )}
 
       {/* Main chat area */}
       <div
@@ -641,13 +712,34 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
                       className={cn(
                         "px-4 py-2.5 max-w-[80%] text-sm",
                         msg.role === "user"
-                          ? "bg-primary text-primary-foreground whitespace-pre-wrap"
+                          ? "bg-primary text-primary-foreground"
                           : "bg-muted"
                       )}
                     >
-                      {msg.role === "user" ? (
-                        msg.content
-                      ) : (
+                      {msg.role === "user" ? (() => {
+                        const { text, docTitle, pdfName } = parseUserMessage(msg.content);
+                        return (
+                          <>
+                            {(docTitle || pdfName) && (
+                              <div className="flex flex-wrap gap-1 mb-1.5 -mt-0.5">
+                                {docTitle && (
+                                  <span className="inline-flex items-center gap-1 text-[10px] bg-primary-foreground/20 text-primary-foreground/80 rounded px-1.5 py-0.5">
+                                    <FileText className="h-2.5 w-2.5" />
+                                    {docTitle}
+                                  </span>
+                                )}
+                                {pdfName && (
+                                  <span className="inline-flex items-center gap-1 text-[10px] bg-primary-foreground/20 text-primary-foreground/80 rounded px-1.5 py-0.5">
+                                    <FileText className="h-2.5 w-2.5" />
+                                    {pdfName}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                            <span className="whitespace-pre-wrap">{text}</span>
+                          </>
+                        );
+                      })() : (
                         <div className="prose prose-sm dark:prose-invert max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
                           <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents as never}>
                             {msg.content}

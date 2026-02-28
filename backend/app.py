@@ -935,6 +935,31 @@ async def upload_chat_file(file: UploadFile = File(...)):
     return {"filename": file.filename, "text": text[:8000]}
 
 
+# ── Data Management ───────────────────────────────────────────────
+
+@app.delete("/data/chat")
+async def delete_all_chat():
+    count = chat_session_repo.delete_all()
+    return {"deleted": count, "module": "chat"}
+
+@app.delete("/data/documents")
+async def delete_all_documents():
+    count = document_repo.delete_all()
+    return {"deleted": count, "module": "documents"}
+
+@app.delete("/data/sheets")
+async def delete_all_sheets():
+    count = sheet_repo.delete_all()
+    return {"deleted": count, "module": "sheets"}
+
+@app.delete("/data/all")
+async def delete_all_data():
+    chat = chat_session_repo.delete_all()
+    docs = document_repo.delete_all()
+    sheets = sheet_repo.delete_all()
+    return {"deleted": {"chat": chat, "documents": docs, "sheets": sheets}}
+
+
 # ── Documents ─────────────────────────────────────────────────────
 
 @app.post("/documents", response_model=Document)

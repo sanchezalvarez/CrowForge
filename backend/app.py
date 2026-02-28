@@ -908,12 +908,12 @@ async def stream_chat_message(session_id: int, req: ChatMessageRequest, request:
             saved = True
             yield {"data": "[DONE]"}
         except Exception as e:
-            saved = True  # don't double-save on error
             yield {"data": f"[ERROR] {e}"}
         finally:
-            # Save partial response on client disconnect (navigation away)
+            # Save partial response on client disconnect or error (if not already saved)
             if not saved and full_response.strip():
                 chat_message_repo.create(session_id, "assistant", full_response.strip())
+                saved = True
 
     return EventSourceResponse(event_generator())
 
@@ -950,6 +950,7 @@ async def get_document(doc_id: str):
     doc = document_repo.get_by_id(doc_id)
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
+    document_repo.touch_opened(doc_id)
     return doc
 
 @app.put("/documents/{doc_id}", response_model=Document)
@@ -1113,6 +1114,7 @@ async def get_sheet(sheet_id: str):
     sheet = sheet_repo.get_by_id(sheet_id)
     if not sheet:
         raise HTTPException(status_code=404, detail="Sheet not found")
+    sheet_repo.touch_opened(sheet_id)
     return sheet
 
 @app.delete("/sheets/{sheet_id}")
@@ -1214,6 +1216,10 @@ async def add_sheet_column(sheet_id: str, req: SheetAddColumn):
 async def clear_cell_range(sheet_id: str, req: dict):
     """Clear all cells in a rectangular range to empty strings."""
     r1, c1, r2, c2 = req.get("r1", 0), req.get("c1", 0), req.get("r2", 0), req.get("c2", 0)
+    r1, r2 = min(r1, r2), max(r1, r2)
+    c1, c2 = min(c1, c2), max(c1, c2)
+    if r1 < 0 or c1 < 0:
+        raise HTTPException(status_code=400, detail="Invalid range: negative indices")
     sheet = sheet_repo.get_by_id(sheet_id)
     if not sheet:
         raise HTTPException(status_code=404, detail="Sheet not found")
@@ -1450,6 +1456,8 @@ async def ai_range_operation(
         return res.strip()
 
     async def event_generator():
+        if await request.is_disconnected():
+            return
         try:
             if mode == "row-wise":
                 # 1 AI call per row
@@ -1493,16 +1501,21 @@ async def ai_range_operation(
                 sys_prompt = "You are a data analyst. Aggregate the input into a single result. Return ONLY plain text."
                 user_prompt = f"Data:\n{source_text}\n\nInstruction: {instruction}"
 
-                full_resp = ""
-                async with asyncio.timeout(GENERATION_TIMEOUT):
-                    async for chunk in engine_manager.get_active().generate_stream(
-                        sys_prompt, user_prompt, temperature=temperature, max_tokens=max_tokens, json_mode=False
-                    ):
-                        full_resp += chunk
-                
-                result = clean_ai_result(full_resp)
-                sheet_repo.update_cell(sheet_id, tr, tc, result)
-                yield {"data": json.dumps({"type": "cell", "row": tr, "col": tc, "value": result})}
+                try:
+                    full_resp = ""
+                    async with asyncio.timeout(GENERATION_TIMEOUT):
+                        async for chunk in engine_manager.get_active().generate_stream(
+                            sys_prompt, user_prompt, temperature=temperature, max_tokens=max_tokens, json_mode=False
+                        ):
+                            full_resp += chunk
+
+                    result = clean_ai_result(full_resp)
+                    sheet_repo.update_cell(sheet_id, tr, tc, result)
+                    yield {"data": json.dumps({"type": "cell", "row": tr, "col": tc, "value": result})}
+                except (TimeoutError, asyncio.TimeoutError):
+                    yield {"data": json.dumps({"type": "error", "error": "AI timed out"})}
+                except Exception as e:
+                    yield {"data": json.dumps({"type": "error", "error": str(e)})}
 
             elif mode == "matrix":
                 # N->N table transformation
@@ -1520,30 +1533,31 @@ async def ai_range_operation(
                 )
                 user_prompt = f"Table:\n{source_table}\n\nInstruction: {instruction}"
 
-                full_resp = ""
-                async with asyncio.timeout(GENERATION_TIMEOUT):
-                    async for chunk in engine_manager.get_active().generate_stream(
-                        sys_prompt, user_prompt, temperature=temperature, max_tokens=max_tokens, json_mode=False
-                    ):
-                        full_resp += chunk
-                
-                # Parse output - filter lines to find actual table rows
-                clean_text = clean_ai_result(full_resp)
-                lines = [l.strip() for l in clean_text.split('\n') if '|' in l]
-                current_r = tr
-                for line in lines:
-                    # Split by pipe
-                    parts = [p.strip() for p in line.split('|')]
-                    # Remove empty start/end if pipe-surrounded (| a | b | -> ['', 'a', 'b', ''])
-                    if parts and not parts[0]: parts.pop(0)
-                    if parts and not parts[-1]: parts.pop()
-                    
-                    if not parts: continue
+                try:
+                    full_resp = ""
+                    async with asyncio.timeout(GENERATION_TIMEOUT):
+                        async for chunk in engine_manager.get_active().generate_stream(
+                            sys_prompt, user_prompt, temperature=temperature, max_tokens=max_tokens, json_mode=False
+                        ):
+                            full_resp += chunk
 
-                    for i, val in enumerate(parts):
-                        sheet_repo.update_cell(sheet_id, current_r, tc + i, val)
-                        yield {"data": json.dumps({"type": "cell", "row": current_r, "col": tc + i, "value": val})}
-                    current_r += 1
+                    # Parse output - filter lines to find actual table rows
+                    clean_text = clean_ai_result(full_resp)
+                    lines = [l.strip() for l in clean_text.split('\n') if '|' in l]
+                    current_r = tr
+                    for line in lines:
+                        parts = [p.strip() for p in line.split('|')]
+                        if parts and not parts[0]: parts.pop(0)
+                        if parts and not parts[-1]: parts.pop()
+                        if not parts: continue
+                        for i, val in enumerate(parts):
+                            sheet_repo.update_cell(sheet_id, current_r, tc + i, val)
+                            yield {"data": json.dumps({"type": "cell", "row": current_r, "col": tc + i, "value": val})}
+                        current_r += 1
+                except (TimeoutError, asyncio.TimeoutError):
+                    yield {"data": json.dumps({"type": "error", "error": "AI timed out"})}
+                except Exception as e:
+                    yield {"data": json.dumps({"type": "error", "error": str(e)})}
 
             else:
                 yield {"data": json.dumps({"type": "error", "error": f"Unknown mode: {mode}"})}
@@ -1671,6 +1685,8 @@ async def ai_fill_column(sheet_id: str, request: Request, col_index: int, instru
         return value
 
     async def event_generator():
+        if await request.is_disconnected():
+            return
         # Initial AI call
         values = None
         last_error = ""
@@ -1746,6 +1762,136 @@ async def ai_fill_column(sheet_id: str, request: Request, col_index: int, instru
 
             print(f"[AI_EXCEL] column={target_col.name}, row={ri}, value={value}, valid=true")
             yield {"data": json.dumps({"type": "cell", "row": ri, "col": col_index, "value": value})}
+
+        yield {"data": "[DONE]"}
+
+    return EventSourceResponse(event_generator())
+
+
+@app.get("/sheets/{sheet_id}/ai-rows")
+async def ai_generate_rows(sheet_id: str, request: Request, instruction: str, count: int = 10):
+    """SSE endpoint: AI generates new rows and appends them to the sheet."""
+    sheet = sheet_repo.get_by_id(sheet_id)
+    if not sheet:
+        raise HTTPException(status_code=404, detail="Sheet not found")
+    if not sheet.columns:
+        raise HTTPException(status_code=400, detail="Sheet has no columns")
+    count = max(1, min(100, count))
+
+    col_schema = ", ".join(f"{c.name} ({c.type})" for c in sheet.columns)
+    example_rows = sheet.rows[:min(8, len(sheet.rows))]
+    examples_text = ""
+    if example_rows:
+        lines = []
+        for row in example_rows:
+            padded = row + [""] * (len(sheet.columns) - len(row))
+            lines.append(json.dumps(padded[:len(sheet.columns)]))
+        examples_text = "\n".join(lines)
+
+    system_prompt = (
+        "You are a spreadsheet data assistant.\n"
+        "TASK: Generate new rows for a spreadsheet.\n"
+        "RULES:\n"
+        "- Return ONLY a JSON array of arrays: [[val1, val2, ...], [val1, val2, ...], ...]\n"
+        f"- Each sub-array must have exactly {len(sheet.columns)} string elements.\n"
+        "- NEVER return objects, dicts, or nested structures.\n"
+        "- NEVER include explanations, labels, or markdown fences.\n"
+        "- Match the schema and style of the existing rows.\n"
+        "- Just the raw JSON, nothing else."
+    )
+    user_prompt = (
+        f"Schema: {col_schema}\n\n"
+        + (f"Existing rows (examples):\n{examples_text}\n\n" if examples_text else "")
+        + f"Instruction: {instruction}\n\n"
+        f"Generate exactly {count} new rows. Respond with ONLY a JSON array of {count} arrays."
+    )
+
+    MAX_RETRIES = 2
+
+    async def _call_ai(sys_p: str, usr_p: str) -> str:
+        full = ""
+        async with asyncio.timeout(GENERATION_TIMEOUT):
+            async for chunk in engine_manager.get_active().generate_stream(
+                sys_p, usr_p, temperature=0.7, json_mode=False
+            ):
+                full += chunk
+        return full
+
+    def _parse_rows(raw_text: str):
+        import re as _re
+        raw = raw_text.strip()
+        raw = _re.sub(r'^```(?:json)?\s*\n?', '', raw)
+        raw = _re.sub(r'\n?```\s*$', '', raw)
+        start = raw.find('[')
+        end = raw.rfind(']')
+        if start == -1 or end == -1:
+            return "AI did not return a valid array"
+        try:
+            data = json.loads(raw[start:end + 1])
+        except json.JSONDecodeError:
+            return "AI returned invalid JSON"
+        if not isinstance(data, list):
+            return "AI did not return an array"
+        # Unwrap if wrapped under a key
+        if len(data) > 0 and not isinstance(data[0], list):
+            return "AI returned flat array instead of array of arrays"
+        return data
+
+    async def event_generator():
+        if await request.is_disconnected():
+            return
+        rows_data = None
+        last_error = ""
+        for attempt in range(1 + MAX_RETRIES):
+            try:
+                if await request.is_disconnected():
+                    return
+                full_response = await _call_ai(system_prompt, user_prompt)
+                result = _parse_rows(full_response)
+                if isinstance(result, str):
+                    last_error = result
+                    print(f"[AI_ROWS] attempt {attempt + 1}: parse error — {result}")
+                    continue
+                rows_data = result
+                break
+            except (TimeoutError, asyncio.TimeoutError):
+                last_error = "AI timed out"
+                print(f"[AI_ROWS] attempt {attempt + 1}: timed out")
+                continue
+            except Exception as e:
+                last_error = str(e)
+                print(f"[AI_ROWS] attempt {attempt + 1}: error — {e}")
+                continue
+
+        if rows_data is None:
+            yield {"data": json.dumps({"type": "error", "error": last_error})}
+            yield {"data": "[DONE]"}
+            return
+
+        # Validate and stream each row
+        validated_rows = []
+        base_row_index = len(sheet.rows)
+        for i, row in enumerate(rows_data[:count]):
+            if await request.is_disconnected():
+                return
+            if not isinstance(row, list):
+                continue
+            # Pad or truncate to correct column count
+            padded = [str(v) if v is not None else "" for v in row] + [""] * len(sheet.columns)
+            padded = padded[:len(sheet.columns)]
+            # Validate each cell (blank invalid cells rather than rejecting the row)
+            for ci, col in enumerate(sheet.columns):
+                err = sheet_repo.validate_cell(padded[ci], col.type)
+                if err:
+                    print(f"[AI_ROWS] row {i}, col {ci}: {err} — blanking cell")
+                    padded[ci] = ""
+            validated_rows.append(padded)
+            row_index = base_row_index + len(validated_rows) - 1
+            yield {"data": json.dumps({"type": "row", "row_index": row_index, "values": padded})}
+
+        if validated_rows:
+            sheet_repo.append_rows(sheet_id, validated_rows)
+            print(f"[AI_ROWS] appended {len(validated_rows)} rows to sheet {sheet_id}")
 
         yield {"data": "[DONE]"}
 

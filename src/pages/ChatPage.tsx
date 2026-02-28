@@ -192,7 +192,7 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
     } else {
       setMessages([]);
     }
-  }, [activeSessionId]);
+  }, [activeSessionId, sessions]);
 
   // Register stream callbacks — reload messages/sessions when stream completes
   const activeSessionIdRef = useRef(activeSessionId);
@@ -350,7 +350,10 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
   function buildContextPrefix(): string {
     const parts: string[] = [];
     if (documentContext) {
-      parts.push(`[Active Document: "${documentContext.title}"]`);
+      const wordHint = documentContext.fullText
+        ? ` (~${Math.ceil(documentContext.fullText.trim().split(/\s+/).length / 50) * 50}+ words)`
+        : "";
+      parts.push(`[Active Document: "${documentContext.title}"${wordHint}]`);
       if (documentContext.outline.length > 0)
         parts.push(`[Outline:\n${documentContext.outline.join("\n")}]`);
       if (documentContext.selectedText) {
@@ -358,6 +361,12 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
           ? documentContext.selectedText.slice(0, 500) + "..."
           : documentContext.selectedText;
         parts.push(`[Selected Text: "${sel}"]`);
+      }
+      if (documentContext.fullText) {
+        const body = documentContext.fullText.length > 6000
+          ? documentContext.fullText.slice(0, 6000) + "\n... [truncated]"
+          : documentContext.fullText;
+        parts.push(`[Document Content:\n${body}]`);
       }
     }
     if (attachedFile) {
@@ -540,6 +549,7 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
                 const parts: string[] = ["title"];
                 if (documentContext.outline.length > 0) parts.push(`outline (${documentContext.outline.length} headings)`);
                 if (documentContext.selectedText) parts.push("selected text");
+                if (documentContext.fullText) parts.push("full body");
                 const tip = `Connected: "${documentContext.title}"\nSending: ${parts.join(", ")}\nClick × to disconnect`;
                 return (
                   <div

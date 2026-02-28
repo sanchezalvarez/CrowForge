@@ -84,11 +84,13 @@ export function useFetchSSE() {
           }
         }
 
-        // Flush any remaining event
-        dispatchEvent(callbacks);
+        // Flush any remaining buffered event (e.g. [DONE] without trailing blank line)
+        const finalResult = dispatchEvent(callbacks);
 
-        // Stream ended without [DONE] — treat as done
-        callbacks.onDone();
+        // Stream ended without [DONE] — treat as done (avoid double-calling onDone)
+        if (finalResult !== "done" && finalResult !== "error") {
+          callbacks.onDone();
+        }
       } catch (err: unknown) {
         if (err instanceof DOMException && err.name === "AbortError") return;
         callbacks.onError(String(err));

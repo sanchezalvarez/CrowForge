@@ -374,6 +374,7 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
   const [editingCell, setEditingCell] = useState<{ row: number; col: number } | null>(null);
   const [editValue, setEditValue] = useState("");
   const cellInputRef = useRef<HTMLInputElement>(null);
+  const cellTextareaRef = useRef<HTMLTextAreaElement>(null);
   const [cellError, setCellError] = useState<string | null>(null);
 
   // Undo / Redo — per-sheet snapshot stacks (local only, max 50)
@@ -442,6 +443,15 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
   const [aiFilledRows, setAiFilledRows] = useState<Set<number>>(new Set());
   const aiFillRef = useRef<EventSource | null>(null);
   const aiFillInstructionRef = useRef<HTMLInputElement>(null);
+
+  // Generate Rows state
+  const [genRowsOpen, setGenRowsOpen] = useState(false);
+  const [genRowsInstruction, setGenRowsInstruction] = useState("");
+  const [genRowsCount, setGenRowsCount] = useState(10);
+  const [genRowsRunning, setGenRowsRunning] = useState(false);
+  const [genRowsProgress, setGenRowsProgress] = useState(0);
+  const [genRowsError, setGenRowsError] = useState<string | null>(null);
+  const genRowsRef = useRef<EventSource | null>(null);
 
   // AI Operation state
   const [aiOpOpen, setAiOpOpen] = useState(false);
@@ -555,9 +565,14 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
 
   // Auto-focus when editing starts
   useEffect(() => {
-    if (editingCell && cellInputRef.current) {
-      cellInputRef.current.focus();
-      cellInputRef.current.select();
+    if (editingCell) {
+      if (cellInputRef.current) {
+        cellInputRef.current.focus();
+        cellInputRef.current.select();
+      } else if (cellTextareaRef.current) {
+        cellTextareaRef.current.focus();
+        cellTextareaRef.current.select();
+      }
     } else if (!editingCell && selection) {
       // Return focus to grid so arrow keys work
       gridRef.current?.focus();
@@ -1006,7 +1021,8 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
   const handleGridScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
     if (filteredRowIndices.length <= ROW_RENDER_LIMIT) return;
     const el = e.currentTarget;
-    const rowHeight = 29; // approximate row height in px
+    // Use actual default row height (not hardcoded) — accounts for custom row heights
+    const rowHeight = DEFAULT_ROW_HEIGHT + 1; // +1 for border
     const scrollTop = el.scrollTop;
     const newStart = Math.max(0, Math.floor(scrollTop / rowHeight) - 20); // 20-row buffer above
     if (Math.abs(newStart - scrollRowStart) > 10) {
@@ -1135,7 +1151,7 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
   }
 
   async function undoSheet() {
-    if (!activeSheet || undoRedoInFlight.current) return;
+    if (!activeSheet || undoRedoInFlight.current || aiFilling) return;
     const stack = undoStacks.current.get(activeSheet.id);
     if (!stack || stack.length === 0) return;
     const snapshot = stack.pop()!;
@@ -1166,7 +1182,7 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
   }
 
   async function redoSheet() {
-    if (!activeSheet || undoRedoInFlight.current) return;
+    if (!activeSheet || undoRedoInFlight.current || aiFilling) return;
     const stack = redoStacks.current.get(activeSheet.id);
     if (!stack || stack.length === 0) return;
     const snapshot = stack.pop()!;
@@ -1306,16 +1322,23 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
     if (tuningParams?.maxTokens !== undefined) params.set("max_tokens", String(tuningParams.maxTokens));
     const es = new EventSource(`${API_BASE}/sheets/${activeSheet.id}/ai-fill?${params}`);
     aiFillRef.current = es;
-
+    const fillSheetId = activeSheet.id;
     let filledCount = 0;
+    let fillCompleted = false;
+
+    function finishFill() {
+      if (fillCompleted) return;
+      fillCompleted = true;
+      es.close();
+      aiFillRef.current = null;
+      setAiFilling(false);
+    }
 
     es.onmessage = (event) => {
       const data = event.data;
       if (data === "[DONE]") {
-        es.close();
-        aiFillRef.current = null;
-        setAiFilling(false);
         setAiFillProgress(`Done — ${label ? label.toLowerCase() + ": " : "filled "}${filledCount} cells`);
+        finishFill();
         return;
       }
       try {
@@ -1326,7 +1349,7 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
           setAiFilledRows((prev) => new Set(prev).add(msg.row));
           setSheets((prev) =>
             prev.map((s) => {
-              if (s.id !== activeSheet.id) return s;
+              if (s.id !== fillSheetId) return s;
               const newRows = s.rows.map((r, ri) => {
                 if (ri !== msg.row) return r;
                 const nr = [...r];
@@ -1343,10 +1366,9 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
     };
 
     es.onerror = () => {
-      es.close();
-      aiFillRef.current = null;
-      setAiFilling(false);
+      if (fillCompleted) return;
       setAiFillProgress("Connection lost");
+      finishFill();
     };
   }
 
@@ -1427,20 +1449,28 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
     if (aiOpModel) params.set("model", aiOpModel);
     if (tuningParams?.maxTokens) params.set("max_tokens", String(tuningParams.maxTokens));
 
-    const es = new EventSource(`${API_BASE}/sheets/${activeSheet.id}/ai-op?${params}`);
+    const opSheetId = activeSheet.id;
+    const es = new EventSource(`${API_BASE}/sheets/${opSheetId}/ai-op?${params}`);
     aiFillRef.current = es; // Allow cancellation via Stop button
-    
+    let opCompleted = false;
+
+    function finishOp() {
+      if (opCompleted) return;
+      opCompleted = true;
+      es.close();
+      aiFillRef.current = null;
+      setAiFilling(false);
+      setAiOpLoading(false);
+    }
+
     setAiFilling(true);
     setAiFillProgress("Starting AI operation...");
 
     es.onmessage = (event) => {
       const data = event.data;
       if (data === "[DONE]") {
-        es.close();
-        aiFillRef.current = null;
-        setAiFilling(false);
-        setAiFillProgress(`Operation complete.`);
-        setAiOpLoading(false);
+        setAiFillProgress("Operation complete.");
+        finishOp();
         return;
       }
       try {
@@ -1449,28 +1479,25 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
           setAiFillProgress(`Updating cell ${idxToCol(msg.col)}${msg.row + 1}...`);
           setSheets((prev) =>
             prev.map((s) => {
-              if (s.id !== activeSheet.id) return s;
+              if (s.id !== opSheetId) return s;
               const newRows = [...s.rows];
               while (newRows.length <= msg.row) newRows.push([]);
               newRows[msg.row] = [...(newRows[msg.row] || [])];
               while (newRows[msg.row].length <= msg.col) newRows[msg.row].push("");
-              
               newRows[msg.row][msg.col] = msg.value;
               return { ...s, rows: newRows };
             })
           );
         } else if (msg.type === "error") {
-           toast(`Error at ${msg.row !== undefined ? `row ${msg.row + 1}` : 'operation'}: ${msg.error}`, "error");
+          toast(`Error at ${msg.row !== undefined ? `row ${msg.row + 1}` : "operation"}: ${msg.error}`, "error");
         }
       } catch { /* ignore */ }
     };
 
     es.onerror = () => {
-      es.close();
-      aiFillRef.current = null;
-      setAiFilling(false);
-      setAiOpLoading(false);
+      if (opCompleted) return;
       toast("AI operation interrupted.", "error");
+      finishOp();
     };
   }
 
@@ -1515,6 +1542,78 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
     setAiFillErrors(new Map());
     setAiFilledRows(new Set());
     setAiOpLoading(false);
+  }
+
+  function handleGenerateRows() {
+    if (!activeSheet || genRowsRunning) return;
+    const instruction = genRowsInstruction.trim();
+    if (!instruction) return;
+    setGenRowsRunning(true);
+    setGenRowsProgress(0);
+    setGenRowsError(null);
+
+    const params = new URLSearchParams({ instruction, count: String(genRowsCount) });
+    const es = new EventSource(`${API_BASE}/sheets/${activeSheet.id}/ai-rows?${params}`);
+    genRowsRef.current = es;
+    const sheetId = activeSheet.id;
+    let completed = false; // guard against onerror firing after close
+
+    function finishGenRows() {
+      if (completed) return;
+      completed = true;
+      es.close();
+      genRowsRef.current = null;
+      setGenRowsRunning(false);
+    }
+
+    es.onmessage = (e) => {
+      if (e.data === "[DONE]") {
+        finishGenRows();
+        // Reload sheet to get server-persisted rows
+        axios.get(`${API_BASE}/sheets/${sheetId}`).then((res) => {
+          setSheets((prev) => prev.map((s) => (s.id === sheetId ? res.data : s)));
+        }).catch(() => {});
+        setTimeout(() => setGenRowsOpen(false), 600);
+        return;
+      }
+      try {
+        const msg = JSON.parse(e.data);
+        if (msg.type === "row") {
+          if (!Array.isArray(msg.values)) return; // guard against malformed payload
+          // Optimistically append row to local state
+          setSheets((prev) =>
+            prev.map((s) => {
+              if (s.id !== sheetId) return s;
+              return { ...s, rows: [...s.rows, msg.values] };
+            })
+          );
+          setGenRowsProgress((p) => p + 1);
+        } else if (msg.type === "error") {
+          setGenRowsError(msg.error || "Unknown error");
+          finishGenRows();
+        }
+      } catch {}
+    };
+    es.onerror = () => {
+      if (completed) return; // ignore onerror fired by es.close() after [DONE]
+      setGenRowsError("Connection error — try again");
+      finishGenRows();
+    };
+  }
+
+  function cancelGenerateRows() {
+    const sheetId = activeSheet?.id;
+    if (genRowsRef.current) {
+      genRowsRef.current.close();
+      genRowsRef.current = null;
+    }
+    setGenRowsRunning(false);
+    // Re-sync sheet from server to discard any optimistically added rows
+    if (sheetId) {
+      axios.get(`${API_BASE}/sheets/${sheetId}`).then((res) => {
+        setSheets((prev) => prev.map((s) => (s.id === sheetId ? res.data : s)));
+      }).catch(() => {});
+    }
   }
 
   // ── Alignment helpers ──────────────────────────────────────────
@@ -1847,10 +1946,10 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
 
             {/* Toolbar */}
             <div className="border-b px-4 py-1.5 flex items-center gap-2">
-              <Button variant="outline" size="sm" className="h-7 w-7 p-0" onClick={undoSheet} disabled={!canUndo} title="Undo (Ctrl+Z)">
+              <Button variant="outline" size="sm" className="h-7 w-7 p-0" onClick={undoSheet} disabled={!canUndo || aiFilling} title={aiFilling ? "Cannot undo while AI is running" : "Undo (Ctrl+Z)"}>
                 <Undo2 className="h-3.5 w-3.5" />
               </Button>
-              <Button variant="outline" size="sm" className="h-7 w-7 p-0" onClick={redoSheet} disabled={!canRedo} title="Redo (Ctrl+Y)">
+              <Button variant="outline" size="sm" className="h-7 w-7 p-0" onClick={redoSheet} disabled={!canRedo || aiFilling} title={aiFilling ? "Cannot redo while AI is running" : "Redo (Ctrl+Y)"}>
                 <Redo2 className="h-3.5 w-3.5" />
               </Button>
               <div className="w-px h-5 bg-border mx-1" />
@@ -1980,6 +2079,17 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
                   disabled={aiDisabled}
                   title="Process a single cell or range with AI"
                 >Range</Button>
+                <Button
+                  size="sm"
+                  className="h-7 text-xs"
+                  variant="outline"
+                  onClick={() => { setGenRowsOpen(true); setGenRowsError(null); setGenRowsProgress(0); }}
+                  disabled={aiDisabled}
+                  title="Generate new rows with AI"
+                >
+                  <Sparkles className="h-3 w-3 mr-1" />
+                  Generate rows
+                </Button>
                 <span className="ml-auto text-[10px] text-muted-foreground font-mono">{activeEngine}</span>
               </div>
             )}
@@ -1998,15 +2108,25 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
                     <option key={ci} value={ci}>{col.name}</option>
                   ))}
                 </select>
-                <input
-                  ref={aiFillInstructionRef}
-                  className="h-7 flex-1 min-w-[200px] px-2 text-xs border border-border rounded-md bg-background outline-none focus:ring-1 focus:ring-primary/40"
-                  placeholder='Instruction, e.g. "generate short description"'
-                  value={aiFillInstruction}
-                  onChange={(e) => setAiFillInstruction(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter" && !aiFilling) startAiFill(); }}
-                  disabled={aiFilling}
-                />
+                <div className="flex items-center gap-1 flex-wrap">
+                  {["Fill with realistic values", "Translate to English", "Categorize", "Extract from context"].map((preset) => (
+                    <button
+                      key={preset}
+                      className="px-1.5 py-0.5 text-[10px] rounded-full border border-border hover:bg-muted transition-colors shrink-0"
+                      onClick={() => setAiFillInstruction(preset)}
+                      disabled={aiFilling}
+                    >{preset}</button>
+                  ))}
+                  <input
+                    ref={aiFillInstructionRef}
+                    className="h-7 flex-1 min-w-[160px] px-2 text-xs border border-border rounded-md bg-background outline-none focus:ring-1 focus:ring-primary/40"
+                    placeholder='Instruction, e.g. "generate short description"'
+                    value={aiFillInstruction}
+                    onChange={(e) => setAiFillInstruction(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter" && !aiFilling) startAiFill(); }}
+                    disabled={aiFilling}
+                  />
+                </div>
                 {aiFilling ? (
                   <Button variant="destructive" size="sm" className="h-7 text-xs gap-1" onClick={cancelAiFill}>
                     <Square className="h-3 w-3" />
@@ -2157,6 +2277,14 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
               onScroll={handleGridScroll}
               onKeyDown={(e) => {
                 if (editingCell) return; // let cell input handle its own keys
+
+                // F2 — enter edit mode
+                if (e.key === "F2" && selection) {
+                  e.preventDefault();
+                  const displayValue = activeSheet?.rows[selection.r1]?.[selection.c1] ?? "";
+                  startEditing(selection.r1, selection.c1, displayValue);
+                  return;
+                }
 
                 // Bold / Italic
                 if ((e.ctrlKey || e.metaKey) && e.key === "b") {
@@ -2449,7 +2577,8 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
                             <td
                               key={ci}
                               className={cn(
-                                "border p-0 overflow-hidden relative", // Added relative for overlay if needed, though using classes
+                                "border p-0 relative",
+                                isEditing ? "overflow-visible" : "overflow-hidden",
                                 !isFormulaRef && "border-border",
                                 isEditing && "ring-2 ring-primary/40 ring-inset",
                                 isEditing && cellError && "ring-destructive/60",
@@ -2499,35 +2628,76 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
                               }}
                             >
                               {isEditing ? (
-                                <div className="relative">
-                                  <input
-                                    ref={cellInputRef}
-                                    type={editValue.startsWith("=") ? "text" : colType === "number" ? "number" : colType === "date" ? "date" : "text"}
-                                    step={colType === "number" ? "any" : undefined}
-                                    className="w-full px-2 py-1 text-sm bg-transparent outline-none"
-                                    value={editValue}
-                                    onChange={(e) => { setEditValue(e.target.value); setCellError(null); }}
-                                    onBlur={commitEdit}
-                                    onKeyDown={(e) => {
-                                      if (e.key === "Enter") {
-                                        e.preventDefault();
-                                        commitEdit();
-                                      } else if (e.key === "Escape") {
-                                        e.preventDefault();
-                                        setCellError(null);
-                                        cancelEdit();
-                                      } else if (e.key === "Tab") {
-                                        e.preventDefault();
-                                        commitEdit();
-                                        const nextCol = e.shiftKey ? ci - 1 : ci + 1;
-                                        if (nextCol >= 0 && nextCol < (activeSheet?.columns.length ?? 0)) {
-                                          startEditing(ri, nextCol, row[nextCol] ?? "");
-                                        } else if (!e.shiftKey && ri + 1 < (activeSheet?.rows.length ?? 0)) {
-                                          startEditing(ri + 1, 0, activeSheet?.rows[ri + 1]?.[0] ?? "");
+                                <div className="relative h-full">
+                                  {!editValue.startsWith("=") && colType !== "number" && colType !== "date" && colType !== "boolean" ? (
+                                    <textarea
+                                      ref={cellTextareaRef}
+                                      className="px-2 py-1 text-sm bg-background border border-primary/60 outline-none resize-none overflow-auto shadow-md"
+                                      style={{
+                                        position: "absolute",
+                                        top: 0,
+                                        left: 0,
+                                        zIndex: 50,
+                                        minWidth: "100%",
+                                        width: "max-content",
+                                        maxWidth: 480,
+                                        minHeight: 28,
+                                        maxHeight: 200,
+                                      }}
+                                      value={editValue}
+                                      rows={Math.min(8, (editValue.match(/\n/g)?.length ?? 0) + 1)}
+                                      onChange={(e) => { setEditValue(e.target.value); setCellError(null); }}
+                                      onBlur={commitEdit}
+                                      onKeyDown={(e) => {
+                                        if (e.key === "Enter" && !e.shiftKey) {
+                                          e.preventDefault();
+                                          commitEdit();
+                                        } else if (e.key === "Escape") {
+                                          e.preventDefault();
+                                          setCellError(null);
+                                          cancelEdit();
+                                        } else if (e.key === "Tab") {
+                                          e.preventDefault();
+                                          commitEdit();
+                                          const nextCol = e.shiftKey ? ci - 1 : ci + 1;
+                                          if (nextCol >= 0 && nextCol < (activeSheet?.columns.length ?? 0)) {
+                                            startEditing(ri, nextCol, row[nextCol] ?? "");
+                                          } else if (!e.shiftKey && ri + 1 < (activeSheet?.rows.length ?? 0)) {
+                                            startEditing(ri + 1, 0, activeSheet?.rows[ri + 1]?.[0] ?? "");
+                                          }
                                         }
-                                      }
-                                    }}
-                                  />
+                                      }}
+                                    />
+                                  ) : (
+                                    <input
+                                      ref={cellInputRef}
+                                      type={editValue.startsWith("=") ? "text" : colType === "number" ? "number" : colType === "date" ? "date" : "text"}
+                                      step={colType === "number" ? "any" : undefined}
+                                      className="w-full px-2 py-1 text-sm bg-transparent outline-none"
+                                      value={editValue}
+                                      onChange={(e) => { setEditValue(e.target.value); setCellError(null); }}
+                                      onBlur={commitEdit}
+                                      onKeyDown={(e) => {
+                                        if (e.key === "Enter") {
+                                          e.preventDefault();
+                                          commitEdit();
+                                        } else if (e.key === "Escape") {
+                                          e.preventDefault();
+                                          setCellError(null);
+                                          cancelEdit();
+                                        } else if (e.key === "Tab") {
+                                          e.preventDefault();
+                                          commitEdit();
+                                          const nextCol = e.shiftKey ? ci - 1 : ci + 1;
+                                          if (nextCol >= 0 && nextCol < (activeSheet?.columns.length ?? 0)) {
+                                            startEditing(ri, nextCol, row[nextCol] ?? "");
+                                          } else if (!e.shiftKey && ri + 1 < (activeSheet?.rows.length ?? 0)) {
+                                            startEditing(ri + 1, 0, activeSheet?.rows[ri + 1]?.[0] ?? "");
+                                          }
+                                        }
+                                      }}
+                                    />
+                                  )}
                                   {cellError && (
                                     <div className="absolute left-0 top-full z-10 mt-0.5 px-2 py-1 text-xs text-destructive bg-destructive/10 border border-destructive/20 rounded shadow-sm whitespace-nowrap flex items-center gap-1">
                                       <AlertCircle className="h-3 w-3 shrink-0" />
@@ -2541,8 +2711,8 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
                                     <span className="text-[9px] font-mono text-muted-foreground/40 shrink-0 leading-none">fx</span>
                                   )}
                                   {colType === "boolean" ? (
-                                    <span className={cell.toLowerCase() === "true" ? "text-green-500" : "text-muted-foreground/50"}>
-                                      {cell.toLowerCase() === "true" ? "Yes" : "No"}
+                                    <span className={(cell ?? "").toLowerCase() === "true" ? "text-green-500" : "text-muted-foreground/50"}>
+                                      {(cell ?? "").toLowerCase() === "true" ? "Yes" : "No"}
                                     </span>
                                   ) : isErrorValue ? (
                                     <span className="text-destructive font-mono text-xs cursor-help" title={`${cell}\nFormula: ${activeSheet.formulas[`${ri},${ci}`]}`}>{cell}</span>
@@ -3229,6 +3399,83 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
               <Button variant="default" size="sm" className="h-8 text-xs gap-1.5" onClick={runAiOp} disabled={aiOpLoading}>
                 {aiOpLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
                 Run
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Generate Rows dialog */}
+      {genRowsOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => { if (!genRowsRunning) { setGenRowsOpen(false); cancelGenerateRows(); } }}>
+          <div className="bg-background border rounded-lg shadow-lg w-[420px] p-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-2 mb-3">
+              <Sparkles className="h-4 w-4 text-primary" />
+              <h3 className="text-sm font-medium">Generate Rows with AI</h3>
+            </div>
+
+            <div className="space-y-3 mb-4">
+              <div>
+                <label className="text-xs text-muted-foreground block mb-1">Number of rows (1–100)</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={100}
+                  className="h-8 w-24 px-2 text-sm border border-border rounded-md bg-background outline-none focus:ring-1 focus:ring-primary/40"
+                  value={genRowsCount}
+                  onChange={(e) => setGenRowsCount(Math.max(1, Math.min(100, Number(e.target.value) || 10)))}
+                  disabled={genRowsRunning}
+                />
+              </div>
+
+              <div>
+                <label className="text-xs text-muted-foreground block mb-1">Instruction</label>
+                <div className="flex flex-wrap gap-1 mb-1.5">
+                  {["Random sample data", "Continue the pattern", "Diverse international records"].map((preset) => (
+                    <button
+                      key={preset}
+                      className="px-2 py-0.5 text-xs rounded-full border border-border hover:bg-muted transition-colors"
+                      onClick={() => setGenRowsInstruction(preset)}
+                      disabled={genRowsRunning}
+                    >{preset}</button>
+                  ))}
+                </div>
+                <textarea
+                  className="w-full min-h-[72px] p-2 text-sm border border-border rounded-md bg-background outline-none focus:ring-1 focus:ring-primary/40 resize-none"
+                  placeholder='e.g. "Generate realistic customer records" or "Continue the pattern"'
+                  value={genRowsInstruction}
+                  onChange={(e) => setGenRowsInstruction(e.target.value)}
+                  disabled={genRowsRunning}
+                />
+              </div>
+
+              {genRowsRunning && (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  Generating... {genRowsProgress}/{genRowsCount} rows
+                </div>
+              )}
+              {genRowsError && (
+                <div className="text-xs text-destructive flex items-center gap-1">
+                  <AlertCircle className="h-3 w-3" />
+                  {genRowsError}
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => { setGenRowsOpen(false); cancelGenerateRows(); }} disabled={false}>
+                {genRowsRunning ? "Stop" : "Cancel"}
+              </Button>
+              <Button
+                variant="default"
+                size="sm"
+                className="h-8 text-xs gap-1.5"
+                onClick={handleGenerateRows}
+                disabled={genRowsRunning || !genRowsInstruction.trim()}
+              >
+                {genRowsRunning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                Generate
               </Button>
             </div>
           </div>

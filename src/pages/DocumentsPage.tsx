@@ -165,6 +165,7 @@ export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPagePr
   const editorScrollRef = useRef<HTMLDivElement>(null);
   const [pageCount, setPageCount] = useState(1);
   const [currentPage, setCurrentPage] = useState(1);
+  const [wordCount, setWordCount] = useState({ words: 0, chars: 0 });
   const pendingRange = useRef<{ from: number; to: number } | null>(null);
   const pendingOriginalText = useRef<string | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -197,8 +198,9 @@ export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPagePr
       title: activeDoc.title,
       outline: outline.map((h) => `${"#".repeat(h.level)} ${h.text}`),
       selectedText: selection?.text ?? null,
+      fullText: editor ? editor.getText().slice(0, 8000) : null,
     });
-  }, [activeDoc?.id, activeDoc?.title, outline, selection, onContextChange]);
+  }, [activeDoc?.id, activeDoc?.title, outline, selection, onContextChange, wordCount, editor]);
 
   const runAiActionRef = useRef<(action: string) => void>(() => {});
 
@@ -228,6 +230,10 @@ export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPagePr
       const el = editor.view.dom as HTMLElement;
       const h = el.scrollHeight;
       setPageCount(Math.max(1, Math.ceil(h / A4_HEIGHT_PX)));
+      // Word/char count
+      const text = editor.getText();
+      const words = text.trim() ? text.trim().split(/\s+/).length : 0;
+      setWordCount({ words, chars: text.length });
     },
     onSelectionUpdate: ({ editor }) => {
       const { from, to } = editor.state.selection;
@@ -782,6 +788,9 @@ export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPagePr
               )}
               <span className="text-xs text-muted-foreground shrink-0 font-mono">
                 Page {currentPage} / {pageCount}
+              </span>
+              <span className="text-[10px] text-muted-foreground font-mono shrink-0">
+                {wordCount.words.toLocaleString()}w · {wordCount.chars.toLocaleString()}c
               </span>
               {saving && (
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0">

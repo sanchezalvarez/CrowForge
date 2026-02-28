@@ -263,15 +263,18 @@ class LocalLLAMAEngine(AIEngine):
 
             # Start inference thread concurrently, drain chunks as they arrive
             inference_task = asyncio.get_event_loop().run_in_executor(None, _run_inference)
-            while True:
-                item = await queue.get()
-                if item is None:
-                    break
-                if isinstance(item, Exception):
-                    raise item
-                yield item
-                await asyncio.sleep(0)
-            await inference_task  # ensure thread completed
+            try:
+                while True:
+                    item = await queue.get()
+                    if item is None:
+                        break
+                    if isinstance(item, Exception):
+                        raise item
+                    yield item
+                    await asyncio.sleep(0)
+            finally:
+                # Always await the thread so it doesn't leak on exception/cancellation
+                await inference_task
         # WinError 10054: client closed connection — harmless on Windows
         except ConnectionResetError as e:
             if getattr(e, 'winerror', None) == 10054:

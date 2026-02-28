@@ -87,6 +87,17 @@ class DatabaseManager:
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )""")
 
+        # Add last_opened_at to documents and sheets if missing
+        cursor = conn.execute("PRAGMA table_info(documents)")
+        doc_cols = {row["name"] for row in cursor.fetchall()}
+        if "last_opened_at" not in doc_cols:
+            conn.execute("ALTER TABLE documents ADD COLUMN last_opened_at TEXT")
+
+        cursor = conn.execute("PRAGMA table_info(sheets)")
+        sheet_cols = {row["name"] for row in cursor.fetchall()}
+        if "last_opened_at" not in sheet_cols:
+            conn.execute("ALTER TABLE sheets ADD COLUMN last_opened_at TEXT")
+
         conn.commit()
 
 class AppRepository:
@@ -248,8 +259,13 @@ class DocumentRepository:
 
     def get_all(self) -> List[Document]:
         with self.db.get_connection() as conn:
-            rows = conn.execute("SELECT * FROM documents ORDER BY updated_at DESC").fetchall()
+            rows = conn.execute("SELECT * FROM documents ORDER BY COALESCE(last_opened_at, updated_at) DESC").fetchall()
             return [self._row_to_document(r) for r in rows]
+
+    def touch_opened(self, doc_id: str) -> None:
+        with self.db.get_connection() as conn:
+            conn.execute("UPDATE documents SET last_opened_at=datetime('now') WHERE id=?", (doc_id,))
+            conn.commit()
 
     def update(self, doc_id: str, title: str = None, content_json: dict = None) -> Optional[Document]:
         with self.db.get_connection() as conn:
@@ -314,8 +330,13 @@ class SheetRepository:
 
     def get_all(self) -> List[Sheet]:
         with self.db.get_connection() as conn:
-            rows = conn.execute("SELECT * FROM sheets ORDER BY updated_at DESC").fetchall()
+            rows = conn.execute("SELECT * FROM sheets ORDER BY COALESCE(last_opened_at, updated_at) DESC").fetchall()
             return [self._row_to_sheet(r) for r in rows]
+
+    def touch_opened(self, sheet_id: str) -> None:
+        with self.db.get_connection() as conn:
+            conn.execute("UPDATE sheets SET last_opened_at=datetime('now') WHERE id=?", (sheet_id,))
+            conn.commit()
 
     def _save(self, conn, sheet_id: str, columns: List[SheetColumn],
               rows: List[List[str]], formulas: dict,
@@ -463,6 +484,14 @@ class SheetRepository:
                        changed_cells={key})
             return self.get_by_id(sheet_id)
 
+    def append_rows(self, sheet_id: str, new_rows: list) -> None:
+        with self.db.get_connection() as conn:
+            sheet = self.get_by_id(sheet_id)
+            if not sheet:
+                return
+            updated = sheet.rows + new_rows
+            self._save(conn, sheet_id, sheet.columns, updated, sheet.formulas, changed_cells=set())
+
     def delete_row(self, sheet_id: str, row_index: int) -> Optional[Sheet]:
         with self.db.get_connection() as conn:
             sheet = self.get_by_id(sheet_id)
@@ -543,9 +572,11 @@ class SheetRepository:
             col = sheet.columns.pop(from_index)
             sheet.columns.insert(to_index, col)
             for row in sheet.rows:
-                if from_index < len(row):
-                    val = row.pop(from_index)
-                    row.insert(to_index, val)
+                # Pad short rows so both positions exist
+                while len(row) <= max(from_index, to_index):
+                    row.append("")
+                val = row.pop(from_index)
+                row.insert(to_index, val)
             # Remap formula column positions
             order = list(range(n))
             moved = order.pop(from_index)

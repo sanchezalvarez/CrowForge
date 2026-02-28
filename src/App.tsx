@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Component, type ReactNode } from "react";
 import axios from "axios";
 import {
   Gauge,
@@ -25,6 +25,36 @@ import { ChatStreamProvider } from "./contexts/ChatStreamContext";
 
 const API_BASE = "http://127.0.0.1:8000";
 
+class PageErrorBoundary extends Component<{ children: ReactNode; page: string }, { error: Error | null }> {
+  constructor(props: { children: ReactNode; page: string }) {
+    super(props);
+    this.state = { error: null };
+  }
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+  componentDidCatch(error: Error) {
+    console.error(`[ErrorBoundary:${this.props.page}]`, error);
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="flex-1 flex flex-col items-center justify-center gap-3 p-8 text-center">
+          <p className="text-sm font-medium text-destructive">Something went wrong in {this.props.page}</p>
+          <p className="text-xs text-muted-foreground font-mono max-w-md break-all">{this.state.error.message}</p>
+          <button
+            className="text-xs px-3 py-1.5 rounded-md border hover:bg-muted transition-colors"
+            onClick={() => this.setState({ error: null })}
+          >
+            Try again
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 type AppStatus = "loading" | "onboarding" | "ready" | "failed";
 type AppPage = "chat" | "documents" | "sheets" | "benchmark" | "settings";
 
@@ -32,6 +62,7 @@ export interface DocumentContext {
   title: string;
   outline: string[];
   selectedText: string | null;
+  fullText: string | null;
 }
 
 export default function App() {
@@ -107,6 +138,9 @@ export default function App() {
     tuningDebounceRef.current = setTimeout(() => {
       axios.post(`${API_BASE}/ai/tuning`, tuningParams).catch(() => {});
     }, 500);
+    return () => {
+      if (tuningDebounceRef.current) clearTimeout(tuningDebounceRef.current);
+    };
   }, [tuningParams]);
 
   // AI panel visibility
@@ -231,6 +265,7 @@ export default function App() {
       {/* MAIN + AI CONTROLS */}
       <div className="flex flex-1 min-w-0 flex-col lg:flex-row overflow-hidden">
         <main className="flex-1 min-w-0 overflow-y-auto">
+          <PageErrorBoundary page={currentPage}>
           {currentPage === "chat" ? (
             <ChatPage
               documentContext={docContextLocked ? null : docContext}
@@ -245,13 +280,14 @@ export default function App() {
           ) : currentPage === "benchmark" ? (
             <BenchmarkPage />
           ) : currentPage === "settings" ? (
-            <SettingsPage 
-              theme={theme} 
-              setTheme={setTheme} 
-              baseColor={baseColor} 
-              setBaseColor={setBaseColor} 
+            <SettingsPage
+              theme={theme}
+              setTheme={setTheme}
+              baseColor={baseColor}
+              setBaseColor={setBaseColor}
             />
           ) : null}
+          </PageErrorBoundary>
         </main>
 
         {currentPage !== "settings" && (

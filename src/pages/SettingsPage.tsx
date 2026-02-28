@@ -183,6 +183,8 @@ export function SettingsPage({ theme, setTheme, baseColor, setBaseColor }: Setti
       await axios.delete(`${API_BASE}/data/${target}`);
       const labels: Record<string, string> = { chat: "Chat", documents: "Documents", sheets: "Sheets", all: "All data" };
       toast(`${labels[target]} deleted.`);
+      // Notify all pages to reload their data
+      window.dispatchEvent(new CustomEvent("crowforge:data-deleted", { detail: { target } }));
     } catch {
       toast("Failed to delete data.", "error");
     } finally {

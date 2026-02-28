@@ -337,6 +337,19 @@ export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPagePr
     fetchActiveEngine();
   }, []);
 
+  useEffect(() => {
+    function onDataDeleted(e: Event) {
+      const target = (e as CustomEvent).detail?.target;
+      if (target === "documents" || target === "all") {
+        setDocuments([]);
+        setActiveDocId(null);
+        loadDocuments();
+      }
+    }
+    window.addEventListener("crowforge:data-deleted", onDataDeleted);
+    return () => window.removeEventListener("crowforge:data-deleted", onDataDeleted);
+  }, []);
+
   // Outline panel resize via mouse drag
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
@@ -406,10 +419,11 @@ export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPagePr
     []
   );
 
-  // Cleanup debounce timer on unmount to prevent saving after component is gone
+  // Cleanup timers on unmount
   useEffect(() => {
     return () => {
       if (saveTimer.current) clearTimeout(saveTimer.current);
+      if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
     };
   }, []);
 
@@ -701,11 +715,16 @@ export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPagePr
   function replaceAll() {
     if (!editor || !searchTerm) return;
     const matches = findMatches(searchTerm);
+    if (matches.length === 0) return;
     // Apply in reverse to preserve positions
     const tr = editor.state.tr;
     for (let i = matches.length - 1; i >= 0; i--) {
       const m = matches[i];
-      tr.replaceWith(m.from, m.to, editor.state.schema.text(replaceTerm));
+      if (replaceTerm) {
+        tr.replaceWith(m.from, m.to, editor.state.schema.text(replaceTerm));
+      } else {
+        tr.delete(m.from, m.to);
+      }
     }
     editor.view.dispatch(tr);
     setSearchMatches([]);

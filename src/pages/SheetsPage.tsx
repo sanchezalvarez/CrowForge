@@ -1050,6 +1050,19 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
     loadSheets();
   }, []);
 
+  useEffect(() => {
+    function onDataDeleted(e: Event) {
+      const target = (e as CustomEvent).detail?.target;
+      if (target === "sheets" || target === "all") {
+        setSheets([]);
+        setActiveSheetId(null);
+        loadSheets();
+      }
+    }
+    window.addEventListener("crowforge:data-deleted", onDataDeleted);
+    return () => window.removeEventListener("crowforge:data-deleted", onDataDeleted);
+  }, []);
+
   async function loadSheets() {
     try {
       const res = await axios.get(`${API_BASE}/sheets`);

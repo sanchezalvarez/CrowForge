@@ -181,6 +181,20 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
   useEffect(() => { loadSessions(); }, []);
 
   useEffect(() => {
+    function onDataDeleted(e: Event) {
+      const target = (e as CustomEvent).detail?.target;
+      if (target === "chat" || target === "all") {
+        setSessions([]);
+        setActiveSessionId(null);
+        setMessages([]);
+        loadSessions();
+      }
+    }
+    window.addEventListener("crowforge:data-deleted", onDataDeleted);
+    return () => window.removeEventListener("crowforge:data-deleted", onDataDeleted);
+  }, []);
+
+  useEffect(() => {
     axios.get(`${API_BASE}/documents`).then(r => {
       const docs = Array.isArray(r.data) ? r.data : r.data.documents ?? [];
       setDocList(docs);

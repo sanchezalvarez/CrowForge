@@ -908,7 +908,7 @@ async def stream_chat_message(session_id: int, req: ChatMessageRequest, request:
             saved = True
             yield {"data": "[DONE]"}
         except Exception as e:
-            yield {"data": f"[ERROR] {e}"}
+            yield {"data": f"[ERROR] {str(e).replace(chr(10), ' ')}"}
         finally:
             # Save partial response on client disconnect or error (if not already saved)
             if not saved and full_response.strip():

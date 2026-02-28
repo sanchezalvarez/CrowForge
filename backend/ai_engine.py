@@ -115,7 +115,8 @@ class HTTPAIEngine(AIEngine):
                                 chunk = json.loads(line[6:])
                                 content = chunk["choices"][0].get("delta", {}).get("content", "")
                                 if content: yield content
-                            except: continue
+                            except (json.JSONDecodeError, KeyError, IndexError):
+                                continue
             # WinError 10054: remote end reset the connection during SSE teardown.
             # This is normal on Windows when the client (browser/EventSource) closes
             # the tab or navigates away — safe to silence, not a real error.
@@ -183,8 +184,9 @@ class LocalLLAMAEngine(AIEngine):
 
     def reload(self, model_path: str, n_ctx: int = 2048) -> tuple[str, str]:
         """Reload with a different model. Returns (status, error_detail) tuple."""
-        if self._generating:
-            return "busy", "Generation is in progress"
+        with self._lock:
+            if self._generating:
+                return "busy", "Generation is in progress"
         if not os.path.exists(model_path):
             return "not_found", f"File not found: {model_path}"
         try:

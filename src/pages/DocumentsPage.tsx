@@ -5,9 +5,11 @@ import {
   Maximize2, SpellCheck, Check, X, AlertCircle, Bold, Italic, Heading1,
   Heading2, List, Upload, Download, ChevronDown, PackageOpen, Pencil, Copy,
   Sparkles, Underline as UnderlineIcon, Strikethrough, AlignLeft as AlignLeftIcon,
-  AlignCenter, AlignRight, Highlighter,
+  AlignCenter, AlignRight, Highlighter, Image as ImageIcon, Search, ChevronUp,
+  Replace,
 } from "lucide-react";
-import { useEditor, EditorContent } from "@tiptap/react";
+import { useEditor, EditorContent, NodeViewWrapper, ReactNodeViewRenderer } from "@tiptap/react";
+import type { NodeViewProps } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { Markdown } from "tiptap-markdown";
 import { Color } from "@tiptap/extension-color";
@@ -17,6 +19,7 @@ import TextAlign from "@tiptap/extension-text-align";
 import Highlight from "@tiptap/extension-highlight";
 import FontFamily from "@tiptap/extension-font-family";
 import { DOMParser as PmDOMParser, Fragment } from "@tiptap/pm/model";
+import ImageExtension from "@tiptap/extension-image";
 import { Button } from "../components/ui/button";
 import { ScrollArea } from "../components/ui/scroll-area";
 import { Badge } from "../components/ui/badge";
@@ -35,6 +38,73 @@ import {
   type DocExportFormat,
 } from "../lib/fileService";
 
+// ---- Resizable Image NodeView ----
+function ResizableImageView({ node, updateAttributes, selected }: NodeViewProps) {
+  const imgRef = useRef<HTMLImageElement>(null);
+  const startX = useRef(0);
+  const startW = useRef(0);
+  const [isResizing, setIsResizing] = useState(false);
+
+  function startResize(e: React.MouseEvent, side: "left" | "right") {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsResizing(true);
+    startX.current = e.clientX;
+    startW.current = node.attrs.width ?? (imgRef.current?.offsetWidth ?? 300);
+
+    function onMove(me: MouseEvent) {
+      const delta = me.clientX - startX.current;
+      const newW = Math.max(48, Math.round(startW.current + (side === "right" ? delta : -delta)));
+      updateAttributes({ width: newW });
+    }
+    function onUp() {
+      setIsResizing(false);
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+    }
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  }
+
+  const w = node.attrs.width ? `${node.attrs.width}px` : "auto";
+  const showHandles = selected || isResizing;
+
+  return (
+    <NodeViewWrapper as="span" className="inline-block relative group/img align-middle select-none" draggable data-drag-handle>
+      <img
+        ref={imgRef}
+        src={node.attrs.src}
+        alt={node.attrs.alt ?? ""}
+        draggable={false}
+        style={{ width: w, maxWidth: "100%", display: "block" }}
+        className={showHandles ? "ring-2 ring-primary ring-offset-1 rounded-sm" : ""}
+      />
+      {/* Left resize handle */}
+      <span
+        className={`absolute top-1/2 -translate-y-1/2 -left-1.5 w-3 h-6 rounded bg-primary/80 cursor-ew-resize transition-opacity ${showHandles ? "opacity-100" : "opacity-0 group-hover/img:opacity-60"}`}
+        onMouseDown={(e) => startResize(e, "left")}
+      />
+      {/* Right resize handle */}
+      <span
+        className={`absolute top-1/2 -translate-y-1/2 -right-1.5 w-3 h-6 rounded bg-primary/80 cursor-ew-resize transition-opacity ${showHandles ? "opacity-100" : "opacity-0 group-hover/img:opacity-60"}`}
+        onMouseDown={(e) => startResize(e, "right")}
+      />
+    </NodeViewWrapper>
+  );
+}
+
+const ResizableImage = ImageExtension.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      width: { default: null, parseHTML: (el) => el.getAttribute("width"), renderHTML: (attrs) => attrs.width ? { width: attrs.width } : {} },
+    };
+  },
+  addNodeView() {
+    return ReactNodeViewRenderer(ResizableImageView);
+  },
+}).configure({ inline: true, allowBase64: true });
+
 const editorExtensions = [
   StarterKit,
   Markdown,
@@ -44,6 +114,7 @@ const editorExtensions = [
   TextAlign.configure({ types: ["heading", "paragraph"] }),
   Highlight.configure({ multicolor: false }),
   FontFamily,
+  ResizableImage,
 ];
 
 interface OutlineItem {
@@ -170,6 +241,15 @@ export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPagePr
   const pendingOriginalText = useRef<string | null>(null);
   const pendingDocId = useRef<string | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [savedRecently, setSavedRecently] = useState(false);
+  const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [colorPickerOpen, setColorPickerOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [replaceTerm, setReplaceTerm] = useState("");
+  const [searchMatches, setSearchMatches] = useState<{ from: number; to: number }[]>([]);
+  const [searchIndex, setSearchIndex] = useState(0);
   const activeDoc = documents.find((d) => d.id === activeDocId) ?? null;
 
   // Import / Export
@@ -188,21 +268,6 @@ export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPagePr
     (file) => handleImportFile(file),
   );
 
-  // Report document context to parent (for Chat integration)
-  useEffect(() => {
-    if (!onContextChange) return;
-    if (!activeDoc) {
-      onContextChange(null);
-      return;
-    }
-    onContextChange({
-      title: activeDoc.title,
-      outline: outline.map((h) => `${"#".repeat(h.level)} ${h.text}`),
-      selectedText: selection?.text ?? null,
-      fullText: editor ? editor.getText().slice(0, 8000) : null,
-    });
-  }, [activeDoc?.id, activeDoc?.title, outline, selection, onContextChange, wordCount, editor]);
-
   const runAiActionRef = useRef<(action: string) => void>(() => {});
 
   const editor = useEditor({
@@ -217,6 +282,11 @@ export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPagePr
         if ((event.metaKey || event.ctrlKey) && event.key === "j") {
           event.preventDefault();
           runAiActionRef.current("rewrite");
+          return true;
+        }
+        if ((event.metaKey || event.ctrlKey) && event.key === "f") {
+          event.preventDefault();
+          setSearchOpen(true);
           return true;
         }
         return false;
@@ -246,6 +316,21 @@ export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPagePr
       setSelection({ from, to, text });
     },
   });
+
+  // Report document context to parent (for Chat integration)
+  useEffect(() => {
+    if (!onContextChange) return;
+    if (!activeDoc) {
+      onContextChange(null);
+      return;
+    }
+    onContextChange({
+      title: activeDoc.title,
+      outline: outline.map((h) => `${"#".repeat(h.level)} ${h.text}`),
+      selectedText: selection?.text ?? null,
+      fullText: editor ? editor.getText().slice(0, 8000) : null,
+    });
+  }, [activeDoc?.id, activeDoc?.title, outline, selection, onContextChange, wordCount, editor]);
 
   useEffect(() => {
     loadDocuments();
@@ -347,14 +432,18 @@ export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPagePr
       setDocuments((prev) => [doc, ...prev]);
       setActiveDocId(doc.id);
     } catch {
-      // ignore
+      toast("Failed to create document.", "error");
     }
   }
 
   async function deleteDocument(id: string) {
     setDocuments((prev) => prev.filter((d) => d.id !== id));
     if (activeDocId === id) setActiveDocId(null);
-    await axios.delete(`${API_BASE}/documents/${id}`).catch(() => {});
+    try {
+      await axios.delete(`${API_BASE}/documents/${id}`);
+    } catch {
+      toast("Failed to delete document.", "error");
+    }
   }
 
   async function duplicateDocument(id: string) {
@@ -363,7 +452,9 @@ export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPagePr
       const doc: Document = res.data;
       setDocuments((prev) => [doc, ...prev]);
       setActiveDocId(doc.id);
-    } catch { /* ignore */ }
+    } catch {
+      toast("Failed to duplicate document.", "error");
+    }
   }
 
   function docRenameStart(id: string) {
@@ -399,8 +490,11 @@ export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPagePr
         content_json: content,
       });
       setDocuments((prev) => prev.map((d) => (d.id === docId ? res.data : d)));
+      setSavedRecently(true);
+      if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+      savedTimerRef.current = setTimeout(() => setSavedRecently(false), 3000);
     } catch {
-      // silent fail
+      toast("Failed to save document.", "error");
     } finally {
       setSaving(false);
     }
@@ -411,7 +505,7 @@ export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPagePr
       const res = await axios.put(`${API_BASE}/documents/${docId}`, { title });
       setDocuments((prev) => prev.map((d) => (d.id === docId ? res.data : d)));
     } catch {
-      // ignore
+      toast("Failed to rename document.", "error");
     }
   }
 
@@ -536,6 +630,94 @@ export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPagePr
     pendingDocId.current = null;
   }
 
+  // ---- Image insert ----
+  function handleImageInsert(file: File) {
+    if (!editor) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const src = e.target?.result as string;
+      if (src) editor.chain().focus().setImage({ src }).run();
+    };
+    reader.readAsDataURL(file);
+  }
+
+  // ---- Search & Replace ----
+  function findMatches(term: string): { from: number; to: number }[] {
+    if (!editor || !term) return [];
+    const matches: { from: number; to: number }[] = [];
+    const lower = term.toLowerCase();
+    editor.state.doc.descendants((node, pos) => {
+      if (!node.isText) return;
+      const text = (node.text ?? "").toLowerCase();
+      let idx = 0;
+      while (true) {
+        const found = text.indexOf(lower, idx);
+        if (found === -1) break;
+        matches.push({ from: pos + found, to: pos + found + term.length });
+        idx = found + 1;
+      }
+    });
+    return matches;
+  }
+
+  function gotoMatch(matches: { from: number; to: number }[], idx: number) {
+    if (!editor || matches.length === 0) return;
+    const m = matches[idx];
+    editor.chain().focus().setTextSelection({ from: m.from, to: m.to }).run();
+    const dom = editor.view.domAtPos(m.from);
+    const el = dom.node instanceof HTMLElement ? dom.node : dom.node.parentElement;
+    el?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }
+
+  function searchNext() {
+    const matches = findMatches(searchTerm);
+    setSearchMatches(matches);
+    if (matches.length === 0) return;
+    const next = (searchIndex + 1) % matches.length;
+    setSearchIndex(next);
+    gotoMatch(matches, next);
+  }
+
+  function searchPrev() {
+    const matches = findMatches(searchTerm);
+    setSearchMatches(matches);
+    if (matches.length === 0) return;
+    const prev = (searchIndex - 1 + matches.length) % matches.length;
+    setSearchIndex(prev);
+    gotoMatch(matches, prev);
+  }
+
+  function replaceCurrent() {
+    if (!editor || searchMatches.length === 0) return;
+    const m = searchMatches[searchIndex];
+    editor.chain().focus().setTextSelection({ from: m.from, to: m.to }).insertContent(replaceTerm).run();
+    const newMatches = findMatches(searchTerm);
+    setSearchMatches(newMatches);
+    const next = Math.min(searchIndex, newMatches.length - 1);
+    setSearchIndex(Math.max(0, next));
+    if (newMatches.length > 0) gotoMatch(newMatches, Math.max(0, next));
+  }
+
+  function replaceAll() {
+    if (!editor || !searchTerm) return;
+    const matches = findMatches(searchTerm);
+    // Apply in reverse to preserve positions
+    const tr = editor.state.tr;
+    for (let i = matches.length - 1; i >= 0; i--) {
+      const m = matches[i];
+      tr.replaceWith(m.from, m.to, editor.state.schema.text(replaceTerm));
+    }
+    editor.view.dispatch(tr);
+    setSearchMatches([]);
+    setSearchIndex(0);
+  }
+
+  function openSearch() {
+    setSearchOpen(true);
+    const matches = findMatches(searchTerm);
+    setSearchMatches(matches);
+  }
+
   // ---- Import ----
   async function handleImportFile(file: File) {
     if (!editor) return;
@@ -615,6 +797,14 @@ export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPagePr
     document.addEventListener("click", close);
     return () => document.removeEventListener("click", close);
   }, [exportDocOpen]);
+
+  // Close color picker on outside click
+  useEffect(() => {
+    if (!colorPickerOpen) return;
+    const close = () => setColorPickerOpen(false);
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [colorPickerOpen]);
 
   const pendingExt = pendingFile ? pendingFile.name.split(".").pop()?.toLowerCase() ?? "" : "";
   const pendingLabel = pendingFile ? (IMPORT_FORMAT_LABELS[pendingExt] ?? pendingExt.toUpperCase()) : "";
@@ -812,12 +1002,17 @@ export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPagePr
               <span className="text-[10px] text-muted-foreground font-mono shrink-0">
                 {wordCount.words.toLocaleString()}w · {wordCount.chars.toLocaleString()}c
               </span>
-              {saving && (
+              {saving ? (
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0">
                   <Loader2 className="h-3 w-3 animate-spin" />
                   Saving...
                 </div>
-              )}
+              ) : savedRecently ? (
+                <div className="flex items-center gap-1.5 text-xs text-green-600 dark:text-green-400 shrink-0">
+                  <Check className="h-3 w-3" />
+                  Saved
+                </div>
+              ) : null}
             </div>
 
             {/* Formatting toolbar */}
@@ -902,12 +1097,42 @@ export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPagePr
                 >
                   <Highlighter className="h-3.5 w-3.5" />
                 </Button>
-                <input
-                  type="color"
-                  className="w-6 h-6 rounded cursor-pointer border-0 p-0"
-                  title="Text color"
-                  onChange={(e) => editor.chain().focus().setColor(e.target.value).run()}
-                />
+                <div className="relative">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 w-7 p-0 relative"
+                    title="Text color"
+                    onClick={() => setColorPickerOpen((o) => !o)}
+                  >
+                    <Type className="h-3.5 w-3.5" />
+                    {editor.getAttributes("textStyle").color && (
+                      <div className="absolute bottom-0.5 left-1 right-1 h-0.5 rounded" style={{ backgroundColor: editor.getAttributes("textStyle").color }} />
+                    )}
+                  </Button>
+                  {colorPickerOpen && (
+                    <div
+                      className="absolute top-full left-0 mt-1 z-50 bg-background border border-border rounded-md shadow-lg p-2 grid grid-cols-6 gap-1 w-[156px]"
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {['#000000','#ef4444','#f97316','#eab308','#22c55e','#3b82f6','#8b5cf6','#ec4899','#6b7280','#ffffff','#991b1b','#9a3412'].map((c) => (
+                        <button
+                          key={c}
+                          className="w-5 h-5 rounded border border-border hover:scale-110 transition-transform"
+                          style={{ backgroundColor: c }}
+                          onClick={() => { editor.chain().focus().setColor(c).run(); setColorPickerOpen(false); }}
+                        />
+                      ))}
+                      <button
+                        className="col-span-6 text-[10px] text-muted-foreground hover:text-foreground mt-0.5"
+                        onClick={() => { editor.chain().focus().unsetColor().run(); setColorPickerOpen(false); }}
+                      >
+                        Reset
+                      </button>
+                    </div>
+                  )}
+                </div>
                 <select
                   className="h-7 text-xs border border-border rounded bg-background px-1 cursor-pointer"
                   title="Font family"
@@ -932,6 +1157,30 @@ export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPagePr
                   onClick={() => editor.chain().focus().toggleBulletList().run()}
                 >
                   <List className="h-3.5 w-3.5" />
+                </Button>
+                <div className="w-px h-4 bg-border mx-1" />
+                <input
+                  ref={imageInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImageInsert(f); e.target.value = ""; }}
+                />
+                <Button
+                  variant="ghost"
+                  size="sm" className="h-7 w-7 p-0"
+                  onClick={() => imageInputRef.current?.click()}
+                  title="Insert image"
+                >
+                  <ImageIcon className="h-3.5 w-3.5" />
+                </Button>
+                <Button
+                  variant={searchOpen ? "secondary" : "ghost"}
+                  size="sm" className="h-7 w-7 p-0"
+                  onClick={() => { if (searchOpen) setSearchOpen(false); else openSearch(); }}
+                  title="Search & Replace (Ctrl+F)"
+                >
+                  <Search className="h-3.5 w-3.5" />
                 </Button>
                 <div className="flex-1" />
                 {/* Export dropdown — active document only */}
@@ -990,6 +1239,48 @@ export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPagePr
                 {activeEngine}
               </span>
             </div>
+
+            {/* Search & Replace panel */}
+            {searchOpen && (
+              <div className="border-b px-4 py-2 bg-background flex flex-col gap-1.5" onKeyDown={(e) => { if (e.key === "Escape") setSearchOpen(false); }}>
+                <div className="flex items-center gap-2">
+                  <input
+                    autoFocus
+                    className="flex-1 h-7 px-2 text-xs border border-border rounded bg-background outline-none focus:ring-1 focus:ring-primary/40"
+                    placeholder="Find... (Enter to jump)"
+                    value={searchTerm}
+                    onChange={(e) => {
+                      setSearchTerm(e.target.value);
+                      const m = findMatches(e.target.value);
+                      setSearchMatches(m);
+                      setSearchIndex(0);
+                    }}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); e.shiftKey ? searchPrev() : searchNext(); } }}
+                  />
+                  <span className="text-[11px] text-muted-foreground shrink-0 min-w-[48px] text-right">
+                    {searchMatches.length > 0 ? `${searchIndex + 1}/${searchMatches.length}` : "0/0"}
+                  </span>
+                  <button onClick={searchPrev} className="p-1 rounded hover:bg-muted" title="Previous"><ChevronUp className="h-3.5 w-3.5" /></button>
+                  <button onClick={searchNext} className="p-1 rounded hover:bg-muted" title="Next"><ChevronDown className="h-3.5 w-3.5" /></button>
+                  <button onClick={() => setSearchOpen(false)} className="p-1 rounded hover:bg-muted"><X className="h-3.5 w-3.5" /></button>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    className="flex-1 h-7 px-2 text-xs border border-border rounded bg-background outline-none focus:ring-1 focus:ring-primary/40"
+                    placeholder="Replace with..."
+                    value={replaceTerm}
+                    onChange={(e) => setReplaceTerm(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") replaceCurrent(); }}
+                  />
+                  <button onClick={replaceCurrent} disabled={searchMatches.length === 0} className="h-7 px-2 text-xs border border-border rounded hover:bg-muted disabled:opacity-40 flex items-center gap-1">
+                    <Replace className="h-3 w-3" /> Replace
+                  </button>
+                  <button onClick={replaceAll} disabled={searchMatches.length === 0} className="h-7 px-2 text-xs border border-border rounded hover:bg-muted disabled:opacity-40">
+                    All
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* TipTap editor + Outline + AI result panel */}
             <div className="flex-1 flex min-h-0">

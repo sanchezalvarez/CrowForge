@@ -396,6 +396,9 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
   const [selAnchor, setSelAnchor] = useState<AnchorPoint | null>(null);
   const selMoving = useRef<AnchorPoint | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  // Delete confirmation
+  const [pendingDelete, setPendingDelete] = useState<{ type: "row" | "col"; index: number; sheetId: string } | null>(null);
+
   // Context menus
   const [rowMenu, setRowMenu] = useState<{ rowIndex: number; x: number; y: number } | null>(null);
   const [colMenu, setColMenu] = useState<{ colIndex: number; x: number; y: number } | null>(null);
@@ -823,7 +826,7 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
     try {
       const res = await axios.post(`${API_BASE}/sheets/${activeSheet.id}/rows/insert`, { row_index: ri });
       updateSheet(res.data);
-    } catch { /* ignore */ }
+    } catch { toast("Failed to insert row.", "error"); }
     setRowMenu(null);
   }
   async function rowInsertBelow(ri: number) {
@@ -831,7 +834,7 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
     try {
       const res = await axios.post(`${API_BASE}/sheets/${activeSheet.id}/rows/insert`, { row_index: ri + 1 });
       updateSheet(res.data);
-    } catch { /* ignore */ }
+    } catch { toast("Failed to insert row.", "error"); }
     setRowMenu(null);
   }
   async function rowDuplicate(ri: number) {
@@ -839,16 +842,13 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
     try {
       const res = await axios.post(`${API_BASE}/sheets/${activeSheet.id}/rows/duplicate`, { row_index: ri });
       updateSheet(res.data);
-    } catch { /* ignore */ }
+    } catch { toast("Failed to duplicate row.", "error"); }
     setRowMenu(null);
   }
-  async function rowDelete(ri: number) {
+  function rowDelete(ri: number) {
     if (!activeSheet) return;
-    try {
-      const res = await axios.delete(`${API_BASE}/sheets/${activeSheet.id}/rows`, { data: { row_index: ri } });
-      updateSheet(res.data);
-    } catch { /* ignore */ }
     setRowMenu(null);
+    setPendingDelete({ type: "row", index: ri, sheetId: activeSheet.id });
   }
 
   // Close row menu on outside click
@@ -934,15 +934,10 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
     } catch { /* ignore */ }
     setColMenu(null);
   }
-  async function colDelete(ci: number) {
+  function colDelete(ci: number) {
     if (!activeSheet) return;
-    try {
-      const res = await axios.delete(`${API_BASE}/sheets/${activeSheet.id}/columns`, {
-        data: { col_index: ci },
-      });
-      updateSheet(res.data);
-    } catch { /* ignore */ }
     setColMenu(null);
+    setPendingDelete({ type: "col", index: ci, sheetId: activeSheet.id });
   }
 
   // Sort column (server-side, persists)
@@ -1227,13 +1222,25 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
     } catch { /* ignore */ }
   }
 
-  async function deleteRow(id: string, rowIndex: number) {
+  function deleteRow(id: string, rowIndex: number) {
+    setPendingDelete({ type: "row", index: rowIndex, sheetId: id });
+  }
+
+  async function confirmDelete() {
+    if (!pendingDelete) return;
+    const { type, index, sheetId } = pendingDelete;
+    setPendingDelete(null);
     try {
-      const res = await axios.delete(`${API_BASE}/sheets/${id}/rows`, {
-        data: { row_index: rowIndex },
-      });
-      updateSheet(res.data);
-    } catch { /* ignore */ }
+      if (type === "row") {
+        const res = await axios.delete(`${API_BASE}/sheets/${sheetId}/rows`, { data: { row_index: index } });
+        updateSheet(res.data);
+      } else {
+        const res = await axios.delete(`${API_BASE}/sheets/${sheetId}/columns`, { data: { col_index: index } });
+        updateSheet(res.data);
+      }
+    } catch {
+      toast(`Failed to delete ${type}.`, "error");
+    }
   }
 
   function submitNewColumn() {
@@ -2012,6 +2019,18 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
                 </>
               )}
               <div className="flex-1" />
+              {filters.size > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs gap-1 text-destructive border-destructive/40 hover:bg-destructive/10"
+                  onClick={() => setFilters(new Map())}
+                  title="Clear all filters"
+                >
+                  <Filter className="h-3 w-3" />
+                  Clear filters
+                </Button>
+              )}
               {/* Export dropdown — active sheet only */}
               <div className="relative" onClick={(e) => e.stopPropagation()}>
                 <Button
@@ -2409,9 +2428,9 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
                 </div>
               ) : (
                 <table className="border-collapse text-sm select-none" style={{ tableLayout: 'fixed', width: 'max-content' }} onMouseUp={handleMouseUp}>
-                  <thead>
+                  <thead className="sticky top-0 z-20">
                     <tr>
-                      <th className="border border-border bg-muted px-2 py-1.5 text-left text-xs font-medium text-muted-foreground w-10">#</th>
+                      <th className="sticky left-0 z-30 border border-border bg-muted px-2 py-1.5 text-left text-xs font-medium text-muted-foreground w-10">#</th>
                       {activeSheet.columns.map((col, ci) => (
                         <th
                           key={ci}
@@ -2541,7 +2560,7 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
                       return (
                       <tr key={ri}>
                         <td
-                          className="border border-border bg-muted/50 px-2 py-1 text-xs text-muted-foreground text-center cursor-context-menu select-none relative"
+                          className="sticky left-0 z-10 border border-border bg-muted/50 px-2 py-1 text-xs text-muted-foreground text-center cursor-context-menu select-none relative"
                           style={ri in rowHeights ? { height: rowHeights[ri] } : { minHeight: DEFAULT_ROW_HEIGHT }}
                           onContextMenu={(e) => {
                             e.preventDefault();
@@ -2715,7 +2734,7 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
                                       {(cell ?? "").toLowerCase() === "true" ? "Yes" : "No"}
                                     </span>
                                   ) : isErrorValue ? (
-                                    <span className="text-destructive font-mono text-xs cursor-help" title={`${cell}\nFormula: ${activeSheet.formulas[`${ri},${ci}`]}`}>{cell}</span>
+                                    <span className="text-destructive font-mono text-xs cursor-help flex items-center gap-0.5" title={`${cell}\nFormula: ${activeSheet.formulas[`${ri},${ci}`]}`}><AlertCircle className="h-2.5 w-2.5 shrink-0" />{cell}</span>
                                   ) : (
                                     <span>{cell || <span className="text-muted-foreground/30">&nbsp;</span>}</span>
                                   )}
@@ -3100,6 +3119,22 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
           </button>
         </div>
       )}
+
+      {/* Delete confirmation dialog */}
+      <Dialog open={!!pendingDelete} onOpenChange={(o) => { if (!o) setPendingDelete(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Delete {pendingDelete?.type === "col" ? "column" : "row"}?</DialogTitle>
+            <DialogDescription>
+              This action cannot be undone. The {pendingDelete?.type === "col" ? "column and all its data" : "row"} will be permanently removed.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setPendingDelete(null)}>Cancel</Button>
+            <Button variant="destructive" size="sm" onClick={confirmDelete}>Delete</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Template picker overlay */}
       {templatePickerOpen && (

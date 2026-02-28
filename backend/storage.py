@@ -529,17 +529,24 @@ class SheetRepository:
             def sort_key(item):
                 _, row = item
                 val = row[col_index] if col_index < len(row) else ""
-                if not val:
-                    return (1, "")  # empty last
                 if col_type == "number":
                     try:
-                        return (0, float(val))
-                    except ValueError:
-                        return (1, val)
-                return (0, val.lower())
+                        return float(val)
+                    except (ValueError, TypeError):
+                        return float("inf")
+                return (val or "").lower()
 
             indexed = list(enumerate(sheet.rows))
-            indexed.sort(key=sort_key, reverse=not ascending)
+            # Separate rows that have a value in the sort column from empty ones
+            def _has_val(item):
+                _, row = item
+                val = row[col_index] if col_index < len(row) else ""
+                return bool(val and str(val).strip())
+
+            data_rows = [item for item in indexed if _has_val(item)]
+            empty_rows = [item for item in indexed if not _has_val(item)]
+            data_rows.sort(key=sort_key, reverse=not ascending)
+            indexed = data_rows + empty_rows  # empty rows always at bottom
             old_to_new = {old_i: new_i for new_i, (old_i, _) in enumerate(indexed)}
             sheet.rows = [row for _, row in indexed]
 

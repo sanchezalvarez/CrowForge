@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from "../components/ui/select";
 import { cn } from "../lib/utils";
+import { toast } from "../hooks/useToast";
 import type { DocumentContext } from "../App";
 import type { TuningParams } from "../components/AIControlPanel";
 import crowforgeIco from "../assets/crowforge_ico.png";
@@ -279,7 +280,9 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
       setSessions((prev) => [session, ...prev]);
       setActiveSessionId(session.id);
       setActiveMode(session.mode);
-    } catch { /* ignore */ }
+    } catch {
+      toast("Failed to create chat session.", "error");
+    }
   }
 
   async function deleteSession(id: number) {
@@ -287,7 +290,9 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
       await axios.delete(`${API_BASE}/chat/session/${id}`);
       setSessions((prev) => prev.filter((s) => s.id !== id));
       if (activeSessionId === id) { setActiveSessionId(null); setMessages([]); }
-    } catch { /* ignore */ }
+    } catch {
+      toast("Failed to delete chat session.", "error");
+    }
   }
 
   async function changeMode(mode: string) {
@@ -583,7 +588,7 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
                         <button
                           key={doc.id}
                           className="w-full text-left px-3 py-2 text-sm hover:bg-muted truncate"
-                          onClick={() => { onConnectDoc?.({ title: doc.title, outline: [], selectedText: null }); setShowDocPicker(false); }}
+                          onClick={() => { onConnectDoc?.({ title: doc.title, outline: [], selectedText: null, fullText: null }); setShowDocPicker(false); }}
                         >
                           {doc.title}
                         </button>

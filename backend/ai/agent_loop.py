@@ -6,9 +6,10 @@ import time
 from typing import AsyncGenerator
 from backend.ai.tool_registry import ToolRegistry
 
-MAX_ITERATIONS = 10
+MAX_ITERATIONS = 6
 TOOL_TIMEOUT_SECONDS = 30
 MAX_TOOL_RETRIES = 1
+MAX_CONSECUTIVE_ERRORS = 3
 
 
 async def run_agent_loop(
@@ -30,6 +31,7 @@ async def run_agent_loop(
     """
     tools = tool_registry.schemas
     tool_failure_counts: dict[str, int] = {}
+    consecutive_errors = 0
 
     for iteration in range(MAX_ITERATIONS):
         current_text = ""
@@ -88,7 +90,9 @@ async def run_agent_loop(
         if current_text.strip():
             yield json.dumps({"type": "thinking", "content": current_text.strip()})
 
-        # Build the assistant message with tool_calls for the message history
+        # Build the assistant message with tool_calls for the message history.
+        # Only keep the FIRST valid tool call — local models often emit multiple
+        # calls before seeing results, causing them to fabricate IDs.
         assistant_msg: dict = {"role": "assistant", "content": current_text or None, "tool_calls": []}
         for i, tc in enumerate(tool_calls_collected):
             if not tc["name"]:
@@ -98,6 +102,7 @@ async def run_agent_loop(
                 "type": "function",
                 "function": {"name": tc["name"], "arguments": tc["arguments"]},
             })
+            break  # one tool per turn
         messages.append(assistant_msg)
 
         # Execute each tool call sequentially
@@ -135,10 +140,20 @@ async def run_agent_loop(
 
             duration_ms = round((time.monotonic() - t0) * 1000)
 
+            # Also check for application-level errors in the result JSON
+            if not error_msg and result:
+                try:
+                    parsed_result = json.loads(result)
+                    if isinstance(parsed_result, dict) and "error" in parsed_result:
+                        error_msg = parsed_result["error"]
+                except (json.JSONDecodeError, TypeError):
+                    pass
+
             if error_msg:
                 # Track failure count
                 fail_key = f"{name}:{call_id}"
                 tool_failure_counts[fail_key] = tool_failure_counts.get(fail_key, 0) + 1
+                consecutive_errors += 1
 
                 yield json.dumps({
                     "type": "tool_error",
@@ -159,6 +174,7 @@ async def run_agent_loop(
                     "content": feedback,
                 })
             else:
+                consecutive_errors = 0
                 # ── finished_tool ──
                 yield json.dumps({
                     "type": "finished_tool",
@@ -173,6 +189,11 @@ async def run_agent_loop(
                     "tool_call_id": call_id,
                     "content": result,
                 })
+
+        # Break early if too many consecutive tool errors
+        if consecutive_errors >= MAX_CONSECUTIVE_ERRORS:
+            yield json.dumps({"type": "error", "message": "Too many consecutive tool errors — stopping agent loop."})
+            return
 
         # Loop continues — the LLM gets another turn with tool results
 

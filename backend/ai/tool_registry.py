@@ -140,11 +140,12 @@ TOOL_DEFINITIONS = [
         "type": "function",
         "function": {
             "name": "create_document",
-            "description": "Create a new empty document.",
+            "description": "Create a new document, optionally with initial text content.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "title": {"type": "string", "description": "Document title."},
+                    "content": {"type": "string", "description": "Optional initial text content."},
                 },
                 "required": ["title"],
             },

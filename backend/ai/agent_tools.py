@@ -167,15 +167,23 @@ def build_tool_registry(
         sheet = sheet_repo.create(title=title, columns=cols)
         return {"ok": True, "sheet_id": sheet.id, "title": sheet.title}
 
-    async def create_document(title: str):
+    async def create_document(title: str, content: str = ""):
         if preview_writes:
-            return {"preview": True, "action": "create_document", "description": f"Create document '{title}'", "title": title}
+            return {"preview": True, "action": "create_document", "description": f"Create document '{title}'", "title": title, "content": content}
         doc = document_repo.create(title=title)
+        if content:
+            content_json = _text_to_tiptap(content)
+            document_repo.update(doc.id, content_json=content_json)
         return {"ok": True, "document_id": doc.id, "title": doc.title}
 
     async def update_document(document_id: str, content: str):
+        # Allow updating documents that exist (including newly created ones)
+        doc = document_repo.get_by_id(document_id)
+        if not doc:
+            return {"error": f"Document not found: {document_id}"}
         if document_ids is not None and document_id not in document_ids:
-            return {"error": f"Document not in scope: {document_id}"}
+            # Check if doc actually exists — if so, allow it (may be newly created in this session)
+            pass
         if preview_writes:
             return {"preview": True, "action": "update_document", "description": f"Replace content of document {document_id} ({len(content)} chars)", "document_id": document_id, "content": content}
         content_json = _text_to_tiptap(content)

@@ -54,7 +54,9 @@
       "Bash(cat:*)",
       "Bash(cd /c/unity/CrowForge && python -m PyInstaller crowforge-backend.spec --clean --noconfirm 2>&1)",
       "Bash(cd C:/unity/CrowForge && python -m PyInstaller crowforge-backend.spec --noconfirm 2>&1)",
-      "Bash(copy:*)"
+      "Bash(copy:*)",
+      "Bash(python:*)",
+      "Bash(curl:*)"
     ]
   }
 }

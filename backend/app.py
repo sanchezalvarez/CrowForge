@@ -778,15 +778,17 @@ CHAT_MODES = {
     "brainstorm": "You are a creative brainstorming partner. Help the user generate ideas, explore possibilities, and think outside the box. Encourage divergent thinking.",
     "agent": (
         "You are an AI agent with access to the user's workspace (Sheets and Documents). "
-        "Use tools to answer questions — never guess at IDs or content.\n\n"
+        "You MUST use tools to interact with data — never guess or fabricate IDs.\n\n"
+        "CRITICAL RULES:\n"
+        "- NEVER invent or guess IDs. Always call list_sheets or list_documents FIRST to get real IDs.\n"
+        "- After creating something (create_sheet, create_document), use the ID returned in the tool result for any follow-up operations.\n"
+        "- If a tool fails, do NOT retry with a made-up ID. Report the error to the user.\n"
+        "- Do NOT call the same tool with the same arguments more than once.\n\n"
         "Workflow:\n"
-        "1. To work with a sheet: call list_sheets to get its ID, then read_sheet or write tools.\n"
-        "2. To work with a document: call list_documents to get its ID, then read_document or update_document.\n"
-        "3. Call only the tools you need. Do not call the same tool twice unnecessarily.\n"
-        "4. After finishing, give a short plain-text summary of what you did.\n\n"
-        "IMPORTANT: Write operations (write_to_sheet, add_sheet_row, add_sheet_column, "
-        "create_sheet, create_document, update_document) are in preview mode — they show "
-        "a description but do not execute until the user clicks Apply."
+        "1. To work with a sheet: call list_sheets → get ID → read_sheet/write_to_sheet/etc.\n"
+        "2. To work with a document: call list_documents → get ID → read_document/update_document.\n"
+        "3. To create new: call create_sheet or create_document → use the returned ID for further edits.\n"
+        "4. After finishing, give a short plain-text summary of what you did."
     ),
 }
 
@@ -967,7 +969,7 @@ async def stream_agent_message(session_id: int, req: ChatMessageRequest, request
     history = chat_message_repo.get_by_session_id(session_id)
     system_prompt = CHAT_MODES.get(session.mode, CHAT_MODES["agent"])
     temperature = req.temperature if req.temperature is not None else 0.7
-    max_tokens = req.max_tokens if req.max_tokens is not None else 1024
+    max_tokens = req.max_tokens if req.max_tokens is not None else 2048  # agent needs more tokens for tool calls
 
     # Build a scoped tool registry if scope is provided
     scope = req.scope or {}
@@ -978,12 +980,10 @@ async def stream_agent_message(session_id: int, req: ChatMessageRequest, request
             sheet_repo, document_repo,
             sheet_ids=scoped_sheet_ids,
             document_ids=scoped_document_ids,
-            preview_writes=True,
         )
     else:
         scoped_registry = build_tool_registry(
             sheet_repo, document_repo,
-            preview_writes=True,
         )
 
     messages = [{"role": "system", "content": system_prompt}]
@@ -1044,10 +1044,15 @@ async def apply_agent_write(session_id: int, data: dict):
     args = data.get("args", {})
     if not tool_name:
         raise HTTPException(status_code=400, detail="Missing 'tool' field")
-    # Build a non-preview registry to actually execute
-    registry = build_tool_registry(sheet_repo, document_repo, preview_writes=False)
-    import asyncio
-    result_str = asyncio.get_event_loop().run_until_complete(registry.call(tool_name, args)) if False else await registry.call(tool_name, args)
+    # Build a non-preview registry, preserving scope if provided
+    scope = data.get("scope") or {}
+    registry = build_tool_registry(
+        sheet_repo, document_repo,
+        sheet_ids=scope.get("sheet_ids"),
+        document_ids=scope.get("document_ids"),
+        preview_writes=False,
+    )
+    result_str = await registry.call(tool_name, args)
     try:
         result = json.loads(result_str)
     except (json.JSONDecodeError, TypeError):

@@ -257,7 +257,7 @@ class HTTPAIEngine(AIEngine):
 class LocalLLAMAEngine(AIEngine):
     """Local GGUF engine with runtime model hot-swap."""
 
-    def __init__(self, model_path: str | None = None, n_ctx: int | None = None, chat_format: str = None):
+    def __init__(self, model_path: str | None = None, n_ctx: int | None = None, chat_format: str = "chatml"):
         self.llm = None
         self.is_ready = False
         self.model_path: str | None = None
@@ -284,7 +284,7 @@ class LocalLLAMAEngine(AIEngine):
                     n_ctx=n_ctx,
                     n_threads=os.cpu_count(),
                     verbose=False,
-                    chat_format=self.chat_format,  # None = auto-detect from GGUF metadata
+                    chat_format=self.chat_format,
                 )
                 self.model_path = model_path
                 self.n_ctx = n_ctx
@@ -363,7 +363,7 @@ class LocalLLAMAEngine(AIEngine):
                 top_p=top_p,
                 repeat_penalty=1.3,
                 stream=True,
-                stop=["<|im_end|>", "<|endoftext|>", "<|eot_id|>"],
+                stop=["<|im_start|>", "<|im_end|>", "<|endoftext|>", "<|eot_id|>", "Assistant:", "User:"],
             )
             if json_mode:
                 kwargs["response_format"] = {"type": "json_object"}
@@ -432,28 +432,85 @@ class LocalLLAMAEngine(AIEngine):
 
         def _run_inference():
             try:
-                # llama-cpp-python streaming with tools is unreliable for some models;
-                # use non-streaming to get a complete, well-formed tool call response.
+                # Build a system prompt that describes the available tools so the model
+                # can emit <tool_call> blocks.  We parse those ourselves rather than
+                # relying on llama-cpp-python's tool_choice which needs specific chat formats.
+                tool_lines = []
+                for t in tools:
+                    fn = t.get("function", t)
+                    params = fn.get("parameters", {}).get("properties", {})
+                    req = fn.get("parameters", {}).get("required", [])
+                    param_parts = []
+                    for pname, pdef in params.items():
+                        star = "*" if pname in req else ""
+                        param_parts.append(f"{pname}{star}: {pdef.get('type','string')}")
+                    sig = ", ".join(param_parts) if param_parts else ""
+                    tool_lines.append(f"- {fn['name']}({sig}) — {fn.get('description','')}")
+                tool_prompt = (
+                    "\n\nYou have tools. To call one, write EXACTLY:\n"
+                    "<tool_call>\n{\"name\": \"tool_name\", \"arguments\": {\"arg\": \"value\"}}\n</tool_call>\n\n"
+                    "RULES:\n"
+                    "- Call exactly ONE tool per response. Wait for the result before calling the next tool.\n"
+                    "- NEVER guess or fabricate IDs. Use list_sheets/list_documents to get real IDs.\n"
+                    "- After create_sheet/create_document, the result contains the new ID. Use THAT ID for follow-up calls.\n"
+                    "- Do NOT plan multiple tool calls at once. One tool, wait for result, then decide next step.\n\n"
+                    "Tools:\n" + "\n".join(tool_lines)
+                )
+                # Inject tool descriptions into the system message and convert
+                # OpenAI-format tool messages to plain assistant/user turns that
+                # chatml can understand.
+                patched_messages = []
+                for msg in messages:
+                    role = msg.get("role", "")
+                    if role == "system":
+                        patched_messages.append({"role": "system", "content": msg["content"] + tool_prompt})
+                    elif role == "assistant" and msg.get("tool_calls"):
+                        # Convert assistant tool_calls to text showing what tools were called
+                        tc_text = msg.get("content") or ""
+                        for tc in msg["tool_calls"]:
+                            fn = tc.get("function", {})
+                            tc_text += f'\n<tool_call>\n{{"name": "{fn.get("name","")}", "arguments": {fn.get("arguments","{}") }}}\n</tool_call>'
+                        patched_messages.append({"role": "assistant", "content": tc_text.strip()})
+                    elif role == "tool":
+                        # Convert tool results to user messages so the model sees them
+                        tool_id = msg.get("tool_call_id", "")
+                        content = msg.get("content", "")
+                        patched_messages.append({"role": "user", "content": f"[Tool result for {tool_id}]: {content}"})
+                    else:
+                        patched_messages.append(msg)
+
                 kwargs = dict(
-                    messages=messages,
-                    tools=tools,
-                    tool_choice="auto",
+                    messages=patched_messages,
                     max_tokens=max_tokens,
                     temperature=temperature,
                     stream=False,
                 )
                 response = self.llm.create_chat_completion(**kwargs)
                 message = response["choices"][0].get("message", {})
-                # Emit text content if present
-                if message.get("content"):
+                content = message.get("content") or ""
+                tool_calls = []
+
+                # Parse <tool_call> blocks from the model's text output
+                if "<tool_call>" in content:
+                    import re as _re
+                    for m in _re.finditer(r"<tool_call>(.*?)</tool_call>", content, _re.DOTALL):
+                        try:
+                            obj = json.loads(m.group(1).strip())
+                            tool_calls.append(obj)
+                        except (json.JSONDecodeError, ValueError):
+                            pass
+                    # Strip tool_call blocks from content
+                    content = _re.sub(r"\s*<tool_call>.*?</tool_call>\s*", "", content, flags=_re.DOTALL).strip()
+
+                # Emit remaining text content (thinking text)
+                if content:
                     loop.call_soon_threadsafe(queue.put_nowait,
-                        json.dumps({"type": "token", "content": message["content"]}))
-                # Emit tool calls if present
-                tool_calls = message.get("tool_calls") or []
-                for i, tc in enumerate(tool_calls):
-                    fn = tc.get("function", {})
-                    args = fn.get("arguments", "{}")
-                    # llama-cpp may return arguments as a dict instead of JSON string
+                        json.dumps({"type": "token", "content": content}))
+
+                # Emit parsed tool calls
+                for i, obj in enumerate(tool_calls):
+                    name = obj.get("name", "")
+                    args = obj.get("arguments", {})
                     if isinstance(args, dict):
                         args = json.dumps(args)
                     loop.call_soon_threadsafe(queue.put_nowait,
@@ -461,8 +518,8 @@ class LocalLLAMAEngine(AIEngine):
                             "type": "tool_call_delta",
                             "tool_call": {
                                 "index": i,
-                                "id": tc.get("id", f"call_{i}"),
-                                "function": {"name": fn.get("name", ""), "arguments": args},
+                                "id": f"call_{i}",
+                                "function": {"name": name, "arguments": args},
                             },
                         }))
                 loop.call_soon_threadsafe(queue.put_nowait, None)

@@ -157,8 +157,9 @@ function AgentToolBubble({ events, sessionId, isSending }: { events: AgentEvent[
   if (events.length === 0) return null;
 
   type ThinkingStep = { kind: "thinking"; content: string };
+  type ErrorStep = { kind: "error"; message: string };
   type ToolStep = { kind: "tool"; callId: string; tool: string; args: Record<string, unknown>; result?: string; durationMs?: number; finished: boolean; hasError: boolean; errorText?: string; isPreview: boolean; previewDesc?: string };
-  type Step = ThinkingStep | ToolStep;
+  type Step = ThinkingStep | ErrorStep | ToolStep;
 
   const steps: Step[] = [];
   const toolMap = new Map<string, ToolStep>();
@@ -166,6 +167,8 @@ function AgentToolBubble({ events, sessionId, isSending }: { events: AgentEvent[
   for (const evt of events) {
     if (evt.type === "thinking") {
       steps.push({ kind: "thinking", content: evt.content ?? "" });
+    } else if (evt.type === "error") {
+      steps.push({ kind: "error", message: evt.message ?? "Unknown error" });
     } else if (evt.type === "started_tool") {
       const step: ToolStep = {
         kind: "tool",
@@ -235,6 +238,14 @@ function AgentToolBubble({ events, sessionId, isSending }: { events: AgentEvent[
           return (
             <div key={`t${i}`} className="text-xs text-violet-600/70 dark:text-violet-400/70 italic px-1 py-0.5">
               {step.content}
+            </div>
+          );
+        }
+        if (step.kind === "error") {
+          return (
+            <div key={`e${i}`} className="flex items-center gap-1.5 text-xs text-red-600 dark:text-red-400 bg-red-500/10 border border-red-500/30 px-2.5 py-1.5 rounded-md">
+              <XCircle className="h-3 w-3 shrink-0" />
+              {step.message}
             </div>
           );
         }
@@ -873,15 +884,18 @@ export function AgentPage({ tuningParams }: AgentPageProps) {
               </div>
             )}
 
-            {/* Scope warning */}
-            {scopeCount === 0 && supportsTools !== false && (
-              <div className="mx-4 mt-2 flex items-center gap-2 text-xs text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/30 px-3 py-2 rounded-md">
-                No items selected — the agent won't be able to access any sheets or documents.
+            {/* Scope warning — only show if user explicitly deselected everything */}
+            {scopeCount === 0 && totalCount > 0 && supportsTools !== false && (
+              <div className="mx-4 mt-2 flex items-center gap-2 text-xs text-muted-foreground bg-muted/50 border px-3 py-2 rounded-md">
+                Agent context is empty — it won't see any sheets or documents.
                 <button
-                  onClick={() => setShowContextPanel(true)}
+                  onClick={() => {
+                    setSelectedSheetIds(new Set(allSheets.map(s => s.id)));
+                    setSelectedDocumentIds(new Set(allDocuments.map(d => d.id)));
+                  }}
                   className="underline hover:no-underline font-medium"
                 >
-                  Configure context
+                  Select all
                 </button>
               </div>
             )}

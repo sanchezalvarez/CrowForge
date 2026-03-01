@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import axios from "axios";
-import { Download, CheckCircle2, Loader2, X, AlertCircle, Trash2 } from "lucide-react";
+import { Download, CheckCircle2, Loader2, X, AlertCircle, Trash2, ExternalLink } from "lucide-react";
 import { toast } from "../hooks/useToast";
 import { openUrl } from "@tauri-apps/plugin-opener";
 
@@ -41,10 +41,63 @@ interface GalleryModel {
   description: string;
   filename: string;
   url: string;
+  infoUrl?: string;
   tags?: string[];
 }
 
 const GALLERY_MODELS: GalleryModel[] = [
+  // ── Agent-capable models (tool calling / function calling) ──
+  {
+    name: "Qwen2.5 7B Instruct Q4_K_M",
+    size: "~4.7 GB",
+    license: "Apache 2.0",
+    description: "Best local agent model — native tool/function calling, strong coding and math.",
+    filename: "Qwen2.5-7B-Instruct-Q4_K_M.gguf",
+    url: "https://huggingface.co/bartowski/Qwen2.5-7B-Instruct-GGUF/resolve/main/Qwen2.5-7B-Instruct-Q4_K_M.gguf",
+    infoUrl: "https://huggingface.co/Qwen/Qwen2.5-7B-Instruct",
+    tags: ["agent", "coding", "math", "multilingual"],
+  },
+  {
+    name: "Qwen2.5 3B Instruct Q4_K_M",
+    size: "~1.9 GB",
+    license: "Apache 2.0",
+    description: "Lightweight agent model — supports tool calling, good for lower-end hardware.",
+    filename: "Qwen2.5-3B-Instruct-Q4_K_M.gguf",
+    url: "https://huggingface.co/bartowski/Qwen2.5-3B-Instruct-GGUF/resolve/main/Qwen2.5-3B-Instruct-Q4_K_M.gguf",
+    infoUrl: "https://huggingface.co/Qwen/Qwen2.5-3B-Instruct",
+    tags: ["agent", "translate", "multilingual", "fast"],
+  },
+  {
+    name: "Hermes 3 Llama 3.1 8B Q4_K_M",
+    size: "~4.9 GB",
+    license: "Meta Llama 3.1",
+    description: "NousResearch fine-tune with excellent structured output and function calling.",
+    filename: "Hermes-3-Llama-3.1-8B-Q4_K_M.gguf",
+    url: "https://huggingface.co/NousResearch/Hermes-3-Llama-3.1-8B-GGUF/resolve/main/Hermes-3-Llama-3.1-8B-Q4_K_M.gguf",
+    infoUrl: "https://huggingface.co/NousResearch/Hermes-3-Llama-3.1-8B",
+    tags: ["agent", "chat", "reasoning"],
+  },
+  {
+    name: "Mistral Nemo 12B Instruct Q4_K_M",
+    size: "~7.1 GB",
+    license: "Apache 2.0",
+    description: "Mistral + NVIDIA 12B — native function calling, strong reasoning. Needs 12 GB+ RAM.",
+    filename: "Mistral-Nemo-Instruct-2407-Q4_K_M.gguf",
+    url: "https://huggingface.co/bartowski/Mistral-Nemo-Instruct-2407-GGUF/resolve/main/Mistral-Nemo-Instruct-2407-Q4_K_M.gguf",
+    infoUrl: "https://huggingface.co/mistralai/Mistral-Nemo-Instruct-2407",
+    tags: ["agent", "chat", "reasoning"],
+  },
+  {
+    name: "Functionary Small v3.2 Q4_K_M",
+    size: "~4.9 GB",
+    license: "Meta Llama 3.1",
+    description: "Purpose-built for function/tool calling — top accuracy for agent workflows.",
+    filename: "functionary-small-v3.2-Q4_K_M.gguf",
+    url: "https://huggingface.co/meetkai/functionary-small-v3.2-GGUF/resolve/main/functionary-small-v3.2.Q4_K_M.gguf",
+    infoUrl: "https://huggingface.co/meetkai/functionary-small-v3.2",
+    tags: ["agent"],
+  },
+  // ── General-purpose models (no tool calling) ──
   {
     name: "Llama 3.2 3B Instruct Q4_K_M",
     size: "~2.0 GB",
@@ -52,6 +105,7 @@ const GALLERY_MODELS: GalleryModel[] = [
     description: "Compact and capable general-purpose model from Meta. Great for chat and writing.",
     filename: "Llama-3.2-3B-Instruct-Q4_K_M.gguf",
     url: "https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF/resolve/main/Llama-3.2-3B-Instruct-Q4_K_M.gguf",
+    infoUrl: "https://huggingface.co/meta-llama/Llama-3.2-3B-Instruct",
     tags: ["chat", "general"],
   },
   {
@@ -61,6 +115,7 @@ const GALLERY_MODELS: GalleryModel[] = [
     description: "Larger Llama model with stronger reasoning and instruction following.",
     filename: "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf",
     url: "https://huggingface.co/bartowski/Meta-Llama-3.1-8B-Instruct-GGUF/resolve/main/Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf",
+    infoUrl: "https://huggingface.co/meta-llama/Meta-Llama-3.1-8B-Instruct",
     tags: ["chat", "reasoning"],
   },
   {
@@ -70,6 +125,7 @@ const GALLERY_MODELS: GalleryModel[] = [
     description: "Google's lightweight Gemma 2 — fast, multilingual, good for translation.",
     filename: "gemma-2-2b-it-Q4_K_M.gguf",
     url: "https://huggingface.co/bartowski/gemma-2-2b-it-GGUF/resolve/main/gemma-2-2b-it-Q4_K_M.gguf",
+    infoUrl: "https://huggingface.co/google/gemma-2-2b-it",
     tags: ["translate", "multilingual", "fast"],
   },
   {
@@ -79,6 +135,7 @@ const GALLERY_MODELS: GalleryModel[] = [
     description: "Google's full Gemma 2 9B — excellent multilingual, translation and reasoning.",
     filename: "gemma-2-9b-it-Q4_K_M.gguf",
     url: "https://huggingface.co/bartowski/gemma-2-9b-it-GGUF/resolve/main/gemma-2-9b-it-Q4_K_M.gguf",
+    infoUrl: "https://huggingface.co/google/gemma-2-9b-it",
     tags: ["translate", "multilingual", "reasoning"],
   },
   {
@@ -88,25 +145,8 @@ const GALLERY_MODELS: GalleryModel[] = [
     description: "Microsoft's efficient small model, great for coding and reasoning.",
     filename: "Phi-3.5-mini-instruct-Q4_K_M.gguf",
     url: "https://huggingface.co/bartowski/Phi-3.5-mini-instruct-GGUF/resolve/main/Phi-3.5-mini-instruct-Q4_K_M.gguf",
+    infoUrl: "https://huggingface.co/microsoft/Phi-3.5-mini-instruct",
     tags: ["coding", "reasoning"],
-  },
-  {
-    name: "Qwen2.5 3B Instruct Q4_K_M",
-    size: "~1.9 GB",
-    license: "Apache 2.0",
-    description: "Alibaba's multilingual model with strong instruction following and translation.",
-    filename: "Qwen2.5-3B-Instruct-Q4_K_M.gguf",
-    url: "https://huggingface.co/bartowski/Qwen2.5-3B-Instruct-GGUF/resolve/main/Qwen2.5-3B-Instruct-Q4_K_M.gguf",
-    tags: ["translate", "multilingual"],
-  },
-  {
-    name: "Qwen2.5 7B Instruct Q4_K_M",
-    size: "~4.7 GB",
-    license: "Apache 2.0",
-    description: "Larger Qwen model — strong at coding, math and multilingual tasks.",
-    filename: "Qwen2.5-7B-Instruct-Q4_K_M.gguf",
-    url: "https://huggingface.co/bartowski/Qwen2.5-7B-Instruct-GGUF/resolve/main/Qwen2.5-7B-Instruct-Q4_K_M.gguf",
-    tags: ["coding", "math", "multilingual"],
   },
   {
     name: "Mistral 7B Instruct v0.3 Q4_K_M",
@@ -115,6 +155,7 @@ const GALLERY_MODELS: GalleryModel[] = [
     description: "Mistral's flagship 7B instruction model — high quality output.",
     filename: "Mistral-7B-Instruct-v0.3-Q4_K_M.gguf",
     url: "https://huggingface.co/bartowski/Mistral-7B-Instruct-v0.3-GGUF/resolve/main/Mistral-7B-Instruct-v0.3-Q4_K_M.gguf",
+    infoUrl: "https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.3",
     tags: ["chat", "general"],
   },
   {
@@ -124,6 +165,7 @@ const GALLERY_MODELS: GalleryModel[] = [
     description: "Cohere's multilingual model trained on 23 languages — best-in-class for translation.",
     filename: "aya-expanse-8b-Q4_K_M.gguf",
     url: "https://huggingface.co/bartowski/aya-expanse-8b-GGUF/resolve/main/aya-expanse-8b-Q4_K_M.gguf",
+    infoUrl: "https://huggingface.co/CohereForAI/aya-expanse-8b",
     tags: ["translate", "multilingual"],
   },
   {
@@ -133,11 +175,12 @@ const GALLERY_MODELS: GalleryModel[] = [
     description: "Tiny but surprisingly capable reasoning model distilled from DeepSeek-R1.",
     filename: "DeepSeek-R1-Distill-Qwen-1.5B-Q4_K_M.gguf",
     url: "https://huggingface.co/bartowski/DeepSeek-R1-Distill-Qwen-1.5B-GGUF/resolve/main/DeepSeek-R1-Distill-Qwen-1.5B-Q4_K_M.gguf",
+    infoUrl: "https://huggingface.co/deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B",
     tags: ["reasoning", "fast"],
   },
 ];
 
-const ALL_TAGS = ["all", "chat", "translate", "multilingual", "coding", "reasoning", "math", "fast", "general"];
+const ALL_TAGS = ["all", "agent", "chat", "translate", "multilingual", "coding", "reasoning", "math", "fast", "general"];
 
 type Section = "ai" | "models" | "appearance" | "user" | "about";
 
@@ -200,7 +243,7 @@ export function SettingsPage({ theme, setTheme, baseColor, setBaseColor }: Setti
     model: "gpt-4o-mini",
     model_path: "",
     models_dir: "C:/models",
-    ctx_size: 2048,
+    ctx_size: 8192,
   });
   const [installedFiles, setInstalledFiles] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
@@ -467,13 +510,16 @@ export function SettingsPage({ theme, setTheme, baseColor, setBaseColor }: Setti
 
             {config.engine === "local" && (
               <div>
-                <label className="text-xs font-medium text-muted-foreground">Context Size</label>
+                <label className="text-xs font-medium text-muted-foreground">Context Size (tokens)</label>
                 <input
                   type="number"
                   value={config.ctx_size}
                   onChange={(e) => setConfig({ ...config, ctx_size: Number(e.target.value) })}
                   className="mt-1 w-full rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-primary"
                 />
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Minimum 4096 for agent tool calling. 8192 recommended. Higher values use more RAM.
+                </p>
               </div>
             )}
 
@@ -607,7 +653,18 @@ export function SettingsPage({ theme, setTheme, baseColor, setBaseColor }: Setti
                   <div key={m.filename} className="rounded-lg border p-4 space-y-2">
                     <div className="flex items-start justify-between gap-4">
                       <div className="space-y-0.5 min-w-0">
-                        <p className="text-sm font-medium">{m.name}</p>
+                        <div className="flex items-center gap-1.5">
+                          <p className="text-sm font-medium">{m.name}</p>
+                          {m.infoUrl && (
+                            <button
+                              onClick={() => openUrl(m.infoUrl!)}
+                              className="text-muted-foreground hover:text-foreground transition-colors"
+                              title="More info on HuggingFace"
+                            >
+                              <ExternalLink size={12} />
+                            </button>
+                          )}
+                        </div>
                         <p className="text-xs text-muted-foreground">{m.description}</p>
                         <div className="flex flex-wrap gap-2 text-xs text-muted-foreground pt-1">
                           <span>{m.size}</span>

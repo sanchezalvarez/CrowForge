@@ -9,6 +9,7 @@ import {
   PanelRightClose,
   PanelRightOpen,
   CpuIcon,
+  Bot,
 } from "lucide-react";
 import crowforgeLogo from "./assets/crowforge_ico.png";
 import { cn } from "./lib/utils";
@@ -17,6 +18,7 @@ import { ChatPage } from "./pages/ChatPage";
 import { DocumentsPage } from "./pages/DocumentsPage";
 import { SheetsPage } from "./pages/SheetsPage";
 import { SettingsPage } from "./pages/SettingsPage";
+import { AgentPage } from "./pages/AgentPage";
 import { SplashScreen } from "./components/SplashScreen";
 import { OnboardingPage } from "./pages/OnboardingPage";
 import { Toaster } from "./components/ui/toaster";
@@ -56,7 +58,7 @@ class PageErrorBoundary extends Component<{ children: ReactNode; page: string },
 }
 
 type AppStatus = "loading" | "onboarding" | "ready" | "failed";
-type AppPage = "chat" | "documents" | "sheets" | "benchmark" | "settings";
+type AppPage = "chat" | "agent" | "documents" | "sheets" | "benchmark" | "settings";
 
 export interface DocumentContext {
   title: string;
@@ -221,6 +223,7 @@ export default function App() {
 
   const navItems: { page: AppPage; label: string; icon: typeof MessageSquare }[] = [
     { page: "chat", label: "Chat", icon: MessageSquare },
+    { page: "agent", label: "Agent", icon: Bot },
     { page: "documents", label: "Documents", icon: FileText },
     { page: "sheets", label: "Sheets", icon: Table2 },
     { page: "benchmark", label: "Benchmark", icon: Gauge },
@@ -249,9 +252,13 @@ export default function App() {
                 onClick={() => setCurrentPage(page)}
                 className={cn(
                   "w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-sm transition-colors",
-                  currentPage === page
-                    ? "bg-primary/10 text-primary font-semibold"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  page === "agent"
+                    ? currentPage === page
+                      ? "bg-violet-500/15 text-violet-600 dark:text-violet-400 font-semibold"
+                      : "text-muted-foreground hover:bg-violet-500/10 hover:text-violet-600 dark:hover:text-violet-400"
+                    : currentPage === page
+                      ? "bg-primary/10 text-primary font-semibold"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
                 )}
               >
                 <Icon size={14} />
@@ -273,6 +280,8 @@ export default function App() {
               onConnectDoc={(ctx) => { setDocContext(ctx); setDocContextLocked(false); }}
               tuningParams={tuningParams}
             />
+          ) : currentPage === "agent" ? (
+            <AgentPage tuningParams={tuningParams} />
           ) : currentPage === "documents" ? (
             <DocumentsPage onContextChange={setDocContext} tuningParams={tuningParams} />
           ) : currentPage === "sheets" ? (

@@ -62,7 +62,7 @@ async def lifespan(app: FastAPI):
         api_key = app_repo.get_setting("ai_api_key") or os.getenv("LLM_API_KEY", "")
         model = app_repo.get_setting("ai_model") or os.getenv("LLM_MODEL", "gpt-4o-mini")
         model_path = app_repo.get_setting("ai_model_path") or ""
-        ctx_size = int(app_repo.get_setting("ai_ctx_size") or "2048")
+        ctx_size = int(app_repo.get_setting("ai_ctx_size") or "8192")
 
         try:
             engine_manager.clear()
@@ -143,6 +143,10 @@ chat_session_repo = ChatSessionRepository(db)
 chat_message_repo = ChatMessageRepository(db)
 document_repo = DocumentRepository(db)
 sheet_repo = SheetRepository(db)
+
+from backend.ai.agent_tools import build_tool_registry
+from backend.ai.agent_loop import run_agent_loop
+tool_registry = build_tool_registry(sheet_repo, document_repo)
 
 # ── AI Engine Manager (runtime-switchable) ───────────────────────────
 engine_manager = AIEngineManager()
@@ -331,7 +335,7 @@ async def get_ai_settings():
         "model": _get("ai_model", os.getenv("LLM_MODEL", "gpt-4o-mini")),
         "model_path": _get("ai_model_path", os.getenv("LLM_MODEL_PATH", "")),
         "models_dir": _get("ai_models_dir", LLM_MODELS_DIR),
-        "ctx_size": int(_get("ai_ctx_size", os.getenv("LLM_CTX_SIZE", "2048")) or "2048"),
+        "ctx_size": int(_get("ai_ctx_size", os.getenv("LLM_CTX_SIZE", "8192")) or "8192"),
     }
 
 
@@ -365,7 +369,7 @@ async def save_ai_settings(data: dict, background_tasks: BackgroundTasks):
     api_key = app_repo.get_setting("ai_api_key") or os.getenv("LLM_API_KEY", "")
     model = app_repo.get_setting("ai_model") or os.getenv("LLM_MODEL", "gpt-4o-mini")
     model_path = app_repo.get_setting("ai_model_path") or ""
-    ctx_size = int(app_repo.get_setting("ai_ctx_size") or "2048")
+    ctx_size = int(app_repo.get_setting("ai_ctx_size") or "8192")
 
     # Persist settings to .env file for restart durability
     _write_env({
@@ -431,10 +435,24 @@ async def get_reinit_status():
         active = engine_manager.active_name
     except RuntimeError:
         active = "reinitializing"
+    supports_tools = False
+    model_label = ""
+    try:
+        eng = engine_manager.get_active()
+        supports_tools = eng.supports_tools
+        if hasattr(eng, "get_model_info"):
+            info = eng.get_model_info()
+            model_label = info.get("model_name") or ""
+        elif hasattr(eng, "model"):
+            model_label = eng.model or ""
+    except Exception:
+        pass
     return {
         "status": _reinit_state["status"],   # "ready" | "reinitializing" | "error"
         "error": _reinit_state["error"],
         "active_engine": active,
+        "supports_tools": supports_tools,
+        "model_label": model_label,
     }
 
 
@@ -700,7 +718,7 @@ async def run_benchmark(req: BenchmarkRequest):
         if isinstance(engine, LocalLLAMAEngine) and req.models:
             for model_filename in req.models:
                 model_path = os.path.join(LLM_MODELS_DIR, model_filename)
-                reload_status, reload_detail = engine.reload(model_path, n_ctx=int(os.getenv("LLM_CTX_SIZE", "2048")))
+                reload_status, reload_detail = engine.reload(model_path, n_ctx=int(os.getenv("LLM_CTX_SIZE", "8192")))
                 if reload_status != "ok":
                     run = BenchmarkRun(
                         input_text=req.input_text,
@@ -758,6 +776,18 @@ CHAT_MODES = {
     "coding": "You are an expert programming assistant. Help the user write, debug, and understand code. Provide clear explanations and working examples.",
     "analysis": "You are an analytical assistant. Help the user break down problems, interpret data, evaluate arguments, and draw conclusions with rigorous reasoning.",
     "brainstorm": "You are a creative brainstorming partner. Help the user generate ideas, explore possibilities, and think outside the box. Encourage divergent thinking.",
+    "agent": (
+        "You are an AI agent with access to the user's workspace (Sheets and Documents). "
+        "Use tools to answer questions — never guess at IDs or content.\n\n"
+        "Workflow:\n"
+        "1. To work with a sheet: call list_sheets to get its ID, then read_sheet or write tools.\n"
+        "2. To work with a document: call list_documents to get its ID, then read_document or update_document.\n"
+        "3. Call only the tools you need. Do not call the same tool twice unnecessarily.\n"
+        "4. After finishing, give a short plain-text summary of what you did.\n\n"
+        "IMPORTANT: Write operations (write_to_sheet, add_sheet_row, add_sheet_column, "
+        "create_sheet, create_document, update_document) are in preview mode — they show "
+        "a description but do not execute until the user clicks Apply."
+    ),
 }
 
 @app.get("/chat/modes")
@@ -772,8 +802,8 @@ async def create_chat_session(data: dict = {}):
     return chat_session_repo.create(mode=mode)
 
 @app.get("/chat/sessions")
-async def list_chat_sessions():
-    return chat_session_repo.get_all()
+async def list_chat_sessions(mode: str = None):
+    return chat_session_repo.get_all(mode=mode)
 
 @app.get("/chat/session/{session_id}")
 async def get_chat_session(session_id: int):
@@ -916,6 +946,115 @@ async def stream_chat_message(session_id: int, req: ChatMessageRequest, request:
                 saved = True
 
     return EventSourceResponse(event_generator())
+
+
+@app.post("/chat/session/{session_id}/agent/stream")
+async def stream_agent_message(session_id: int, req: ChatMessageRequest, request: Request):
+    session = chat_session_repo.get_by_id(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Chat session not found")
+
+    # Auto-title on first message
+    if session.title == "New Chat":
+        auto_title = req.content.strip()[:40]
+        if auto_title:
+            chat_session_repo.update_title(session_id, auto_title)
+
+    # Store user message
+    chat_message_repo.create(session_id, "user", req.content)
+
+    # Build messages array for the agent loop
+    history = chat_message_repo.get_by_session_id(session_id)
+    system_prompt = CHAT_MODES.get(session.mode, CHAT_MODES["agent"])
+    temperature = req.temperature if req.temperature is not None else 0.7
+    max_tokens = req.max_tokens if req.max_tokens is not None else 1024
+
+    # Build a scoped tool registry if scope is provided
+    scope = req.scope or {}
+    scoped_sheet_ids = scope.get("sheet_ids")  # None means all
+    scoped_document_ids = scope.get("document_ids")  # None means all
+    if scoped_sheet_ids is not None or scoped_document_ids is not None:
+        scoped_registry = build_tool_registry(
+            sheet_repo, document_repo,
+            sheet_ids=scoped_sheet_ids,
+            document_ids=scoped_document_ids,
+            preview_writes=True,
+        )
+    else:
+        scoped_registry = build_tool_registry(
+            sheet_repo, document_repo,
+            preview_writes=True,
+        )
+
+    messages = [{"role": "system", "content": system_prompt}]
+    for msg in history:
+        messages.append({"role": msg.role, "content": msg.content})
+
+    async def event_generator():
+        full_text = ""
+        saved = False
+        tool_events: list[dict] = []
+        try:
+            import json as _json
+            STRUCTURED_TYPES = ("started_tool", "finished_tool", "thinking", "error", "tool_error")
+            async for event_str in run_agent_loop(
+                engine=engine_manager.get_active(),
+                tool_registry=scoped_registry,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            ):
+                if await request.is_disconnected():
+                    break
+                # Check if structured event
+                try:
+                    parsed = _json.loads(event_str)
+                    if isinstance(parsed, dict) and parsed.get("type") in STRUCTURED_TYPES:
+                        tool_events.append(parsed)
+                        yield {"data": event_str}
+                        continue
+                except (ValueError, TypeError):
+                    pass
+                # Plain text token (final answer)
+                full_text += event_str
+                yield {"data": event_str}
+
+            assistant_text = full_text.strip() or "(No response generated)"
+            metadata = _json.dumps(tool_events) if tool_events else None
+            chat_message_repo.create(session_id, "assistant", assistant_text, metadata=metadata)
+            saved = True
+            yield {"data": "[DONE]"}
+        except Exception as e:
+            yield {"data": f"[ERROR] {str(e).replace(chr(10), ' ')}"}
+        finally:
+            if not saved and full_text.strip():
+                metadata = _json.dumps(tool_events) if tool_events else None
+                chat_message_repo.create(session_id, "assistant", full_text.strip(), metadata=metadata)
+
+    return EventSourceResponse(event_generator())
+
+
+@app.post("/chat/session/{session_id}/agent/apply-write")
+async def apply_agent_write(session_id: int, data: dict):
+    """Execute a previously previewed write operation."""
+    session = chat_session_repo.get_by_id(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Chat session not found")
+    tool_name = data.get("tool")
+    args = data.get("args", {})
+    if not tool_name:
+        raise HTTPException(status_code=400, detail="Missing 'tool' field")
+    # Build a non-preview registry to actually execute
+    registry = build_tool_registry(sheet_repo, document_repo, preview_writes=False)
+    import asyncio
+    result_str = asyncio.get_event_loop().run_until_complete(registry.call(tool_name, args)) if False else await registry.call(tool_name, args)
+    try:
+        result = json.loads(result_str)
+    except (json.JSONDecodeError, TypeError):
+        result = {"result": result_str}
+    if isinstance(result, dict) and "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result
 
 
 @app.post("/chat/upload")

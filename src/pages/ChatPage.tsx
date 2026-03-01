@@ -7,7 +7,9 @@ import { oneDark, oneLight } from "react-syntax-highlighter/dist/esm/styles/pris
 import {
   PlusCircle, Send, Trash2, MessageSquare, Loader2, FileText,
   Paperclip, X, Copy, Check, Info, Upload, Square, Pencil,
+  Wrench, ChevronDown, ChevronRight,
 } from "lucide-react";
+import type { AgentEvent } from "../hooks/useFetchSSE";
 import { useChatStream } from "../contexts/ChatStreamContext";
 import { Button } from "../components/ui/button";
 import { Textarea } from "../components/ui/textarea";
@@ -129,6 +131,101 @@ function CodeBlock({ code, language, isDark }: { code: string; language: string;
   );
 }
 
+/** Renders the agent's "thought process": thinking text, tool calls with start/finish/timing. */
+function ToolCallBubble({ events }: { events: AgentEvent[] }) {
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  if (events.length === 0) return null;
+
+  // Build a display-order list of steps
+  type ThinkingStep = { kind: "thinking"; content: string };
+  type ToolStep = { kind: "tool"; callId: string; tool: string; args: Record<string, unknown>; result?: string; durationMs?: number; finished: boolean };
+  type Step = ThinkingStep | ToolStep;
+
+  const steps: Step[] = [];
+  const toolMap = new Map<string, ToolStep>();
+
+  for (const evt of events) {
+    if (evt.type === "thinking") {
+      steps.push({ kind: "thinking", content: evt.content ?? "" });
+    } else if (evt.type === "started_tool") {
+      const step: ToolStep = {
+        kind: "tool",
+        callId: evt.call_id ?? `t${steps.length}`,
+        tool: evt.tool ?? "unknown",
+        args: evt.args ?? {},
+        finished: false,
+      };
+      steps.push(step);
+      toolMap.set(step.callId, step);
+    } else if (evt.type === "finished_tool") {
+      const existing = toolMap.get(evt.call_id ?? "");
+      if (existing) {
+        existing.result = evt.result;
+        existing.durationMs = evt.duration_ms;
+        existing.finished = true;
+      }
+    }
+  }
+
+  return (
+    <div className="space-y-1.5 mb-2">
+      {steps.map((step, i) => {
+        if (step.kind === "thinking") {
+          return (
+            <div key={`t${i}`} className="text-xs text-muted-foreground italic px-1 py-0.5">
+              {step.content}
+            </div>
+          );
+        }
+        const key = step.callId;
+        const isOpen = expanded[key] ?? false;
+        return (
+          <div key={key} className="border rounded-md bg-muted/50 text-xs">
+            <button
+              className="flex items-center gap-1.5 w-full px-2.5 py-1.5 text-left hover:bg-muted/80 transition-colors"
+              onClick={() => setExpanded(prev => ({ ...prev, [key]: !prev[key] }))}
+            >
+              {isOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+              <Wrench className="h-3 w-3 text-muted-foreground" />
+              <span className="font-medium">{step.tool}</span>
+              {step.finished ? (
+                <span className="ml-auto flex items-center gap-1.5">
+                  {step.durationMs != null && (
+                    <span className="text-muted-foreground">{step.durationMs}ms</span>
+                  )}
+                  <Check className="h-3 w-3 text-green-600 dark:text-green-400" />
+                </span>
+              ) : (
+                <Loader2 className="h-3 w-3 animate-spin ml-auto text-muted-foreground" />
+              )}
+            </button>
+            {isOpen && (
+              <div className="px-2.5 pb-2 space-y-1 border-t">
+                {Object.keys(step.args).length > 0 && (
+                  <div className="mt-1.5">
+                    <span className="text-muted-foreground">Args: </span>
+                    <code className="text-[10px]">{JSON.stringify(step.args)}</code>
+                  </div>
+                )}
+                {step.result && (
+                  <div>
+                    <span className="text-muted-foreground">Result: </span>
+                    <code className="text-[10px] break-all">{
+                      step.result.length > 500
+                        ? step.result.slice(0, 500) + "..."
+                        : step.result
+                    }</code>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tuningParams }: ChatPageProps) {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<number | null>(null);
@@ -154,6 +251,7 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
   const {
     streamingSessionId, streamingContent, isStreaming, isSending,
     sendMessage: contextSendMessage, stopStreaming, onStreamDone, onStreamError,
+    agentEvents,
   } = useChatStream();
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -304,7 +402,7 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
   async function loadSessions() {
     try {
       const res = await axios.get(`${API_BASE}/chat/sessions`);
-      setSessions(res.data);
+      setSessions((res.data as ChatSession[]).filter(s => s.mode !== "agent"));
     } catch { /* backend may be offline */ }
   }
 
@@ -460,6 +558,7 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
       content,
       temperature: tuningParams?.temperature,
       maxTokens: tuningParams?.maxTokens,
+      isAgent: activeMode === "agent",
     });
   }
 
@@ -769,15 +868,16 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
                       <img src={crowforgeIco} alt="CrowForge" className="w-5 h-5 object-contain" />
                     </div>
                     <Card className="px-4 py-2.5 bg-muted text-sm max-w-[80%] min-w-0 overflow-hidden">
+                      {agentEvents.length > 0 && <ToolCallBubble events={agentEvents} />}
                       {isStreaming && streamingContent ? (
                         <div className="prose prose-sm dark:prose-invert max-w-none break-words [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
                           <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents as never}>
                             {streamingContent}
                           </ReactMarkdown>
                         </div>
-                      ) : (
+                      ) : agentEvents.length === 0 ? (
                         <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                      )}
+                      ) : null}
                     </Card>
                   </div>
                 )}

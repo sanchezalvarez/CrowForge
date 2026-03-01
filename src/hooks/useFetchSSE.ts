@@ -1,9 +1,22 @@
 import { useRef, useCallback } from "react";
 
+export interface AgentEvent {
+  type: "started_tool" | "finished_tool" | "thinking" | "error" | "tool_error";
+  tool?: string;
+  args?: Record<string, unknown>;
+  call_id?: string;
+  result?: string;
+  duration_ms?: number;
+  content?: string;   // for "thinking" events
+  message?: string;   // for "error" events
+  error?: string;     // for "tool_error" events
+}
+
 interface FetchSSECallbacks {
   onToken: (token: string) => void;
   onDone: () => void;
   onError: (error: string) => void;
+  onStructuredEvent?: (event: AgentEvent) => void;
 }
 
 export function useFetchSSE() {
@@ -52,6 +65,17 @@ export function useFetchSSE() {
           if (payload.startsWith("[ERROR]")) {
             callbacks.onError(payload.slice(8));
             return "error";
+          }
+          // Check for structured agent events
+          if (callbacks.onStructuredEvent) {
+            try {
+              const parsed = JSON.parse(payload);
+              if (parsed && typeof parsed === "object" && parsed.type &&
+                  ["started_tool", "finished_tool", "thinking", "error", "tool_error"].includes(parsed.type)) {
+                callbacks.onStructuredEvent(parsed as AgentEvent);
+                return "token";
+              }
+            } catch { /* not JSON — treat as plain token */ }
           }
           callbacks.onToken(payload);
           return "token";

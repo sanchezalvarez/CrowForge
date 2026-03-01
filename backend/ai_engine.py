@@ -17,6 +17,11 @@ class AILogger:
         print(f"[AI_TRACE] Engine: {engine_name} | Latency: {duration:.2f}s | Req: {request_size} chars | Status: {status}{fallback_str}")
 
 class AIEngine(ABC):
+    @property
+    def supports_tools(self) -> bool:
+        """Whether this engine supports tool/function calling for the agent."""
+        return False
+
     @abstractmethod
     async def generate_stream(
         self, system_prompt: str, user_prompt: str, *,
@@ -26,8 +31,26 @@ class AIEngine(ABC):
     ) -> AsyncGenerator[str, None]:
         pass
 
+    async def generate_with_tools(
+        self, *, messages: list[dict], tools: list[dict],
+        temperature: float = 0.7, max_tokens: int = 1024,
+    ) -> AsyncGenerator[str, None]:
+        """Generate with tool-calling support. Yields JSON event strings.
+        Default implementation streams text only (no tool calling)."""
+        system = messages[0]["content"] if messages and messages[0]["role"] == "system" else ""
+        non_system = [m for m in messages if m["role"] != "system"]
+        user_prompt = "\n".join(f'{m["role"].title()}: {m.get("content", "")}' for m in non_system)
+        async for chunk in self.generate_stream(
+            system, user_prompt, temperature=temperature, max_tokens=max_tokens, json_mode=False
+        ):
+            yield chunk
+
 class MockAIEngine(AIEngine):
     """Fallback engine when no real LLM is configured. Returns prompt-appropriate mock data."""
+
+    @property
+    def supports_tools(self) -> bool:
+        return True
 
     _MOCK_NAMES = ["Alice", "Bob", "Charlie", "Diana", "Eve", "Frank", "Grace", "Hank", "Iris", "Jack"]
 
@@ -80,7 +103,62 @@ class MockAIEngine(AIEngine):
             yield response_text[i:i+4]
             await asyncio.sleep(0.01)
 
+    async def generate_with_tools(
+        self, *, messages: list[dict], tools: list[dict],
+        temperature: float = 0.7, max_tokens: int = 1024,
+    ) -> AsyncGenerator[str, None]:
+        """Mock agent: if no tool results in history yet, call list_sheets;
+        if tool results exist but no read_sheet yet, call read_sheet on first sheet;
+        otherwise produce a final text response summarising the data."""
+        has_tool_result = any(m.get("role") == "tool" for m in messages)
+        has_read_sheet = any(
+            m.get("role") == "tool" and "headers" in m.get("content", "")
+            for m in messages
+        )
+
+        if not has_tool_result:
+            # Phase 1: thinking text + list_sheets call
+            yield json.dumps({"type": "token", "content": "Let me look at your sheets..."})
+            await asyncio.sleep(0.05)
+            yield json.dumps({
+                "type": "tool_call_delta",
+                "tool_call": {
+                    "index": 0,
+                    "function": {"name": "list_sheets", "arguments": "{}"},
+                },
+            })
+        elif not has_read_sheet:
+            # Phase 2: try to read_sheet from the list_sheets result
+            # Find the last tool result to extract a sheet id
+            sheet_id = "unknown"
+            for m in reversed(messages):
+                if m.get("role") == "tool":
+                    try:
+                        data = json.loads(m["content"])
+                        if isinstance(data, list) and len(data) > 0 and "id" in data[0]:
+                            sheet_id = data[0]["id"]
+                    except (json.JSONDecodeError, KeyError, IndexError, TypeError):
+                        pass
+                    break
+            yield json.dumps({
+                "type": "tool_call_delta",
+                "tool_call": {
+                    "index": 0,
+                    "function": {"name": "read_sheet", "arguments": json.dumps({"sheet_id": sheet_id, "max_rows": 5})},
+                },
+            })
+        else:
+            # Phase 3: final text answer
+            response = "Here's what I found in your workspace. This is a **mock response** — connect a real LLM engine for actual agent capabilities."
+            for i in range(0, len(response), 4):
+                yield json.dumps({"type": "token", "content": response[i:i+4]})
+                await asyncio.sleep(0.01)
+
 class HTTPAIEngine(AIEngine):
+    @property
+    def supports_tools(self) -> bool:
+        return True
+
     def __init__(self):
         self.api_key = os.getenv("LLM_API_KEY", "no-key")
         self.base_url = os.getenv("LLM_BASE_URL", "https://api.openai.com/v1")
@@ -131,10 +209,55 @@ class HTTPAIEngine(AIEngine):
             except Exception as e:
                 yield f"[ERROR] {str(e)}"
 
+    async def generate_with_tools(
+        self, *, messages: list[dict], tools: list[dict],
+        temperature: float = 0.7, max_tokens: int = 1024,
+    ) -> AsyncGenerator[str, None]:
+        payload = {
+            "model": self.model,
+            "messages": messages,
+            "stream": True,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+            "tools": tools,
+            "tool_choice": "auto",
+        }
+        headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            try:
+                async with client.stream("POST", f"{self.base_url}/chat/completions", json=payload, headers=headers) as response:
+                    async for line in response.aiter_lines():
+                        if not line.startswith("data: "):
+                            continue
+                        raw = line[6:].strip()
+                        if raw == "[DONE]":
+                            break
+                        try:
+                            chunk = json.loads(raw)
+                            delta = chunk["choices"][0].get("delta", {})
+                            # Text content
+                            if delta.get("content"):
+                                yield json.dumps({"type": "token", "content": delta["content"]})
+                            # Tool call deltas
+                            if delta.get("tool_calls"):
+                                for tc in delta["tool_calls"]:
+                                    yield json.dumps({"type": "tool_call_delta", "tool_call": tc})
+                        except (json.JSONDecodeError, KeyError, IndexError):
+                            continue
+            except ConnectionResetError as e:
+                if getattr(e, 'winerror', None) == 10054:
+                    print(f"[HTTP_ENGINE] Client disconnected (WinError 10054)")
+                else:
+                    yield json.dumps({"type": "error", "message": str(e)})
+            except httpx.ReadTimeout:
+                yield json.dumps({"type": "error", "message": "LLM request timed out"})
+            except Exception as e:
+                yield json.dumps({"type": "error", "message": str(e)})
+
 class LocalLLAMAEngine(AIEngine):
     """Local GGUF engine with runtime model hot-swap."""
 
-    def __init__(self, model_path: str | None = None, n_ctx: int | None = None, chat_format: str = "chatml"):
+    def __init__(self, model_path: str | None = None, n_ctx: int | None = None, chat_format: str = None):
         self.llm = None
         self.is_ready = False
         self.model_path: str | None = None
@@ -161,7 +284,7 @@ class LocalLLAMAEngine(AIEngine):
                     n_ctx=n_ctx,
                     n_threads=os.cpu_count(),
                     verbose=False,
-                    chat_format=self.chat_format,
+                    chat_format=self.chat_format,  # None = auto-detect from GGUF metadata
                 )
                 self.model_path = model_path
                 self.n_ctx = n_ctx
@@ -240,7 +363,7 @@ class LocalLLAMAEngine(AIEngine):
                 top_p=top_p,
                 repeat_penalty=1.3,
                 stream=True,
-                stop=["<|im_start|>", "<|im_end|>", "<|endoftext|>", "Assistant:", "User:"],
+                stop=["<|im_end|>", "<|endoftext|>", "<|eot_id|>"],
             )
             if json_mode:
                 kwargs["response_format"] = {"type": "json_object"}
@@ -288,3 +411,79 @@ class LocalLLAMAEngine(AIEngine):
             yield f"[ERROR] {str(e)}"
         finally:
             self._generating = False
+
+    @property
+    def supports_tools(self) -> bool:
+        return self.is_ready
+
+    async def generate_with_tools(
+        self, *, messages: list[dict], tools: list[dict],
+        temperature: float = 0.7, max_tokens: int = 1024,
+    ) -> AsyncGenerator[str, None]:
+        if not self.is_ready:
+            yield json.dumps({"type": "error", "message": "Local model is not loaded."})
+            return
+
+        import time as _time
+        self.last_used = _time.time()
+        self._generating = True
+        queue: asyncio.Queue = asyncio.Queue()
+        loop = asyncio.get_event_loop()
+
+        def _run_inference():
+            try:
+                # llama-cpp-python streaming with tools is unreliable for some models;
+                # use non-streaming to get a complete, well-formed tool call response.
+                kwargs = dict(
+                    messages=messages,
+                    tools=tools,
+                    tool_choice="auto",
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    stream=False,
+                )
+                response = self.llm.create_chat_completion(**kwargs)
+                message = response["choices"][0].get("message", {})
+                # Emit text content if present
+                if message.get("content"):
+                    loop.call_soon_threadsafe(queue.put_nowait,
+                        json.dumps({"type": "token", "content": message["content"]}))
+                # Emit tool calls if present
+                tool_calls = message.get("tool_calls") or []
+                for i, tc in enumerate(tool_calls):
+                    fn = tc.get("function", {})
+                    args = fn.get("arguments", "{}")
+                    # llama-cpp may return arguments as a dict instead of JSON string
+                    if isinstance(args, dict):
+                        args = json.dumps(args)
+                    loop.call_soon_threadsafe(queue.put_nowait,
+                        json.dumps({
+                            "type": "tool_call_delta",
+                            "tool_call": {
+                                "index": i,
+                                "id": tc.get("id", f"call_{i}"),
+                                "function": {"name": fn.get("name", ""), "arguments": args},
+                            },
+                        }))
+                loop.call_soon_threadsafe(queue.put_nowait, None)
+            except Exception as exc:
+                loop.call_soon_threadsafe(queue.put_nowait, exc)
+
+        inference_task = loop.run_in_executor(None, _run_inference)
+        try:
+            while True:
+                item = await queue.get()
+                if item is None:
+                    break
+                if isinstance(item, Exception):
+                    raise item
+                yield item
+                await asyncio.sleep(0)
+        except ConnectionResetError as e:
+            if getattr(e, 'winerror', None) != 10054:
+                yield json.dumps({"type": "error", "message": str(e)})
+        except Exception as e:
+            yield json.dumps({"type": "error", "message": str(e)})
+        finally:
+            self._generating = False
+            await inference_task

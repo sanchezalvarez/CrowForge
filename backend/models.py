@@ -34,12 +34,14 @@ class ChatMessage(BaseModel):
     session_id: Optional[int] = Field(default=None)
     role: str = ""
     content: str = ""
+    metadata: Optional[str] = None
     created_at: Optional[str] = None
 
 class ChatMessageRequest(BaseModel):
     content: str
     temperature: Optional[float] = None
     max_tokens: Optional[int] = None
+    scope: Optional[dict] = None  # {"sheet_ids": [...], "document_ids": [...]}
 
 class Document(BaseModel):
     id: Optional[str] = Field(default=None)

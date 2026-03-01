@@ -87,6 +87,12 @@ class DatabaseManager:
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )""")
 
+        # Add metadata column to chat_messages if missing
+        cursor = conn.execute("PRAGMA table_info(chat_messages)")
+        cm_cols = {row["name"] for row in cursor.fetchall()}
+        if "metadata" not in cm_cols:
+            conn.execute("ALTER TABLE chat_messages ADD COLUMN metadata TEXT")
+
         # Add last_opened_at to documents and sheets if missing
         cursor = conn.execute("PRAGMA table_info(documents)")
         doc_cols = {row["name"] for row in cursor.fetchall()}
@@ -148,9 +154,12 @@ class ChatSessionRepository:
             row = conn.execute("SELECT * FROM chat_sessions WHERE id = ?", (session_id,)).fetchone()
             return ChatSession(**dict(row)) if row else None
 
-    def get_all(self) -> List[ChatSession]:
+    def get_all(self, mode: str = None) -> List[ChatSession]:
         with self.db.get_connection() as conn:
-            rows = conn.execute("SELECT * FROM chat_sessions ORDER BY created_at DESC").fetchall()
+            if mode:
+                rows = conn.execute("SELECT * FROM chat_sessions WHERE mode = ? ORDER BY created_at DESC", (mode,)).fetchall()
+            else:
+                rows = conn.execute("SELECT * FROM chat_sessions ORDER BY created_at DESC").fetchall()
             return [ChatSession(**dict(r)) for r in rows]
 
     def update_title(self, session_id: int, title: str):
@@ -176,12 +185,12 @@ class ChatMessageRepository:
     def __init__(self, db: DatabaseManager):
         self.db = db
 
-    def create(self, session_id: int, role: str, content: str) -> ChatMessage:
+    def create(self, session_id: int, role: str, content: str, metadata: str = None) -> ChatMessage:
         with self.db.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
-                "INSERT INTO chat_messages (session_id, role, content) VALUES (?, ?, ?)",
-                (session_id, role, content),
+                "INSERT INTO chat_messages (session_id, role, content, metadata) VALUES (?, ?, ?, ?)",
+                (session_id, role, content, metadata),
             )
             conn.commit()
             row = conn.execute("SELECT * FROM chat_messages WHERE id = ?", (cursor.lastrowid,)).fetchone()

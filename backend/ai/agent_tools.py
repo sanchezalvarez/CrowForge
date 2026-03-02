@@ -177,13 +177,11 @@ def build_tool_registry(
         return {"ok": True, "document_id": doc.id, "title": doc.title}
 
     async def update_document(document_id: str, content: str):
-        # Allow updating documents that exist (including newly created ones)
         doc = document_repo.get_by_id(document_id)
         if not doc:
             return {"error": f"Document not found: {document_id}"}
         if document_ids is not None and document_id not in document_ids:
-            # Check if doc actually exists — if so, allow it (may be newly created in this session)
-            pass
+            return {"error": f"Document not in scope: {document_id}"}
         if preview_writes:
             return {"preview": True, "action": "update_document", "description": f"Replace content of document {document_id} ({len(content)} chars)", "document_id": document_id, "content": content}
         content_json = _text_to_tiptap(content)

@@ -144,9 +144,17 @@ chat_message_repo = ChatMessageRepository(db)
 document_repo = DocumentRepository(db)
 sheet_repo = SheetRepository(db)
 
-from backend.ai.agent_tools import build_tool_registry
-from backend.ai.agent_loop import run_agent_loop
-tool_registry = build_tool_registry(sheet_repo, document_repo)
+# Agent imports are lazy-loaded so a failure in agent code doesn't break
+# the rest of the backend (chat, documents, sheets, etc.).
+_agent_available = False
+try:
+    from backend.ai.agent_tools import build_tool_registry
+    from backend.ai.agent_loop import run_agent_loop
+    _agent_available = True
+except Exception as _agent_import_err:
+    print(f"[STARTUP] Agent modules unavailable: {_agent_import_err}")
+    build_tool_registry = None  # type: ignore
+    run_agent_loop = None  # type: ignore
 
 # ── AI Engine Manager (runtime-switchable) ───────────────────────────
 engine_manager = AIEngineManager()
@@ -952,6 +960,8 @@ async def stream_chat_message(session_id: int, req: ChatMessageRequest, request:
 
 @app.post("/chat/session/{session_id}/agent/stream")
 async def stream_agent_message(session_id: int, req: ChatMessageRequest, request: Request):
+    if not _agent_available:
+        raise HTTPException(status_code=503, detail="Agent modules are not available")
     session = chat_session_repo.get_by_id(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Chat session not found")
@@ -967,7 +977,9 @@ async def stream_agent_message(session_id: int, req: ChatMessageRequest, request
 
     # Build messages array for the agent loop
     history = chat_message_repo.get_by_session_id(session_id)
-    system_prompt = CHAT_MODES.get(session.mode, CHAT_MODES["agent"])
+    # Agent endpoint always uses the agent system prompt (it needs tool instructions).
+    # Fall back to session.mode only if session.mode happens to be "agent" already.
+    system_prompt = CHAT_MODES["agent"]
     temperature = req.temperature if req.temperature is not None else 0.7
     max_tokens = req.max_tokens if req.max_tokens is not None else 2048  # agent needs more tokens for tool calls
 
@@ -1037,6 +1049,8 @@ async def stream_agent_message(session_id: int, req: ChatMessageRequest, request
 @app.post("/chat/session/{session_id}/agent/apply-write")
 async def apply_agent_write(session_id: int, data: dict):
     """Execute a previously previewed write operation."""
+    if not _agent_available:
+        raise HTTPException(status_code=503, detail="Agent modules are not available")
     session = chat_session_repo.get_by_id(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Chat session not found")

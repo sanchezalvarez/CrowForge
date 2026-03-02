@@ -330,20 +330,24 @@ class SheetRepository:
         )
 
     def create(self, title: str = "Untitled Sheet", columns: List[SheetColumn] = None,
-               rows: List[List[str]] = None, formulas: dict = None, formats: dict = None) -> Sheet:
+               rows: List[List[str]] = None, formulas: dict = None, formats: dict = None,
+               sizes: dict = None, alignments: dict = None) -> Sheet:
         from backend.formula import recalculate
         sheet_id = str(uuid.uuid4())
         cols = columns or []
         row_data = rows or []
         form_data = formulas or {}
         fmt_data = formats or {}
+        sizes_data = sizes or {}
+        align_data = alignments or {}
         if form_data:
             recalculate(row_data, form_data)
         with self.db.get_connection() as conn:
             conn.execute(
                 "INSERT INTO sheets (id, title, columns_json, rows_json, formulas_json, sizes_json, alignments_json, formats_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                 (sheet_id, title, json.dumps([c.model_dump() for c in cols]),
-                 json.dumps(row_data), json.dumps(form_data), '{}', '{}', json.dumps(fmt_data)),
+                 json.dumps(row_data), json.dumps(form_data),
+                 json.dumps(sizes_data), json.dumps(align_data), json.dumps(fmt_data)),
             )
             conn.commit()
         return self.get_by_id(sheet_id)
@@ -365,21 +369,29 @@ class SheetRepository:
 
     def _save(self, conn, sheet_id: str, columns: List[SheetColumn],
               rows: List[List[str]], formulas: dict,
-              changed_cells: set | None = None):
+              changed_cells: set | None = None,
+              formats: dict | None = None, alignments: dict | None = None):
         """Recalculate formulas and persist columns, rows, and formulas.
 
         changed_cells=None   — full recalculation (structural changes, restore).
         changed_cells={..}   — targeted recalculation (only dependents of those cells).
         changed_cells=set()  — skip recalculation (no value changes, e.g. add empty row).
+        formats/alignments   — when provided, also persist updated cell metadata.
         """
         from backend.formula import recalculate
         recalculate(rows, formulas, changed_cells)
-        conn.execute(
-            "UPDATE sheets SET columns_json = ?, rows_json = ?, formulas_json = ?, "
-            "updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-            (json.dumps([c.model_dump() for c in columns]), json.dumps(rows),
-             json.dumps(formulas), sheet_id),
-        )
+        sql = ("UPDATE sheets SET columns_json = ?, rows_json = ?, formulas_json = ?")
+        params: list = [json.dumps([c.model_dump() for c in columns]), json.dumps(rows),
+                        json.dumps(formulas)]
+        if formats is not None:
+            sql += ", formats_json = ?"
+            params.append(json.dumps(formats))
+        if alignments is not None:
+            sql += ", alignments_json = ?"
+            params.append(json.dumps(alignments))
+        sql += ", updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+        params.append(sheet_id)
+        conn.execute(sql, params)
         conn.commit()
 
     # ── Formula-key helpers ───────────────────────────────────────
@@ -425,7 +437,10 @@ class SheetRepository:
             idx = max(0, min(row_index, len(sheet.rows)))
             sheet.rows.insert(idx, [""] * len(sheet.columns))
             formulas = self._shift_formulas(sheet.formulas, 'row', idx, +1)
-            self._save(conn, sheet_id, sheet.columns, sheet.rows, formulas)
+            formats = self._shift_formulas(sheet.formats, 'row', idx, +1)
+            alignments = self._shift_formulas(sheet.alignments, 'row', idx, +1)
+            self._save(conn, sheet_id, sheet.columns, sheet.rows, formulas,
+                       formats=formats, alignments=alignments)
             return self.get_by_id(sheet_id)
 
     def duplicate_row(self, sheet_id: str, row_index: int) -> Optional[Sheet]:
@@ -436,17 +451,23 @@ class SheetRepository:
             if row_index < 0 or row_index >= len(sheet.rows):
                 return None
             sheet.rows.insert(row_index + 1, list(sheet.rows[row_index]))
-            # Shift formulas at row > row_index, then copy formulas at row_index
-            new_formulas = {}
-            for key, val in sheet.formulas.items():
-                r, c = map(int, key.split(','))
-                if r > row_index:
-                    new_formulas[f"{r + 1},{c}"] = val
-                else:
-                    new_formulas[f"{r},{c}"] = val
-                if r == row_index:
-                    new_formulas[f"{row_index + 1},{c}"] = val
-            self._save(conn, sheet_id, sheet.columns, sheet.rows, new_formulas)
+            # Shift+copy helper: rows > row_index shift down, row_index is duplicated
+            def _shift_and_copy(d: dict) -> dict:
+                new = {}
+                for key, val in d.items():
+                    r, c = map(int, key.split(','))
+                    if r > row_index:
+                        new[f"{r + 1},{c}"] = val
+                    else:
+                        new[f"{r},{c}"] = val
+                    if r == row_index:
+                        new[f"{row_index + 1},{c}"] = val
+                return new
+            new_formulas = _shift_and_copy(sheet.formulas)
+            new_formats = _shift_and_copy(sheet.formats)
+            new_alignments = _shift_and_copy(sheet.alignments)
+            self._save(conn, sheet_id, sheet.columns, sheet.rows, new_formulas,
+                       formats=new_formats, alignments=new_alignments)
             return self.get_by_id(sheet_id)
 
     def add_column(self, sheet_id: str, name: str, col_type: str = "text") -> Optional[Sheet]:
@@ -526,7 +547,10 @@ class SheetRepository:
                 return None
             sheet.rows.pop(row_index)
             formulas = self._shift_formulas(sheet.formulas, 'row', row_index, -1)
-            self._save(conn, sheet_id, sheet.columns, sheet.rows, formulas)
+            formats = self._shift_formulas(sheet.formats, 'row', row_index, -1)
+            alignments = self._shift_formulas(sheet.alignments, 'row', row_index, -1)
+            self._save(conn, sheet_id, sheet.columns, sheet.rows, formulas,
+                       formats=formats, alignments=alignments)
             return self.get_by_id(sheet_id)
 
     def delete_column(self, sheet_id: str, col_index: int) -> Optional[Sheet]:
@@ -541,7 +565,10 @@ class SheetRepository:
                 if col_index < len(row):
                     row.pop(col_index)
             formulas = self._shift_formulas(sheet.formulas, 'col', col_index, -1)
-            self._save(conn, sheet_id, sheet.columns, sheet.rows, formulas)
+            formats = self._shift_formulas(sheet.formats, 'col', col_index, -1)
+            alignments = self._shift_formulas(sheet.alignments, 'col', col_index, -1)
+            self._save(conn, sheet_id, sheet.columns, sheet.rows, formulas,
+                       formats=formats, alignments=alignments)
             return self.get_by_id(sheet_id)
 
     def sort_by_column(self, sheet_id: str, col_index: int, ascending: bool = True) -> Optional[Sheet]:
@@ -575,12 +602,18 @@ class SheetRepository:
             old_to_new = {old_i: new_i for new_i, (old_i, _) in enumerate(indexed)}
             sheet.rows = [row for _, row in indexed]
 
-            new_formulas = {}
-            for key, val in sheet.formulas.items():
-                r, c = map(int, key.split(','))
-                if r in old_to_new:
-                    new_formulas[f"{old_to_new[r]},{c}"] = val
-            self._save(conn, sheet_id, sheet.columns, sheet.rows, new_formulas)
+            def _remap_rows(d: dict) -> dict:
+                new = {}
+                for key, val in d.items():
+                    r, c = map(int, key.split(','))
+                    if r in old_to_new:
+                        new[f"{old_to_new[r]},{c}"] = val
+                return new
+            new_formulas = _remap_rows(sheet.formulas)
+            new_formats = _remap_rows(sheet.formats)
+            new_alignments = _remap_rows(sheet.alignments)
+            self._save(conn, sheet_id, sheet.columns, sheet.rows, new_formulas,
+                       formats=new_formats, alignments=new_alignments)
             return self.get_by_id(sheet_id)
 
     def rename_column(self, sheet_id: str, col_index: int, name: str) -> Optional[Sheet]:
@@ -614,12 +647,18 @@ class SheetRepository:
             moved = order.pop(from_index)
             order.insert(to_index, moved)
             old_to_new = {old_c: new_c for new_c, old_c in enumerate(order)}
-            new_formulas = {}
-            for key, val in sheet.formulas.items():
-                r, c = map(int, key.split(','))
-                if c in old_to_new:
-                    new_formulas[f"{r},{old_to_new[c]}"] = val
-            self._save(conn, sheet_id, sheet.columns, sheet.rows, new_formulas)
+            def _remap_cols(d: dict) -> dict:
+                new = {}
+                for key, val in d.items():
+                    r, c = map(int, key.split(','))
+                    if c in old_to_new:
+                        new[f"{r},{old_to_new[c]}"] = val
+                return new
+            new_formulas = _remap_cols(sheet.formulas)
+            new_formats = _remap_cols(sheet.formats)
+            new_alignments = _remap_cols(sheet.alignments)
+            self._save(conn, sheet_id, sheet.columns, sheet.rows, new_formulas,
+                       formats=new_formats, alignments=new_alignments)
             return self.get_by_id(sheet_id)
 
     def update_formats(self, sheet_id: str, formats: dict) -> Optional[Sheet]:
@@ -694,6 +733,9 @@ class SheetRepository:
             columns=[SheetColumn(**c.model_dump()) for c in sheet.columns],
             rows=[list(row) for row in sheet.rows],
             formulas=dict(sheet.formulas),
+            formats=dict(sheet.formats),
+            sizes=dict(sheet.sizes),
+            alignments=dict(sheet.alignments),
         )
 
     def delete(self, sheet_id: str) -> bool:

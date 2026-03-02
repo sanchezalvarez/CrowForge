@@ -261,16 +261,20 @@ def validate_formula(formula: str) -> str | None:
         return "#ERROR"
 
     # Check function calls — must be FUNC(REF:REF)
+    _has_bad_ref = False
+
     def _check_func(m):
+        nonlocal _has_bad_ref
         try:
             parse_cell_ref(m.group(2))
             parse_cell_ref(m.group(3))
         except InvalidRefError:
-            return None  # signal: don't replace, will fail later
+            _has_bad_ref = True
+            return "0"  # must return str for re.sub; flag signals error
         return "0"  # placeholder
 
     reduced = _FUNC_RE.sub(_check_func, body)
-    if reduced is None:
+    if _has_bad_ref:
         return "#REF"
 
     # If a function call wasn't matched (e.g. bad syntax like SUM(A1)),
@@ -279,15 +283,19 @@ def validate_formula(formula: str) -> str | None:
         return "#ERROR"
 
     # Check bare cell references
+    _has_bad_bare_ref = False
+
     def _check_ref(m):
+        nonlocal _has_bad_bare_ref
         try:
             parse_cell_ref(m.group(0))
         except InvalidRefError:
-            return None
+            _has_bad_bare_ref = True
+            return "0"  # must return str for re.sub; flag signals error
         return "0"
 
     reduced = _BARE_REF_RE.sub(_check_ref, reduced)
-    if reduced is None:
+    if _has_bad_bare_ref:
         return "#REF"
 
     # After replacing functions and refs with "0", only arithmetic should remain

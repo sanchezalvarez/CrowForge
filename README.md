@@ -10,6 +10,35 @@ Built with **Tauri v2** · **React 19 / TypeScript** · **Python FastAPI** · **
 
 ---
 
+## What's new in v0.2
+
+### AI Agent
+- New **Agent** sidebar section — a ReAct-style AI agent that can autonomously read and write your sheets and documents
+- Agent tools: `list_sheets`, `read_sheet`, `write_to_sheet`, `add_sheet_row`, `add_sheet_column`, `create_sheet`, `list_documents`, `read_document`, `search_documents`, `create_document`, `update_document`
+- Write actions shown as a preview diff before being applied — approve or discard per-tool
+- Agent sessions are fully isolated: failures never affect Chat, Documents, or Sheets
+
+### Documents
+- **Image support** — insert images from disk directly into any document
+- **Document search** — search across all documents by title or content
+
+### Sheets
+- **Delete rows and columns** from the context menu
+- **Sort by column** (ascending and descending)
+- **AI row generation** — describe a set of rows and the AI generates them for you
+- Cell formats, sizes, and alignments now persist correctly across sort, insert, delete, duplicate, and move operations
+
+### Settings & Data
+- **Data deletion** — clear all chat history, all documents, all sheets, or reset everything from Settings
+- **Backend restart** — restart the Python backend in-app without relaunching the window
+
+### Stability
+- Formula engine no longer crashes on invalid cell references (returns `#REF` instead)
+- Agent modules are lazy-loaded — import errors never block app startup
+- Streaming context refactored for more reliable SSE delivery
+
+---
+
 ## Screenshots
 
 <table>
@@ -97,7 +126,7 @@ Built with **Tauri v2** · **React 19 / TypeScript** · **Python FastAPI** · **
 npm install
 
 # 2. Backend dependencies
-pip install fastapi uvicorn httpx python-dotenv sse-starlette pydantic openpyxl python-docx pdfplumber
+pip install -r requirements.txt
 
 # 3. (Optional) Local GGUF inference
 pip install llama-cpp-python
@@ -156,25 +185,37 @@ npm run dev             # Terminal 2 → http://localhost:1420
 
 ## Production Build
 
-### 1. Bundle the Python backend
+### Automated (recommended)
 
-```bash
-python -m PyInstaller crowforge-backend.spec
+```powershell
+.\build.ps1
 ```
 
-### 2. Copy the sidecar binary
+This script runs all three steps in order and stops on any error.
+
+### Manual steps
+
+#### 1. Bundle the Python backend
+
+```bash
+python -m PyInstaller crowforge-backend.spec --noconfirm
+```
+
+#### 2. Copy the sidecar binary
 
 ```bash
 copy dist\crowforge-backend.exe src-tauri\bin\crowforge-backend-x86_64-pc-windows-msvc.exe
 ```
 
-### 3. Build the Tauri installer
+#### 3. Build the Tauri installer
 
 ```bash
 npm run tauri build
 ```
 
 Output: `src-tauri/target/release/bundle/` — MSI and NSIS installers.
+
+> The PyInstaller spec (`crowforge-backend.spec`) bundles all required DLLs automatically — llama-cpp, numpy, Pillow, pdfplumber, psutil and all other backend dependencies are collected and embedded in the executable. No separate DLL installation is needed on the target machine.
 
 ---
 
@@ -186,8 +227,12 @@ backend/
   ai_engine.py        AI engine implementations (Mock, HTTP, Local GGUF)
   ai/
     engine_manager.py Runtime engine registry and hot-swap
+    agent_loop.py     ReAct agent loop (reasoning + tool calling)
+    agent_tools.py    Tool handlers bound to sheet/document repos
+    tool_registry.py  Tool registration and dispatch
   storage.py          SQLite data layer (raw SQL, no ORM)
   models.py           Pydantic request/response models
+  formula.py          Spreadsheet formula evaluator
   schema.sql          Database schema
 
 src/

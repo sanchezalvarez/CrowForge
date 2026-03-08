@@ -93,11 +93,13 @@ class DatabaseManager:
         if "metadata" not in cm_cols:
             conn.execute("ALTER TABLE chat_messages ADD COLUMN metadata TEXT")
 
-        # Add last_opened_at to documents and sheets if missing
+        # Add last_opened_at and page_settings_json to documents if missing
         cursor = conn.execute("PRAGMA table_info(documents)")
         doc_cols = {row["name"] for row in cursor.fetchall()}
         if "last_opened_at" not in doc_cols:
             conn.execute("ALTER TABLE documents ADD COLUMN last_opened_at TEXT")
+        if "page_settings_json" not in doc_cols:
+            conn.execute("ALTER TABLE documents ADD COLUMN page_settings_json TEXT")
 
         cursor = conn.execute("PRAGMA table_info(sheets)")
         sheet_cols = {row["name"] for row in cursor.fetchall()}
@@ -256,15 +258,18 @@ class DocumentRepository:
     def _row_to_document(self, row) -> Document:
         d = dict(row)
         d["content_json"] = json.loads(d["content_json"]) if isinstance(d["content_json"], str) else d["content_json"]
+        ps_json = d.pop("page_settings_json", None)
+        d["page_settings"] = json.loads(ps_json) if ps_json else None
         return Document(**d)
 
-    def create(self, title: str = "Untitled", content_json: dict = None) -> Document:
+    def create(self, title: str = "Untitled", content_json: dict = None, page_settings: dict = None) -> Document:
         doc_id = str(uuid.uuid4())
         content_str = json.dumps(content_json or {})
+        ps_str = json.dumps(page_settings) if page_settings else None
         with self.db.get_connection() as conn:
             conn.execute(
-                "INSERT INTO documents (id, title, content_json) VALUES (?, ?, ?)",
-                (doc_id, title, content_str),
+                "INSERT INTO documents (id, title, content_json, page_settings_json) VALUES (?, ?, ?, ?)",
+                (doc_id, title, content_str, ps_str),
             )
             conn.commit()
             return self.get_by_id(doc_id)
@@ -284,12 +289,14 @@ class DocumentRepository:
             conn.execute("UPDATE documents SET last_opened_at=datetime('now') WHERE id=?", (doc_id,))
             conn.commit()
 
-    def update(self, doc_id: str, title: str = None, content_json: dict = None) -> Optional[Document]:
+    def update(self, doc_id: str, title: str = None, content_json: dict = None, page_settings: dict = None) -> Optional[Document]:
         with self.db.get_connection() as conn:
             if title is not None:
                 conn.execute("UPDATE documents SET title = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (title, doc_id))
             if content_json is not None:
                 conn.execute("UPDATE documents SET content_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (json.dumps(content_json), doc_id))
+            if page_settings is not None:
+                conn.execute("UPDATE documents SET page_settings_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (json.dumps(page_settings), doc_id))
             conn.commit()
             return self.get_by_id(doc_id)
 

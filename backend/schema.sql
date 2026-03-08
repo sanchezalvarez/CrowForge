@@ -47,6 +47,7 @@ CREATE TABLE IF NOT EXISTS documents (
     id TEXT PRIMARY KEY,
     title TEXT NOT NULL DEFAULT 'Untitled',
     content_json TEXT NOT NULL DEFAULT '{}',
+    page_settings_json TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );

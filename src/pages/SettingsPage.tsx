@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import axios from "axios";
-import { Download, CheckCircle2, Loader2, X, AlertCircle, Trash2, ExternalLink } from "lucide-react";
+import { Download, CheckCircle2, Loader2, X, AlertCircle, Trash2, ExternalLink, Cpu, HardDrive, Monitor, MemoryStick } from "lucide-react";
 import { toast } from "../hooks/useToast";
 import { openUrl } from "@tauri-apps/plugin-opener";
 
@@ -43,10 +43,36 @@ interface GalleryModel {
   url: string;
   infoUrl?: string;
   tags?: string[];
+  vram?: string;
+  ram?: string;
+}
+
+interface SystemSpecs {
+  cpu: string;
+  cpu_cores: number;
+  ram_total_gb: number;
+  ram_available_gb: number;
+  disk_total_gb: number;
+  disk_free_gb: number;
+  os: string;
+  gpu: string | null;
+  gpu_vram_gb: number | null;
 }
 
 const GALLERY_MODELS: GalleryModel[] = [
   // ── Agent-capable models (tool calling / function calling) ──
+  {
+    name: "Qwen3.5 9B Q4_K_M",
+    size: "~5.7 GB",
+    license: "Apache 2.0",
+    description: "Latest Qwen 3.5 — top-tier reasoning, coding, and multilingual. Best 9B-class model.",
+    filename: "Qwen3.5-9B-Q4_K_M.gguf",
+    url: "https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/resolve/main/Qwen3.5-9B-Q4_K_M.gguf",
+    infoUrl: "https://huggingface.co/unsloth/Qwen3.5-9B-GGUF",
+    tags: ["agent", "coding", "math", "multilingual", "reasoning"],
+    vram: "6 GB",
+    ram: "10 GB",
+  },
   {
     name: "Qwen2.5 7B Instruct Q4_K_M",
     size: "~4.7 GB",
@@ -56,6 +82,8 @@ const GALLERY_MODELS: GalleryModel[] = [
     url: "https://huggingface.co/bartowski/Qwen2.5-7B-Instruct-GGUF/resolve/main/Qwen2.5-7B-Instruct-Q4_K_M.gguf",
     infoUrl: "https://huggingface.co/Qwen/Qwen2.5-7B-Instruct",
     tags: ["agent", "coding", "math", "multilingual"],
+    vram: "5 GB",
+    ram: "8 GB",
   },
   {
     name: "Qwen2.5 3B Instruct Q4_K_M",
@@ -66,6 +94,8 @@ const GALLERY_MODELS: GalleryModel[] = [
     url: "https://huggingface.co/bartowski/Qwen2.5-3B-Instruct-GGUF/resolve/main/Qwen2.5-3B-Instruct-Q4_K_M.gguf",
     infoUrl: "https://huggingface.co/Qwen/Qwen2.5-3B-Instruct",
     tags: ["agent", "translate", "multilingual", "fast"],
+    vram: "2 GB",
+    ram: "4 GB",
   },
   {
     name: "Hermes 3 Llama 3.1 8B Q4_K_M",
@@ -76,6 +106,8 @@ const GALLERY_MODELS: GalleryModel[] = [
     url: "https://huggingface.co/NousResearch/Hermes-3-Llama-3.1-8B-GGUF/resolve/main/Hermes-3-Llama-3.1-8B-Q4_K_M.gguf",
     infoUrl: "https://huggingface.co/NousResearch/Hermes-3-Llama-3.1-8B",
     tags: ["agent", "chat", "reasoning"],
+    vram: "6 GB",
+    ram: "8 GB",
   },
   {
     name: "Mistral Nemo 12B Instruct Q4_K_M",
@@ -86,6 +118,8 @@ const GALLERY_MODELS: GalleryModel[] = [
     url: "https://huggingface.co/bartowski/Mistral-Nemo-Instruct-2407-GGUF/resolve/main/Mistral-Nemo-Instruct-2407-Q4_K_M.gguf",
     infoUrl: "https://huggingface.co/mistralai/Mistral-Nemo-Instruct-2407",
     tags: ["agent", "chat", "reasoning"],
+    vram: "8 GB",
+    ram: "12 GB",
   },
   {
     name: "Functionary Small v3.2 Q4_K_M",
@@ -96,6 +130,8 @@ const GALLERY_MODELS: GalleryModel[] = [
     url: "https://huggingface.co/meetkai/functionary-small-v3.2-GGUF/resolve/main/functionary-small-v3.2.Q4_K_M.gguf",
     infoUrl: "https://huggingface.co/meetkai/functionary-small-v3.2",
     tags: ["agent"],
+    vram: "6 GB",
+    ram: "8 GB",
   },
   // ── General-purpose models (no tool calling) ──
   {
@@ -107,6 +143,8 @@ const GALLERY_MODELS: GalleryModel[] = [
     url: "https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF/resolve/main/Llama-3.2-3B-Instruct-Q4_K_M.gguf",
     infoUrl: "https://huggingface.co/meta-llama/Llama-3.2-3B-Instruct",
     tags: ["chat", "general"],
+    vram: "2 GB",
+    ram: "4 GB",
   },
   {
     name: "Llama 3.1 8B Instruct Q4_K_M",
@@ -117,6 +155,8 @@ const GALLERY_MODELS: GalleryModel[] = [
     url: "https://huggingface.co/bartowski/Meta-Llama-3.1-8B-Instruct-GGUF/resolve/main/Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf",
     infoUrl: "https://huggingface.co/meta-llama/Meta-Llama-3.1-8B-Instruct",
     tags: ["chat", "reasoning"],
+    vram: "6 GB",
+    ram: "8 GB",
   },
   {
     name: "Gemma 2 2B Instruct Q4_K_M",
@@ -127,6 +167,8 @@ const GALLERY_MODELS: GalleryModel[] = [
     url: "https://huggingface.co/bartowski/gemma-2-2b-it-GGUF/resolve/main/gemma-2-2b-it-Q4_K_M.gguf",
     infoUrl: "https://huggingface.co/google/gemma-2-2b-it",
     tags: ["translate", "multilingual", "fast"],
+    vram: "2 GB",
+    ram: "4 GB",
   },
   {
     name: "Gemma 2 9B Instruct Q4_K_M",
@@ -137,6 +179,8 @@ const GALLERY_MODELS: GalleryModel[] = [
     url: "https://huggingface.co/bartowski/gemma-2-9b-it-GGUF/resolve/main/gemma-2-9b-it-Q4_K_M.gguf",
     infoUrl: "https://huggingface.co/google/gemma-2-9b-it",
     tags: ["translate", "multilingual", "reasoning"],
+    vram: "6 GB",
+    ram: "10 GB",
   },
   {
     name: "Phi-3.5 mini Instruct Q4_K_M",
@@ -147,6 +191,8 @@ const GALLERY_MODELS: GalleryModel[] = [
     url: "https://huggingface.co/bartowski/Phi-3.5-mini-instruct-GGUF/resolve/main/Phi-3.5-mini-instruct-Q4_K_M.gguf",
     infoUrl: "https://huggingface.co/microsoft/Phi-3.5-mini-instruct",
     tags: ["coding", "reasoning"],
+    vram: "3 GB",
+    ram: "4 GB",
   },
   {
     name: "Mistral 7B Instruct v0.3 Q4_K_M",
@@ -157,6 +203,8 @@ const GALLERY_MODELS: GalleryModel[] = [
     url: "https://huggingface.co/bartowski/Mistral-7B-Instruct-v0.3-GGUF/resolve/main/Mistral-7B-Instruct-v0.3-Q4_K_M.gguf",
     infoUrl: "https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.3",
     tags: ["chat", "general"],
+    vram: "5 GB",
+    ram: "8 GB",
   },
   {
     name: "Aya Expanse 8B Q4_K_M",
@@ -167,6 +215,8 @@ const GALLERY_MODELS: GalleryModel[] = [
     url: "https://huggingface.co/bartowski/aya-expanse-8b-GGUF/resolve/main/aya-expanse-8b-Q4_K_M.gguf",
     infoUrl: "https://huggingface.co/CohereForAI/aya-expanse-8b",
     tags: ["translate", "multilingual"],
+    vram: "6 GB",
+    ram: "8 GB",
   },
   {
     name: "DeepSeek-R1 Distill Qwen 1.5B Q4_K_M",
@@ -177,6 +227,8 @@ const GALLERY_MODELS: GalleryModel[] = [
     url: "https://huggingface.co/bartowski/DeepSeek-R1-Distill-Qwen-1.5B-GGUF/resolve/main/DeepSeek-R1-Distill-Qwen-1.5B-Q4_K_M.gguf",
     infoUrl: "https://huggingface.co/deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B",
     tags: ["reasoning", "fast"],
+    vram: "2 GB",
+    ram: "3 GB",
   },
 ];
 
@@ -251,6 +303,7 @@ export function SettingsPage({ theme, setTheme, baseColor, setBaseColor }: Setti
   const [reinitError, setReinitError] = useState<string | null>(null);
   const [downloads, setDownloads] = useState<Record<string, DownloadState>>({});
   const [tagFilter, setTagFilter] = useState("all");
+  const [specs, setSpecs] = useState<SystemSpecs | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const reinitPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -291,6 +344,7 @@ export function SettingsPage({ theme, setTheme, baseColor, setBaseColor }: Setti
     if (section === "models") {
       refreshModels();
       refreshDownloads();
+      axios.get(`${API_BASE}/system/specs`).then((r) => setSpecs(r.data)).catch(() => {});
     }
   }, [section]);
 
@@ -439,7 +493,7 @@ export function SettingsPage({ theme, setTheme, baseColor, setBaseColor }: Setti
       </nav>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto p-6 max-w-2xl space-y-6">
+      <div className={`flex-1 overflow-y-auto p-6 ${section === "models" ? "" : "max-w-2xl"} space-y-6`}>
         {section === "ai" && (
           <>
             <h2 className="text-lg font-semibold">AI Configuration</h2>
@@ -618,140 +672,208 @@ export function SettingsPage({ theme, setTheme, baseColor, setBaseColor }: Setti
         )}
 
         {section === "models" && (
-          <>
-            <div className="space-y-1">
-              <h2 className="text-lg font-semibold">Free GGUF Models</h2>
-              <p className="text-xs text-muted-foreground">
-                Downloads go to your <span className="font-mono text-foreground">{config.models_dir || "Models Directory"}</span>. Change it in AI Configuration.
-              </p>
-            </div>
+          <div className="flex gap-6">
+            {/* Left: Model gallery */}
+            <div className="flex-1 max-w-2xl space-y-6">
+              <div className="space-y-1">
+                <h2 className="text-lg font-semibold">Free GGUF Models</h2>
+                <p className="text-xs text-muted-foreground">
+                  Downloads go to your <span className="font-mono text-foreground">{config.models_dir || "Models Directory"}</span>. Change it in AI Configuration.
+                </p>
+              </div>
 
-            {/* Tag filter */}
-            <div className="flex flex-wrap gap-1.5">
-              {ALL_TAGS.map((tag) => (
-                <button
-                  key={tag}
-                  onClick={() => setTagFilter(tag)}
-                  className={`px-2.5 py-0.5 rounded-full text-xs font-medium transition-colors ${
-                    tagFilter === tag
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted text-muted-foreground hover:bg-muted/80"
-                  }`}
-                >
-                  {tag}
-                </button>
-              ))}
-            </div>
+              {/* Tag filter */}
+              <div className="flex flex-wrap gap-1.5">
+                {ALL_TAGS.map((tag) => (
+                  <button
+                    key={tag}
+                    onClick={() => setTagFilter(tag)}
+                    className={`px-2.5 py-0.5 rounded-full text-xs font-medium transition-colors ${
+                      tagFilter === tag
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted text-muted-foreground hover:bg-muted/80"
+                    }`}
+                  >
+                    {tag}
+                  </button>
+                ))}
+              </div>
 
-            <div className="space-y-3">
-              {filteredModels.map((m) => {
-                const installed = installedFiles.includes(m.filename);
-                const dl = downloads[m.filename];
-                const pct = dl && dl.total > 0 ? Math.round((dl.progress / dl.total) * 100) : 0;
+              <div className="space-y-3">
+                {filteredModels.map((m) => {
+                  const installed = installedFiles.includes(m.filename);
+                  const dl = downloads[m.filename];
+                  const pct = dl && dl.total > 0 ? Math.round((dl.progress / dl.total) * 100) : 0;
 
-                return (
-                  <div key={m.filename} className="rounded-lg border p-4 space-y-2">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="space-y-0.5 min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <p className="text-sm font-medium">{m.name}</p>
-                          {m.infoUrl && (
+                  return (
+                    <div key={m.filename} className="rounded-lg border p-4 space-y-2">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="space-y-0.5 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-sm font-medium">{m.name}</p>
+                            {m.infoUrl && (
+                              <button
+                                onClick={() => openUrl(m.infoUrl!)}
+                                className="text-muted-foreground hover:text-foreground transition-colors"
+                                title="More info on HuggingFace"
+                              >
+                                <ExternalLink size={12} />
+                              </button>
+                            )}
+                          </div>
+                          <p className="text-xs text-muted-foreground">{m.description}</p>
+                          <div className="flex flex-wrap gap-2 text-xs text-muted-foreground pt-1">
+                            <span>{m.size}</span>
+                            <span>·</span>
+                            <span>{m.license}</span>
+                            {m.vram && <span>· GPU: {m.vram}</span>}
+                            {m.ram && <span>· RAM: {m.ram}</span>}
+                            {m.tags && m.tags.map((t) => (
+                              <span key={t} className="px-1.5 py-0 rounded-full bg-muted text-muted-foreground/70">{t}</span>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="shrink-0">
+                          {installed && !dl?.running ? (
+                            <div className="flex items-center gap-2">
+                              <span className="flex items-center gap-1 text-xs font-medium text-green-600">
+                                <CheckCircle2 size={14} />
+                                Installed
+                              </span>
+                              <button
+                                onClick={() => handleDeleteModel(m.filename)}
+                                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive transition-colors"
+                                title="Delete model"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
+                          ) : dl?.running ? (
                             <button
-                              onClick={() => openUrl(m.infoUrl!)}
-                              className="text-muted-foreground hover:text-foreground transition-colors"
-                              title="More info on HuggingFace"
+                              onClick={() => handleCancelDownload(m.filename)}
+                              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive transition-colors"
                             >
-                              <ExternalLink size={12} />
+                              <X size={13} />
+                              Cancel
+                            </button>
+                          ) : dl?.error ? (
+                            <button
+                              onClick={() => handleDownload(m)}
+                              className="flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium hover:bg-muted transition-colors text-destructive border-destructive/30"
+                            >
+                              <AlertCircle size={13} />
+                              Retry
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => handleDownload(m)}
+                              className="flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium hover:bg-muted transition-colors"
+                            >
+                              <Download size={13} />
+                              Download
                             </button>
                           )}
                         </div>
-                        <p className="text-xs text-muted-foreground">{m.description}</p>
-                        <div className="flex flex-wrap gap-2 text-xs text-muted-foreground pt-1">
-                          <span>{m.size}</span>
-                          <span>·</span>
-                          <span>{m.license}</span>
-                          {m.tags && m.tags.map((t) => (
-                            <span key={t} className="px-1.5 py-0 rounded-full bg-muted text-muted-foreground/70">{t}</span>
-                          ))}
-                        </div>
                       </div>
 
-                      <div className="shrink-0">
-                        {installed && !dl?.running ? (
-                          <div className="flex items-center gap-2">
-                            <span className="flex items-center gap-1 text-xs font-medium text-green-600">
-                              <CheckCircle2 size={14} />
-                              Installed
-                            </span>
-                            <button
-                              onClick={() => handleDeleteModel(m.filename)}
-                              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive transition-colors"
-                              title="Delete model"
-                            >
-                              <Trash2 size={13} />
-                            </button>
+                      {/* Progress bar */}
+                      {dl?.running && (
+                        <div className="space-y-1">
+                          <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-primary rounded-full transition-all duration-300"
+                              style={{ width: dl.total > 0 ? `${pct}%` : "0%" }}
+                            />
                           </div>
-                        ) : dl?.running ? (
-                          <button
-                            onClick={() => handleCancelDownload(m.filename)}
-                            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive transition-colors"
-                          >
-                            <X size={13} />
-                            Cancel
-                          </button>
-                        ) : dl?.error ? (
-                          <button
-                            onClick={() => handleDownload(m)}
-                            className="flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium hover:bg-muted transition-colors text-destructive border-destructive/30"
-                          >
-                            <AlertCircle size={13} />
-                            Retry
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => handleDownload(m)}
-                            className="flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium hover:bg-muted transition-colors"
-                          >
-                            <Download size={13} />
-                            Download
-                          </button>
-                        )}
+                          <div className="flex justify-between text-[10px] text-muted-foreground">
+                            <span className="flex items-center gap-1">
+                              <Loader2 size={10} className="animate-spin" />
+                              Downloading…
+                            </span>
+                            <span>
+                              {dl.total > 0
+                                ? `${fmt_bytes(dl.progress)} / ${fmt_bytes(dl.total)} (${pct}%)`
+                                : fmt_bytes(dl.progress)}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                      {dl?.error && (
+                        <p className="text-[11px] text-destructive">{dl.error}</p>
+                      )}
+                      {dl?.done && !installed && (
+                        <p className="text-[11px] text-green-600">Download complete — rescanning…</p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Right: System specs */}
+            <div className="w-64 shrink-0">
+              <div className="sticky top-0 rounded-lg border bg-muted/30 p-4 space-y-4">
+                <h3 className="text-sm font-semibold">Your PC Specs</h3>
+                {!specs ? (
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Loader2 size={12} className="animate-spin" />
+                    Detecting hardware…
+                  </div>
+                ) : (
+                  <div className="space-y-3 text-xs">
+                    <div className="flex items-start gap-2">
+                      <Monitor size={14} className="shrink-0 mt-0.5 text-muted-foreground" />
+                      <div>
+                        <p className="font-medium">OS</p>
+                        <p className="text-muted-foreground">{specs.os}</p>
                       </div>
                     </div>
-
-                    {/* Progress bar */}
-                    {dl?.running && (
-                      <div className="space-y-1">
-                        <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-primary rounded-full transition-all duration-300"
-                            style={{ width: dl.total > 0 ? `${pct}%` : "0%" }}
-                          />
-                        </div>
-                        <div className="flex justify-between text-[10px] text-muted-foreground">
-                          <span className="flex items-center gap-1">
-                            <Loader2 size={10} className="animate-spin" />
-                            Downloading…
-                          </span>
-                          <span>
-                            {dl.total > 0
-                              ? `${fmt_bytes(dl.progress)} / ${fmt_bytes(dl.total)} (${pct}%)`
-                              : fmt_bytes(dl.progress)}
-                          </span>
+                    <div className="flex items-start gap-2">
+                      <Cpu size={14} className="shrink-0 mt-0.5 text-muted-foreground" />
+                      <div>
+                        <p className="font-medium">CPU</p>
+                        <p className="text-muted-foreground">{specs.cpu}</p>
+                        <p className="text-muted-foreground">{specs.cpu_cores} cores</p>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <MemoryStick size={14} className="shrink-0 mt-0.5 text-muted-foreground" />
+                      <div>
+                        <p className="font-medium">RAM</p>
+                        <p className="text-muted-foreground">{specs.ram_total_gb} GB total</p>
+                        <p className="text-muted-foreground">{specs.ram_available_gb} GB available</p>
+                      </div>
+                    </div>
+                    {specs.gpu && (
+                      <div className="flex items-start gap-2">
+                        <Monitor size={14} className="shrink-0 mt-0.5 text-muted-foreground" />
+                        <div>
+                          <p className="font-medium">GPU</p>
+                          <p className="text-muted-foreground">{specs.gpu}</p>
+                          {specs.gpu_vram_gb != null && (
+                            <p className="text-muted-foreground">{specs.gpu_vram_gb} GB VRAM</p>
+                          )}
                         </div>
                       </div>
                     )}
-                    {dl?.error && (
-                      <p className="text-[11px] text-destructive">{dl.error}</p>
-                    )}
-                    {dl?.done && !installed && (
-                      <p className="text-[11px] text-green-600">Download complete — rescanning…</p>
-                    )}
+                    <div className="flex items-start gap-2">
+                      <HardDrive size={14} className="shrink-0 mt-0.5 text-muted-foreground" />
+                      <div>
+                        <p className="font-medium">Disk</p>
+                        <p className="text-muted-foreground">{specs.disk_free_gb} GB free / {specs.disk_total_gb} GB</p>
+                      </div>
+                    </div>
+                    <div className="border-t pt-3 mt-3">
+                      <p className="text-[10px] text-muted-foreground leading-relaxed">
+                        Models run on CPU if no GPU is available. Check the GPU VRAM and RAM requirements on each model to see what fits your system.
+                      </p>
+                    </div>
                   </div>
-                );
-              })}
+                )}
+              </div>
             </div>
-          </>
+          </div>
         )}
 
         {section === "user" && (

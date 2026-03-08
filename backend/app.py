@@ -1122,7 +1122,11 @@ async def delete_all_data():
 
 @app.post("/documents", response_model=Document)
 async def create_document(req: DocumentCreate):
-    return document_repo.create(title=req.title, content_json=req.content_json)
+    return document_repo.create(
+        title=req.title,
+        content_json=req.content_json,
+        page_settings=req.page_settings.model_dump() if req.page_settings else None,
+    )
 
 @app.get("/documents")
 async def list_documents():
@@ -1138,12 +1142,17 @@ async def get_document(doc_id: str):
 
 @app.put("/documents/{doc_id}", response_model=Document)
 async def update_document(doc_id: str, req: DocumentUpdate):
-    if req.title is None and req.content_json is None:
-        raise HTTPException(status_code=400, detail="At least one of title or content_json must be provided")
+    if req.title is None and req.content_json is None and req.page_settings is None:
+        raise HTTPException(status_code=400, detail="At least one of title, content_json, or page_settings must be provided")
     doc = document_repo.get_by_id(doc_id)
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
-    return document_repo.update(doc_id, title=req.title, content_json=req.content_json)
+    return document_repo.update(
+        doc_id,
+        title=req.title,
+        content_json=req.content_json,
+        page_settings=req.page_settings.model_dump() if req.page_settings else None,
+    )
 
 
 @app.delete("/documents/{doc_id}")
@@ -1160,7 +1169,11 @@ async def duplicate_document(doc_id: str):
     doc = document_repo.get_by_id(doc_id)
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
-    return document_repo.create(title=f"{doc.title} (copy)", content_json=doc.content_json)
+    return document_repo.create(
+        title=f"{doc.title} (copy)",
+        content_json=doc.content_json,
+        page_settings=doc.page_settings.model_dump() if doc.page_settings else None,
+    )
 
 
 _DOC_AI_FORMAT = """
@@ -2081,6 +2094,50 @@ async def ai_generate_rows(sheet_id: str, request: Request, instruction: str, co
         yield {"data": "[DONE]"}
 
     return EventSourceResponse(event_generator())
+
+
+@app.get("/system/specs")
+async def system_specs():
+    """Return basic hardware info for display in settings."""
+    import platform
+    import psutil
+    cpu_name = platform.processor() or "Unknown CPU"
+    cpu_cores = os.cpu_count() or 0
+    ram_total = psutil.virtual_memory().total
+    ram_available = psutil.virtual_memory().available
+    disk = psutil.disk_usage(os.getcwd())
+    result = {
+        "cpu": cpu_name,
+        "cpu_cores": cpu_cores,
+        "ram_total_gb": round(ram_total / (1024**3), 1),
+        "ram_available_gb": round(ram_available / (1024**3), 1),
+        "disk_total_gb": round(disk.total / (1024**3), 1),
+        "disk_free_gb": round(disk.free / (1024**3), 1),
+        "os": f"{platform.system()} {platform.release()}",
+        "gpu": None,
+        "gpu_vram_gb": None,
+    }
+    # Try to detect GPU via WMI on Windows
+    if sys.platform == "win32":
+        try:
+            import subprocess
+            out = subprocess.check_output(
+                ["wmic", "path", "win32_videocontroller", "get", "name,adapterram", "/format:csv"],
+                timeout=5, text=True, creationflags=0x08000000,
+            )
+            for line in out.strip().splitlines():
+                parts = [p.strip() for p in line.split(",")]
+                if len(parts) >= 3 and parts[1].isdigit():
+                    vram_bytes = int(parts[1])
+                    gpu_name = parts[2]
+                    # Pick the GPU with the most VRAM
+                    vram_gb = round(vram_bytes / (1024**3), 1)
+                    if result["gpu"] is None or vram_gb > (result["gpu_vram_gb"] or 0):
+                        result["gpu"] = gpu_name
+                        result["gpu_vram_gb"] = vram_gb
+        except Exception:
+            pass
+    return result
 
 
 if __name__ == "__main__":

@@ -57,7 +57,10 @@
       "Bash(copy:*)",
       "Bash(python:*)",
       "Bash(curl:*)",
-      "Bash(wc:*)"
+      "Bash(wc:*)",
+      "Bash(/c/Python314/python:*)",
+      "Bash(npm i:*)",
+      "WebFetch(domain:tiptap.dev)"
     ]
   }
 }

@@ -6,7 +6,8 @@ import {
   Heading2, List, Upload, Download, ChevronDown, PackageOpen, Pencil, Copy,
   Sparkles, Underline as UnderlineIcon, Strikethrough, AlignLeft as AlignLeftIcon,
   AlignCenter, AlignRight, Highlighter, Image as ImageIcon, Search, ChevronUp,
-  Replace,
+  Replace, Subscript as SubscriptIcon, Superscript as SuperscriptIcon,
+  ListOrdered, Quote, Minus, Link as LinkIcon, Unlink,
 } from "lucide-react";
 import { useEditor, EditorContent, NodeViewWrapper, ReactNodeViewRenderer } from "@tiptap/react";
 import type { NodeViewProps } from "@tiptap/react";
@@ -18,7 +19,22 @@ import Underline from "@tiptap/extension-underline";
 import TextAlign from "@tiptap/extension-text-align";
 import Highlight from "@tiptap/extension-highlight";
 import FontFamily from "@tiptap/extension-font-family";
+import Subscript from "@tiptap/extension-subscript";
+import Superscript from "@tiptap/extension-superscript";
+import CharacterCount from "@tiptap/extension-character-count";
+import Typography from "@tiptap/extension-typography";
+import Dropcursor from "@tiptap/extension-dropcursor";
+import Gapcursor from "@tiptap/extension-gapcursor";
+import Link from "@tiptap/extension-link";
+import { Table } from "@tiptap/extension-table";
+import { TableRow } from "@tiptap/extension-table-row";
+import { TableCell } from "@tiptap/extension-table-cell";
+import { TableHeader } from "@tiptap/extension-table-header";
+import Placeholder from "@tiptap/extension-placeholder";
+import { Extension } from "@tiptap/core";
 import { DOMParser as PmDOMParser, Fragment } from "@tiptap/pm/model";
+import { Plugin, PluginKey } from "@tiptap/pm/state";
+import { DecorationSet, Decoration } from "@tiptap/pm/view";
 import ImageExtension from "@tiptap/extension-image";
 import { Button } from "../components/ui/button";
 import { ScrollArea } from "../components/ui/scroll-area";
@@ -37,6 +53,12 @@ import {
   DOCUMENT_EXPORT_FORMATS,
   type DocExportFormat,
 } from "../lib/fileService";
+import {
+  type PageSettings,
+  DEFAULT_PAGE_SETTINGS,
+  getPageDims,
+  getMarginPx,
+} from "../lib/pageSettings";
 
 // ---- Resizable Image NodeView ----
 function ResizableImageView({ node, updateAttributes, selected }: NodeViewProps) {
@@ -105,16 +127,357 @@ const ResizableImage = ImageExtension.extend({
   },
 }).configure({ inline: true, allowBase64: true });
 
+const FontSize = TextStyle.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      fontSize: {
+        default: null,
+        parseHTML: (el: HTMLElement) => {
+          const raw = el.style.fontSize;
+          if (!raw) return null;
+          return parseInt(raw, 10) || null;
+        },
+        renderHTML: (attrs: Record<string, unknown>) => {
+          if (!attrs.fontSize) return {};
+          return { style: `font-size: ${attrs.fontSize}px` };
+        },
+      },
+    };
+  },
+});
+
+// Line-height + paragraph spacing + indent extension
+const LineHeight = Extension.create({
+  name: "lineHeight",
+  addGlobalAttributes() {
+    return [
+      {
+        types: ["paragraph", "heading"],
+        attributes: {
+          lineHeight: {
+            default: null,
+            parseHTML: (el: HTMLElement) => el.style.lineHeight || null,
+            renderHTML: (attrs: Record<string, unknown>) => {
+              if (!attrs.lineHeight) return {};
+              return { style: `line-height: ${attrs.lineHeight}` };
+            },
+          },
+          marginTop: {
+            default: null,
+            parseHTML: (el: HTMLElement) => {
+              const v = el.style.marginTop;
+              return v ? parseInt(v, 10) || null : null;
+            },
+            renderHTML: (attrs: Record<string, unknown>) => {
+              if (!attrs.marginTop) return {};
+              return { style: `margin-top: ${attrs.marginTop}px` };
+            },
+          },
+          marginBottom: {
+            default: null,
+            parseHTML: (el: HTMLElement) => {
+              const v = el.style.marginBottom;
+              return v ? parseInt(v, 10) || null : null;
+            },
+            renderHTML: (attrs: Record<string, unknown>) => {
+              if (!attrs.marginBottom) return {};
+              return { style: `margin-bottom: ${attrs.marginBottom}px` };
+            },
+          },
+          indent: {
+            default: null,
+            parseHTML: (el: HTMLElement) => {
+              const v = el.style.paddingLeft;
+              return v ? parseInt(v, 10) || null : null;
+            },
+            renderHTML: (attrs: Record<string, unknown>) => {
+              if (!attrs.indent) return {};
+              return { style: `padding-left: ${attrs.indent}px` };
+            },
+          },
+        },
+      },
+    ];
+  },
+});
+
+// Module-level page settings for the page-break plugin to read
+let _pageBreakSettings: {
+  pageH: number; margin: number; gap: number;
+  headerText: string; footerText: string;
+  showPageNumbers: boolean; pageNumberPosition: "header" | "footer";
+} = {
+  pageH: 1123, margin: 95, gap: 80,
+  headerText: "", footerText: "",
+  showPageNumbers: true, pageNumberPosition: "footer",
+};
+
+// ── Page-break spacer plugin ─────────────────────────────────────────────────
+// Measures top-level block DOM positions and injects invisible spacer
+// decorations at page boundaries so content is pushed past the gap zone.
+const pageBreakKey = new PluginKey("pageBreak");
+
+function createPageBreakPlugin(getSettings: () => typeof _pageBreakSettings = () => _pageBreakSettings) {
+  let currentDecos = DecorationSet.empty;
+
+  return new Plugin({
+    key: pageBreakKey,
+    props: {
+      decorations() { return currentDecos; },
+    },
+    view(editorView) {
+      let rafId = 0;
+      let debounceTimer = 0;
+      let lastKey = "";
+      let applying = false;
+
+      const recalc = () => {
+        if (applying) return;
+        const settings = getSettings();
+        const { pageH, margin, gap, headerText, footerText, showPageNumbers } = settings;
+        const contentZone = pageH - 2 * margin;
+        const gutter = 2 * margin + gap;
+        const slotSize = contentZone + gutter;
+
+        // Find scroll container so we can restore position after measurement
+        let scrollParent: HTMLElement | null = editorView.dom.parentElement as HTMLElement | null;
+        while (scrollParent) {
+          const ov = getComputedStyle(scrollParent).overflowY;
+          if (ov === "auto" || ov === "scroll") break;
+          scrollParent = scrollParent.parentElement as HTMLElement | null;
+        }
+        const savedScrollTop = scrollParent?.scrollTop ?? 0;
+
+        // Hide existing spacers so we can measure clean block positions
+        const existingSpacers = editorView.dom.querySelectorAll(".page-break-spacer");
+        existingSpacers.forEach(s => ((s as HTMLElement).style.display = "none"));
+
+        // Force sync layout without spacers
+        // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+        editorView.dom.offsetHeight;
+
+        const baseTop = (editorView.dom as HTMLElement).offsetTop;
+        const doc = editorView.state.doc;
+
+        // Collect clean positions of each top-level block
+        const blocks: { offset: number; top: number; height: number }[] = [];
+        doc.forEach((_node, offset) => {
+          const domNode = editorView.nodeDOM(offset);
+          if (!domNode || !(domNode instanceof HTMLElement)) return;
+          blocks.push({
+            offset,
+            top: domNode.offsetTop - baseTop,
+            height: domNode.offsetHeight,
+          });
+        });
+
+        // Restore spacer visibility before any early return, then restore scroll
+        existingSpacers.forEach(s => ((s as HTMLElement).style.display = ""));
+        if (scrollParent) scrollParent.scrollTop = savedScrollTop;
+
+        // Walk blocks and compute variable-height spacers
+        const breaks: { offset: number; spacerH: number; pageAbove: number }[] = [];
+        let totalShift = 0;
+
+        for (const block of blocks) {
+          const adjustedTop = block.top + totalShift;
+          const adjustedBottom = adjustedTop + block.height;
+          const topPage = Math.floor(adjustedTop / slotSize);
+          const pageContentEnd = topPage * slotSize + contentZone;
+
+          if (adjustedBottom > pageContentEnd && adjustedTop > 0) {
+            // Push the entire block to the next page (works for both small and oversized blocks).
+            // Oversized blocks will overflow their page — acceptable vs. mid-line cuts.
+            const remaining = pageContentEnd - adjustedTop;
+            const thisSpacerH = remaining + gutter;
+            breaks.push({ offset: block.offset, spacerH: thisSpacerH, pageAbove: topPage + 1 });
+            totalShift += thisSpacerH;
+          }
+        }
+
+        // Dedupe — if nothing changed, keep existing decorations as-is
+        const posKey = breaks.map(b => `${b.offset}:${b.spacerH}`).join(",");
+        if (posKey === lastKey) return;
+        lastKey = posKey;
+
+        // Build decorations — each spacer IS the visual page break
+        const decorations: Decoration[] = [];
+        const ext = margin + 40; // extend past the page padding into the scroll area
+
+        for (let i = 0; i < breaks.length; i++) {
+          const brk = breaks[i];
+          const pageAboveNum = brk.pageAbove; // page number above this break (1-indexed)
+
+          const spacer = document.createElement("div");
+          spacer.className = "page-break-spacer";
+          spacer.style.cssText = `height:${brk.spacerH}px;pointer-events:none;user-select:none;position:relative;margin-left:-${ext}px;margin-right:-${ext}px;z-index:20;contain:layout style;`;
+
+          // Opaque muted background (covers full spacer including 40px beyond page edges)
+          const bg = document.createElement("div");
+          bg.style.cssText = "position:absolute;inset:0;background:var(--muted, hsl(220 14% 96%));";
+          spacer.appendChild(bg);
+
+          // remaining = leftover content zone space above the bottom margin
+          const remaining = brk.spacerH - 2 * margin - gap;
+          // pageW = 40px from spacer edge to page edge (ext = margin+40, page edge = 40 into spacer)
+          const pageEdge = ext - margin; // = 40px
+
+          // White: content zone remainder (still inside the page, above the bottom margin)
+          if (remaining > 0) {
+            const whiteContent = document.createElement("div");
+            whiteContent.style.cssText = `position:absolute;top:0;left:${pageEdge}px;right:${pageEdge}px;height:${remaining}px;background:white;`;
+            spacer.appendChild(whiteContent);
+          }
+
+          // White: full-page-width bottom margin of page above
+          const whiteBot = document.createElement("div");
+          whiteBot.style.cssText = `position:absolute;top:${remaining}px;left:${pageEdge}px;right:${pageEdge}px;height:${margin}px;background:white;`;
+          spacer.appendChild(whiteBot);
+
+          // White: full-page-width top margin of page below
+          const whiteTop = document.createElement("div");
+          whiteTop.style.cssText = `position:absolute;top:${remaining + margin + gap}px;left:${pageEdge}px;right:${pageEdge}px;height:${margin}px;background:white;`;
+          spacer.appendChild(whiteTop);
+
+          // 1px border line at bottom edge of page above
+          const lineBot = document.createElement("div");
+          lineBot.style.cssText = `position:absolute;top:${remaining + margin}px;left:${pageEdge}px;right:${pageEdge}px;height:1px;background:rgba(0,0,0,0.12);z-index:2;`;
+          spacer.appendChild(lineBot);
+
+          // Shadow at bottom edge of page above (casts downward into gap)
+          const shadowBot = document.createElement("div");
+          shadowBot.style.cssText = `position:absolute;top:${remaining + margin}px;left:${pageEdge}px;right:${pageEdge}px;height:0;box-shadow:0 4px 14px rgba(0,0,0,0.22);z-index:1;`;
+          spacer.appendChild(shadowBot);
+
+          // 1px border line at top edge of page below
+          const lineTop = document.createElement("div");
+          lineTop.style.cssText = `position:absolute;top:${remaining + margin + gap}px;left:${pageEdge}px;right:${pageEdge}px;height:1px;background:rgba(0,0,0,0.12);z-index:2;`;
+          spacer.appendChild(lineTop);
+
+          // Shadow at top edge of page below (casts upward into gap)
+          const shadowTop = document.createElement("div");
+          shadowTop.style.cssText = `position:absolute;top:${remaining + margin + gap}px;left:${pageEdge}px;right:${pageEdge}px;height:0;box-shadow:0 -4px 14px rgba(0,0,0,0.22);z-index:1;`;
+          spacer.appendChild(shadowTop);
+
+          // Footer: aligned to content area, near bottom of bottom-margin white strip
+          const footerArea = document.createElement("div");
+          const footerTop = remaining + margin * 0.65;
+          footerArea.style.cssText = `position:absolute;top:${footerTop}px;left:${ext}px;right:${ext}px;font-size:9px;color:hsl(var(--muted-foreground));display:flex;justify-content:space-between;pointer-events:none;user-select:none;`;
+          const footerLeft = document.createElement("span");
+          footerLeft.textContent = footerText;
+          footerArea.appendChild(footerLeft);
+          const footerRight = document.createElement("span");
+          if (showPageNumbers) {
+            footerRight.textContent = String(pageAboveNum);
+          }
+          footerArea.appendChild(footerRight);
+          spacer.appendChild(footerArea);
+
+          // Header: aligned to content area, near top of top-margin white strip
+          const headerArea = document.createElement("div");
+          const headerTop = remaining + margin + gap + margin * 0.25;
+          headerArea.style.cssText = `position:absolute;top:${headerTop}px;left:${ext}px;right:${ext}px;font-size:9px;color:hsl(var(--muted-foreground));display:flex;justify-content:space-between;pointer-events:none;user-select:none;`;
+          const headerLeft = document.createElement("span");
+          headerLeft.textContent = headerText;
+          headerArea.appendChild(headerLeft);
+          spacer.appendChild(headerArea);
+
+          decorations.push(Decoration.widget(brk.offset, spacer, { side: -1 }));
+        }
+
+        // Performance: content-visibility for off-screen blocks
+        if (scrollParent && blocks.length > 40) {
+          const scrollTop = scrollParent.scrollTop;
+          const viewportH = scrollParent.clientHeight;
+          const twoPages = 2 * slotSize;
+          for (const block of blocks) {
+            const adjustedTop = block.top + totalShift;
+            const offScreen = adjustedTop + block.height < scrollTop - twoPages ||
+                              adjustedTop > scrollTop + viewportH + twoPages;
+            if (offScreen) {
+              const pmNode = doc.nodeAt(block.offset);
+              if (pmNode) {
+                decorations.push(
+                  Decoration.node(block.offset, block.offset + pmNode.nodeSize, {
+                    style: `content-visibility:auto;contain-intrinsic-size:auto ${block.height}px;`,
+                  })
+                );
+              }
+            }
+          }
+        }
+
+        applying = true;
+        currentDecos = DecorationSet.create(doc, decorations);
+        editorView.updateState(editorView.state);
+        applying = false;
+
+        // Restore scroll again after decoration update (spacer heights may have changed)
+        if (scrollParent) scrollParent.scrollTop = savedScrollTop;
+      };
+
+      const scheduleRecalc = () => {
+        if (applying) return;
+        cancelAnimationFrame(rafId);
+        clearTimeout(debounceTimer);
+        // Debounce to 300ms then use RAF for smooth timing
+        debounceTimer = window.setTimeout(() => {
+          rafId = requestAnimationFrame(recalc);
+        }, 300);
+      };
+
+      // Immediate recalc for first render
+      const scheduleImmediate = () => {
+        if (applying) return;
+        cancelAnimationFrame(rafId);
+        rafId = requestAnimationFrame(recalc);
+      };
+
+      // ResizeObserver catches async height changes (images loading, etc.)
+      const ro = new ResizeObserver(scheduleRecalc);
+      ro.observe(editorView.dom);
+
+      scheduleImmediate();
+      return {
+        update: scheduleRecalc,
+        destroy() { cancelAnimationFrame(rafId); clearTimeout(debounceTimer); ro.disconnect(); },
+      };
+    },
+  });
+}
+
+const PageBreaker = Extension.create({
+  name: "pageBreaker",
+  addProseMirrorPlugins() {
+    return [createPageBreakPlugin()];
+  },
+});
+
 const editorExtensions = [
-  StarterKit,
+  StarterKit.configure({ dropcursor: false, gapcursor: false }),
   Markdown,
-  TextStyle,
+  FontSize,
   Color,
   Underline,
   TextAlign.configure({ types: ["heading", "paragraph"] }),
   Highlight.configure({ multicolor: false }),
   FontFamily,
+  Subscript,
+  Superscript,
+  CharacterCount,
+  Typography,
+  Dropcursor.configure({ color: "var(--primary)", width: 2 }),
+  Gapcursor,
+  Link.configure({ openOnClick: false, HTMLAttributes: { class: "text-primary underline cursor-pointer" } }),
+  Placeholder.configure({ placeholder: "Start writing..." }),
+  LineHeight,
   ResizableImage,
+  Table.configure({ resizable: false }),
+  TableRow,
+  TableCell,
+  TableHeader,
+  PageBreaker,
 ];
 
 interface OutlineItem {
@@ -193,6 +556,7 @@ interface Document {
   id: string;
   title: string;
   content_json: Record<string, unknown>;
+  page_settings?: PageSettings | null;
   created_at: string;
   updated_at: string;
 }
@@ -210,10 +574,6 @@ interface DocumentsPageProps {
   onContextChange?: (ctx: DocumentContext | null) => void;
   tuningParams?: TuningParams;
 }
-
-// A4 at 96 DPI: 794 × 1123 px. We use this for page-break simulation.
-const A4_HEIGHT_PX = 1123;
-const A4_WIDTH_PX = 794;
 
 export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPageProps) {
   const [documents, setDocuments] = useState<Document[]>([]);
@@ -236,7 +596,7 @@ export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPagePr
   const editorScrollRef = useRef<HTMLDivElement>(null);
   const [pageCount, setPageCount] = useState(1);
   const [currentPage, setCurrentPage] = useState(1);
-  const [wordCount, setWordCount] = useState({ words: 0, chars: 0 });
+  const [wordCount, setWordCount] = useState({ words: 0, chars: 0, sentences: 0 });
   const pendingRange = useRef<{ from: number; to: number } | null>(null);
   const pendingOriginalText = useRef<string | null>(null);
   const pendingDocId = useRef<string | null>(null);
@@ -244,8 +604,27 @@ export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPagePr
   const [savedRecently, setSavedRecently] = useState(false);
   const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const [pageSettings, setPageSettings] = useState<PageSettings>(DEFAULT_PAGE_SETTINGS);
+  const [pageSettingsOpen, setPageSettingsOpen] = useState(false);
+  const pageSettingsRef = useRef<PageSettings>(DEFAULT_PAGE_SETTINGS);
+
+  // Keep module-level page-break settings in sync
+  useEffect(() => {
+    const dims = getPageDims(pageSettings);
+    const margin = getMarginPx(pageSettings);
+    _pageBreakSettings = {
+      pageH: dims.h, margin, gap: 80,
+      headerText: pageSettings.headerText ?? "",
+      footerText: pageSettings.footerText ?? "",
+      showPageNumbers: pageSettings.showPageNumbers ?? true,
+      pageNumberPosition: pageSettings.pageNumberPosition ?? "footer",
+    };
+  }, [pageSettings]);
+
   const [searchOpen, setSearchOpen] = useState(false);
   const [colorPickerOpen, setColorPickerOpen] = useState(false);
+  const [linkInputOpen, setLinkInputOpen] = useState(false);
+  const [linkUrl, setLinkUrl] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [replaceTerm, setReplaceTerm] = useState("");
   const [searchMatches, setSearchMatches] = useState<{ from: number; to: number }[]>([]);
@@ -297,14 +676,19 @@ export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPagePr
       if (!activeDocId) return;
       const json = editor.getJSON();
       debouncedSave(activeDocId, json);
-      // Estimate page count from editor DOM height
+      // Estimate page count: subtract spacer heights to get real content height
       const el = editor.view.dom as HTMLElement;
-      const h = el.scrollHeight;
-      setPageCount(Math.max(1, Math.ceil(h / A4_HEIGHT_PX)));
-      // Word/char count
-      const text = editor.getText();
-      const words = text.trim() ? text.trim().split(/\s+/).length : 0;
-      setWordCount({ words, chars: text.length });
+      const spacers = el.querySelectorAll(".page-break-spacer");
+      let spacerTotal = 0;
+      spacers.forEach(s => { spacerTotal += (s as HTMLElement).offsetHeight; });
+      const contentH = el.scrollHeight - spacerTotal;
+      const ps = pageSettingsRef.current;
+      const contentZone = getPageDims(ps).h - 2 * getMarginPx(ps);
+      setPageCount(Math.max(1, Math.ceil(contentH / contentZone)));
+      // Word/char count via CharacterCount extension
+      const chars = editor.storage.characterCount.characters();
+      const words = editor.storage.characterCount.words();
+      setWordCount({ words, chars, sentences: 0 });
     },
     onSelectionUpdate: ({ editor }) => {
       const { from, to } = editor.state.selection;
@@ -316,6 +700,13 @@ export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPagePr
       setSelection({ from, to, text });
     },
   });
+
+  // Nudge the editor when page settings change so the page-break plugin recalculates
+  useEffect(() => {
+    if (editor && !editor.isDestroyed) {
+      editor.view.dispatch(editor.state.tr.setMeta("pageSettingsChanged", true));
+    }
+  }, [pageSettings, editor]);
 
   // Report document context to parent (for Chat integration)
   useEffect(() => {
@@ -369,7 +760,12 @@ export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPagePr
   // Track current page from scroll position
   function handleEditorScroll(e: React.UIEvent<HTMLDivElement>) {
     const scrollTop = (e.target as HTMLDivElement).scrollTop;
-    setCurrentPage(Math.max(1, Math.floor(scrollTop / A4_HEIGHT_PX) + 1));
+    const dims = getPageDims(pageSettings);
+    const margin = getMarginPx(pageSettings);
+    const contentZone = dims.h - 2 * margin;
+    const gutter = 2 * margin + 80; // 80 = gap
+    const slotSize = contentZone + gutter;
+    setCurrentPage(Math.max(1, Math.floor(scrollTop / slotSize) + 1));
   }
 
   async function fetchActiveEngine() {
@@ -391,6 +787,10 @@ export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPagePr
     pendingRange.current = null;
     pendingOriginalText.current = null;
     pendingDocId.current = null;
+    // Sync page settings from active document
+    const ps = activeDoc?.page_settings ?? DEFAULT_PAGE_SETTINGS;
+    setPageSettings(ps);
+    pageSettingsRef.current = ps;
     if (!editor) return;
     setSelection(null);
     if (activeDoc) {
@@ -744,19 +1144,43 @@ export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPagePr
     setImporting(true);
     try {
       const parsed = await parseDocumentImport(file);
-      const res = await axios.post(`${API_BASE}/documents`, { title: parsed.title, content_json: {} });
+
+      // Convert the imported content to Tiptap JSON *before* creating the document
+      // so we can POST it with the real content. This avoids the race condition where
+      // setActiveDocId triggers the load-useEffect which wipes the editor with {} before
+      // the old setTimeout-based approach could set content.
+      if (parsed.type === "markdown") {
+        (editor.commands as unknown as { setMarkdown: (s: string) => void }).setMarkdown(parsed.content);
+      } else {
+        editor.commands.setContent(parsed.content);
+      }
+      const contentJson = editor.getJSON();
+
+      // Recalculate page count after DOM reflow (allow spacer plugin to run first)
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          const el = editor.view.dom as HTMLElement;
+          const spacers = el.querySelectorAll(".page-break-spacer");
+          let spacerTotal = 0;
+          spacers.forEach(s => { spacerTotal += (s as HTMLElement).offsetHeight; });
+          const contentH = el.scrollHeight - spacerTotal;
+          const ps = pageSettingsRef.current;
+          const contentZone = getPageDims(ps).h - 2 * getMarginPx(ps);
+          setPageCount(Math.max(1, Math.ceil(contentH / contentZone)));
+        });
+      });
+
+      // Create the document already populated with the parsed content
+      const res = await axios.post(`${API_BASE}/documents`, {
+        title: parsed.title,
+        content_json: contentJson,
+      });
       const doc: Document = res.data;
-      setDocuments((prev) => [doc, ...prev]);
+      // Merge the real content_json into the doc so the load-useEffect doesn't
+      // overwrite with stale empty data from the server response
+      const docWithContent = { ...doc, content_json: contentJson };
+      setDocuments((prev) => [docWithContent, ...prev]);
       setActiveDocId(doc.id);
-      setTimeout(() => {
-        if (!editor) return;
-        if (parsed.type === "markdown") {
-          (editor.commands as unknown as { setMarkdown: (s: string) => void }).setMarkdown(parsed.content);
-        } else {
-          editor.commands.setContent(parsed.content);
-        }
-        saveContent(doc.id, editor.getJSON());
-      }, 50);
       toast(`"${parsed.title}" imported.`);
     } catch {
       toast("Import failed. Please check the file and try again.", "error");
@@ -770,13 +1194,17 @@ export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPagePr
   async function handleExportDoc(format: DocExportFormat) {
     setExportDocOpen(false);
     if (!editor || !activeDoc) return;
-    await exportDocumentAs(format, {
-      html: editor.getHTML(),
-      json: editor.getJSON(),
-      text: editor.getText(),
-      markdown: (editor.storage as unknown as { markdown: { getMarkdown: () => string } }).markdown.getMarkdown(),
-      title: activeDoc.title,
-    });
+    await exportDocumentAs(
+      format,
+      {
+        html: editor.getHTML(),
+        json: editor.getJSON(),
+        text: editor.getText(),
+        markdown: (editor.storage as unknown as { markdown: { getMarkdown: () => string } }).markdown.getMarkdown(),
+        title: activeDoc.title,
+      },
+      pageSettings,
+    );
   }
 
   // ---- Bulk export ----
@@ -824,6 +1252,24 @@ export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPagePr
     document.addEventListener("mousedown", close);
     return () => document.removeEventListener("mousedown", close);
   }, [colorPickerOpen]);
+
+  // Close page settings popover on outside click
+  useEffect(() => {
+    if (!pageSettingsOpen) return;
+    const close = () => setPageSettingsOpen(false);
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [pageSettingsOpen]);
+
+  async function savePageSettings(docId: string, settings: PageSettings) {
+    pageSettingsRef.current = settings;
+    try {
+      const res = await axios.put(`${API_BASE}/documents/${docId}`, { page_settings: settings });
+      setDocuments((prev) => prev.map((d) => (d.id === docId ? res.data : d)));
+    } catch {
+      toast("Failed to save page settings.", "error");
+    }
+  }
 
   const pendingExt = pendingFile ? pendingFile.name.split(".").pop()?.toLowerCase() ?? "" : "";
   const pendingLabel = pendingFile ? (IMPORT_FORMAT_LABELS[pendingExt] ?? pendingExt.toUpperCase()) : "";
@@ -1082,6 +1528,22 @@ export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPagePr
                 >
                   <Strikethrough className="h-3.5 w-3.5" />
                 </Button>
+                <Button
+                  variant={editor.isActive("subscript") ? "secondary" : "ghost"}
+                  size="sm" className="h-7 w-7 p-0"
+                  onClick={() => editor.chain().focus().toggleSubscript().run()}
+                  title="Subscript"
+                >
+                  <SubscriptIcon className="h-3.5 w-3.5" />
+                </Button>
+                <Button
+                  variant={editor.isActive("superscript") ? "secondary" : "ghost"}
+                  size="sm" className="h-7 w-7 p-0"
+                  onClick={() => editor.chain().focus().toggleSuperscript().run()}
+                  title="Superscript"
+                >
+                  <SuperscriptIcon className="h-3.5 w-3.5" />
+                </Button>
                 <div className="w-px h-4 bg-border mx-1" />
                 <Button
                   variant={editor.isActive({ textAlign: "left" }) ? "secondary" : "ghost"}
@@ -1155,7 +1617,7 @@ export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPagePr
                 <select
                   className="h-7 text-xs border border-border rounded bg-background px-1 cursor-pointer"
                   title="Font family"
-                  defaultValue=""
+                  value={editor.getAttributes("textStyle").fontFamily ?? ""}
                   onChange={(e) => {
                     const val = e.target.value;
                     if (!val) {
@@ -1169,14 +1631,281 @@ export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPagePr
                   <option value="serif">Serif</option>
                   <option value="monospace">Mono</option>
                 </select>
+                <select
+                  className="h-7 text-xs border border-border rounded bg-background px-1 cursor-pointer"
+                  title="Font size"
+                  value={(() => {
+                    const fs = editor.getAttributes("textStyle").fontSize;
+                    return fs ? String(fs) : "";
+                  })()}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (!val) {
+                      editor.chain().focus().setMark("textStyle", { fontSize: null }).run();
+                    } else {
+                      editor.chain().focus().setMark("textStyle", { fontSize: Number(val) }).run();
+                    }
+                  }}
+                >
+                  <option value="">Size</option>
+                  {[8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 36].map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+                <select
+                  className="h-7 text-xs border border-border rounded bg-background px-1 cursor-pointer"
+                  title="Line height"
+                  value={(() => {
+                    const lh = editor.getAttributes("paragraph").lineHeight ?? editor.getAttributes("heading").lineHeight ?? "";
+                    return lh ? String(lh) : "";
+                  })()}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (!val) {
+                      editor.chain().focus().updateAttributes("paragraph", { lineHeight: null }).updateAttributes("heading", { lineHeight: null }).run();
+                    } else {
+                      editor.chain().focus().updateAttributes("paragraph", { lineHeight: val }).updateAttributes("heading", { lineHeight: val }).run();
+                    }
+                  }}
+                >
+                  <option value="">LH</option>
+                  {[
+                    ["1", "1.0"],
+                    ["1.15", "1.15"],
+                    ["1.5", "1.5"],
+                    ["2", "2.0"],
+                    ["2.5", "2.5"],
+                    ["3", "3.0"],
+                  ].map(([v, label]) => (
+                    <option key={v} value={v}>{label}</option>
+                  ))}
+                </select>
                 <div className="w-px h-4 bg-border mx-1" />
                 <Button
                   variant={editor.isActive("bulletList") ? "secondary" : "ghost"}
                   size="sm" className="h-7 w-7 p-0"
                   onClick={() => editor.chain().focus().toggleBulletList().run()}
+                  title="Bullet list"
                 >
                   <List className="h-3.5 w-3.5" />
                 </Button>
+                <Button
+                  variant={editor.isActive("orderedList") ? "secondary" : "ghost"}
+                  size="sm" className="h-7 w-7 p-0"
+                  onClick={() => editor.chain().focus().toggleOrderedList().run()}
+                  title="Ordered list"
+                >
+                  <ListOrdered className="h-3.5 w-3.5" />
+                </Button>
+                <Button
+                  variant={editor.isActive("blockquote") ? "secondary" : "ghost"}
+                  size="sm" className="h-7 w-7 p-0"
+                  onClick={() => editor.chain().focus().toggleBlockquote().run()}
+                  title="Blockquote"
+                >
+                  <Quote className="h-3.5 w-3.5" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm" className="h-7 w-7 p-0"
+                  onClick={() => editor.chain().focus().setHorizontalRule().run()}
+                  title="Horizontal rule"
+                >
+                  <Minus className="h-3.5 w-3.5" />
+                </Button>
+                <div className="w-px h-4 bg-border mx-1" />
+                <div className="relative">
+                  <Button
+                    variant={editor.isActive("link") ? "secondary" : "ghost"}
+                    size="sm" className="h-7 w-7 p-0"
+                    title="Insert link"
+                    onClick={() => {
+                      if (editor.isActive("link")) {
+                        editor.chain().focus().unsetLink().run();
+                      } else {
+                        setLinkUrl(editor.getAttributes("link").href ?? "");
+                        setLinkInputOpen((o) => !o);
+                      }
+                    }}
+                  >
+                    {editor.isActive("link") ? <Unlink className="h-3.5 w-3.5" /> : <LinkIcon className="h-3.5 w-3.5" />}
+                  </Button>
+                  {linkInputOpen && (
+                    <div
+                      className="absolute top-full left-0 mt-1 z-50 bg-background border border-border rounded-md shadow-lg p-2 flex gap-1 w-[260px]"
+                      onMouseDown={(e) => e.stopPropagation()}
+                    >
+                      <input
+                        className="flex-1 text-xs border border-border rounded px-1.5 py-1 bg-background"
+                        placeholder="https://..."
+                        value={linkUrl}
+                        onChange={(e) => setLinkUrl(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && linkUrl.trim()) {
+                            editor.chain().focus().setLink({ href: linkUrl.trim() }).run();
+                            setLinkInputOpen(false);
+                            setLinkUrl("");
+                          } else if (e.key === "Escape") {
+                            setLinkInputOpen(false);
+                          }
+                        }}
+                        autoFocus
+                      />
+                      <Button
+                        size="sm" className="h-7 text-xs px-2"
+                        onClick={() => {
+                          if (linkUrl.trim()) {
+                            editor.chain().focus().setLink({ href: linkUrl.trim() }).run();
+                          }
+                          setLinkInputOpen(false);
+                          setLinkUrl("");
+                        }}
+                      >
+                        OK
+                      </Button>
+                    </div>
+                  )}
+                </div>
+                <div className="w-px h-4 bg-border mx-1" />
+                {/* Page settings popover */}
+                <div className="relative" onMouseDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
+                  <Button
+                    variant={pageSettingsOpen ? "secondary" : "ghost"}
+                    size="sm"
+                    className="h-7 text-xs gap-1 px-2"
+                    title="Page settings"
+                    onClick={() => setPageSettingsOpen((o) => !o)}
+                  >
+                    <Maximize2 className="h-3.5 w-3.5" />
+                    Page
+                  </Button>
+                  {pageSettingsOpen && (
+                    <div className="absolute left-0 top-full mt-1 z-50 bg-background border border-border rounded-md shadow-lg p-3 w-[220px] flex flex-col gap-3">
+                      {/* Size */}
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Size</p>
+                        <div className="flex flex-wrap gap-1">
+                          {(["a4", "letter", "legal", "a5"] as const).map((sz) => (
+                            <button
+                              key={sz}
+                              className={`h-6 px-2 rounded text-xs border transition-colors ${pageSettings.size === sz ? "bg-primary text-primary-foreground border-primary" : "border-border hover:bg-muted"}`}
+                              onClick={() => {
+                                const next = { ...pageSettings, size: sz };
+                                setPageSettings(next);
+                                if (activeDocId) savePageSettings(activeDocId, next);
+                              }}
+                            >
+                              {sz.toUpperCase()}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      {/* Orientation */}
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Orientation</p>
+                        <div className="flex gap-1">
+                          {(["portrait", "landscape"] as const).map((ori) => (
+                            <button
+                              key={ori}
+                              className={`h-6 px-2 rounded text-xs border transition-colors capitalize ${pageSettings.orientation === ori ? "bg-primary text-primary-foreground border-primary" : "border-border hover:bg-muted"}`}
+                              onClick={() => {
+                                const next = { ...pageSettings, orientation: ori };
+                                setPageSettings(next);
+                                if (activeDocId) savePageSettings(activeDocId, next);
+                              }}
+                            >
+                              {ori}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      {/* Margins */}
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Margins</p>
+                        <div className="flex gap-1">
+                          {(["normal", "narrow", "wide"] as const).map((m) => (
+                            <button
+                              key={m}
+                              className={`h-6 px-2 rounded text-xs border transition-colors capitalize ${pageSettings.margins === m ? "bg-primary text-primary-foreground border-primary" : "border-border hover:bg-muted"}`}
+                              onClick={() => {
+                                const next = { ...pageSettings, margins: m };
+                                setPageSettings(next);
+                                if (activeDocId) savePageSettings(activeDocId, next);
+                              }}
+                            >
+                              {m}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      {/* Header */}
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Header</p>
+                        <input
+                          type="text"
+                          className="w-full h-6 px-2 rounded text-xs border border-border bg-background focus:outline-none focus:ring-1 focus:ring-primary"
+                          placeholder="Header text..."
+                          value={pageSettings.headerText ?? ""}
+                          onChange={(e) => {
+                            const next = { ...pageSettings, headerText: e.target.value };
+                            setPageSettings(next);
+                            pageSettingsRef.current = next;
+                          }}
+                          onBlur={() => { if (activeDocId) savePageSettings(activeDocId, pageSettingsRef.current); }}
+                        />
+                      </div>
+                      {/* Footer */}
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Footer</p>
+                        <input
+                          type="text"
+                          className="w-full h-6 px-2 rounded text-xs border border-border bg-background focus:outline-none focus:ring-1 focus:ring-primary"
+                          placeholder="Footer text..."
+                          value={pageSettings.footerText ?? ""}
+                          onChange={(e) => {
+                            const next = { ...pageSettings, footerText: e.target.value };
+                            setPageSettings(next);
+                            pageSettingsRef.current = next;
+                          }}
+                          onBlur={() => { if (activeDocId) savePageSettings(activeDocId, pageSettingsRef.current); }}
+                        />
+                      </div>
+                      {/* Page numbers */}
+                      <div>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Page Numbers</p>
+                          <button
+                            className={`h-4 w-7 rounded-full transition-colors relative ${(pageSettings.showPageNumbers ?? true) ? "bg-primary" : "bg-border"}`}
+                            onClick={() => {
+                              const next = { ...pageSettings, showPageNumbers: !(pageSettings.showPageNumbers ?? true) };
+                              setPageSettings(next);
+                              if (activeDocId) savePageSettings(activeDocId, next);
+                            }}
+                          >
+                            <span className={`absolute top-0.5 h-3 w-3 rounded-full bg-white transition-transform ${(pageSettings.showPageNumbers ?? true) ? "translate-x-3.5" : "translate-x-0.5"}`} />
+                          </button>
+                        </div>
+                        {(pageSettings.showPageNumbers ?? true) && (
+                          <div className="flex gap-1">
+                            {(["header", "footer"] as const).map((pos) => (
+                              <button
+                                key={pos}
+                                className={`h-6 px-2 rounded text-xs border transition-colors capitalize ${(pageSettings.pageNumberPosition ?? "footer") === pos ? "bg-primary text-primary-foreground border-primary" : "border-border hover:bg-muted"}`}
+                                onClick={() => {
+                                  const next = { ...pageSettings, pageNumberPosition: pos };
+                                  setPageSettings(next);
+                                  if (activeDocId) savePageSettings(activeDocId, next);
+                                }}
+                              >
+                                {pos}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
                 <div className="w-px h-4 bg-border mx-1" />
                 <input
                   ref={imageInputRef}
@@ -1348,39 +2077,43 @@ export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPagePr
               {/* A4 editor scroll area */}
               <div
                 ref={editorScrollRef}
-                className="flex-1 overflow-auto bg-muted/30"
+                className="flex-1 overflow-auto bg-muted"
                 onScroll={handleEditorScroll}
               >
                 {/* Page number CSS for print */}
                 <style>{`
                   @media print {
-                    @page { size: A4; margin: 25mm; }
+                    @page { size: ${pageSettings.size} ${pageSettings.orientation}; margin: ${pageSettings.margins === "normal" ? "25mm" : pageSettings.margins === "narrow" ? "12.5mm" : "38mm"}; }
                     .a4-page { box-shadow: none !important; margin: 0 !important; border-radius: 0 !important; }
-                    .page-break-line { display: none !important; }
+                    .page-break-spacer { display: none !important; }
                   }
                   .a4-page { page-break-after: always; }
                 `}</style>
 
-                <div className="py-8 flex flex-col items-center gap-0">
-                  {/* Single A4 "page" — content flows naturally, break lines are visual only */}
+                <div className="py-8 flex flex-col items-center">
+                  {/* Single contenteditable — visual page breaks rendered as gap overlays */}
                   <div
                     className="a4-page bg-white text-black shadow-lg rounded-sm relative"
-                    style={{ width: A4_WIDTH_PX, minHeight: A4_HEIGHT_PX, padding: "25mm 20mm" }}
+                    style={{
+                      width: getPageDims(pageSettings).w,
+                      minHeight: getPageDims(pageSettings).h,
+                      padding: getMarginPx(pageSettings),
+                    }}
                   >
-                    <EditorContent editor={editor} />
-
-                    {/* Visual page-break lines */}
-                    {Array.from({ length: pageCount - 1 }, (_, i) => (
-                      <div
-                        key={i}
-                        className="page-break-line absolute left-0 right-0 border-t-2 border-dashed border-muted-foreground/20 pointer-events-none"
-                        style={{ top: A4_HEIGHT_PX * (i + 1) - 95 /* subtract top padding */ }}
-                      >
-                        <span className="absolute right-2 -top-3 text-[9px] text-muted-foreground/40 font-mono select-none">
-                          page {i + 2}
-                        </span>
+                    {/* Page 1 header — headerText only, no page number */}
+                    {pageSettings.headerText && (
+                      <div className="absolute top-6 left-0 right-0 flex justify-between pointer-events-none select-none" style={{ padding: `0 ${getMarginPx(pageSettings)}px`, fontSize: 9, color: "hsl(var(--muted-foreground))" }}>
+                        <span>{pageSettings.headerText}</span>
                       </div>
-                    ))}
+                    )}
+                    <EditorContent editor={editor} />
+                    {/* Last page footer — always show page number bottom-right */}
+                    {(pageSettings.footerText || (pageSettings.showPageNumbers ?? true)) && (
+                      <div className="absolute bottom-6 left-0 right-0 flex justify-between pointer-events-none select-none" style={{ padding: `0 ${getMarginPx(pageSettings)}px`, fontSize: 9, color: "hsl(var(--muted-foreground))" }}>
+                        <span>{pageSettings.footerText ?? ""}</span>
+                        {(pageSettings.showPageNumbers ?? true) && <span>{pageCount}</span>}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

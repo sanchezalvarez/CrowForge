@@ -100,6 +100,7 @@ function ResizableImageView({ node, updateAttributes, selected }: NodeViewProps)
         draggable={false}
         style={{ width: w, maxWidth: "100%", display: "block" }}
         className={showHandles ? "ring-2 ring-primary ring-offset-1 rounded-sm" : ""}
+        onLoad={() => window.dispatchEvent(new Event("resize"))}
       />
       {/* Left resize handle */}
       <span
@@ -231,6 +232,7 @@ function createPageBreakPlugin(getSettings: () => typeof _pageBreakSettings = ()
       let debounceTimer = 0;
       let lastKey = "";
       let applying = false;
+      let destroyed = false;
 
       const recalc = () => {
         if (applying) return;
@@ -249,32 +251,34 @@ function createPageBreakPlugin(getSettings: () => typeof _pageBreakSettings = ()
         }
         const savedScrollTop = scrollParent?.scrollTop ?? 0;
 
-        // Hide existing spacers so we can measure clean block positions
-        const existingSpacers = editorView.dom.querySelectorAll(".page-break-spacer");
-        existingSpacers.forEach(s => ((s as HTMLElement).style.display = "none"));
-
-        // Force sync layout without spacers
-        // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-        editorView.dom.offsetHeight;
-
         const baseTop = (editorView.dom as HTMLElement).offsetTop;
         const doc = editorView.state.doc;
 
-        // Collect clean positions of each top-level block
+        // Measure block positions with spacers in place, subtracting accumulated
+        // spacer heights to get "clean" positions. Spacer widgets with side:-1
+        // render as the immediate previousElementSibling of their target block.
+        let cumulativeShift = 0;
         const blocks: { offset: number; top: number; height: number }[] = [];
         doc.forEach((_node, offset) => {
           const domNode = editorView.nodeDOM(offset);
           if (!domNode || !(domNode instanceof HTMLElement)) return;
+
+          // ProseMirror-gapcursor may appear between the spacer and this block —
+          // skip only that element, never walk past actual content blocks.
+          let sib = domNode.previousElementSibling;
+          while (sib?.classList.contains("ProseMirror-gapcursor")) {
+            sib = sib.previousElementSibling;
+          }
+          if (sib?.classList.contains("page-break-spacer")) {
+            cumulativeShift += (sib as HTMLElement).offsetHeight;
+          }
+
           blocks.push({
             offset,
-            top: domNode.offsetTop - baseTop,
+            top: domNode.offsetTop - baseTop - cumulativeShift,
             height: domNode.offsetHeight,
           });
         });
-
-        // Restore spacer visibility before any early return, then restore scroll
-        existingSpacers.forEach(s => ((s as HTMLElement).style.display = ""));
-        if (scrollParent) scrollParent.scrollTop = savedScrollTop;
 
         // Walk blocks and compute variable-height spacers
         const breaks: { offset: number; spacerH: number; pageAbove: number }[] = [];
@@ -438,10 +442,22 @@ function createPageBreakPlugin(getSettings: () => typeof _pageBreakSettings = ()
       const ro = new ResizeObserver(scheduleRecalc);
       ro.observe(editorView.dom);
 
+      // window resize catches browser zoom (Ctrl+scroll changes DPR, not CSS pixels)
+      window.addEventListener("resize", scheduleRecalc);
+
       scheduleImmediate();
+      // Wait for custom fonts to load — they change line heights after first render
+      document.fonts.ready.then(() => { if (!destroyed) scheduleImmediate(); });
+
       return {
         update: scheduleRecalc,
-        destroy() { cancelAnimationFrame(rafId); clearTimeout(debounceTimer); ro.disconnect(); },
+        destroy() {
+          destroyed = true;
+          cancelAnimationFrame(rafId);
+          clearTimeout(debounceTimer);
+          ro.disconnect();
+          window.removeEventListener("resize", scheduleRecalc);
+        },
       };
     },
   });

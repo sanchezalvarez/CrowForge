@@ -39,8 +39,8 @@ import { writeFile } from "@tauri-apps/plugin-fs";
 /** Maximum accepted import file size (50 MB). */
 export const MAX_FILE_SIZE = 50 * 1024 * 1024;
 
-export const DOCUMENT_IMPORT_ACCEPT = ".docx,.md,.txt";
-export const DOCUMENT_IMPORT_EXTS = ["docx", "md", "txt"];
+export const DOCUMENT_IMPORT_ACCEPT = ".docx,.md,.txt,.rtf";
+export const DOCUMENT_IMPORT_EXTS = ["docx", "md", "txt", "rtf"];
 
 export const SHEET_IMPORT_ACCEPT = ".xlsx,.xls,.csv,.tsv";
 export const SHEET_IMPORT_EXTS = ["xlsx", "xls", "csv", "tsv"];
@@ -610,6 +610,8 @@ async function parseDocxToHtml(buf: ArrayBuffer): Promise<string> {
     const mime = MIME[ext] ?? "image/png";
     const b64  = await zipFile.async("base64");
     media.set(path.replace("word/", ""), `data:${mime};base64,${b64}`);
+    // Yield to main thread between media files to prevent UI freeze on large DOCX
+    await new Promise<void>(r => setTimeout(r, 0));
   }
 
   const ctx: DxCtx = { styles, nums, rels, theme, media };
@@ -619,6 +621,191 @@ async function parseDocxToHtml(buf: ArrayBuffer): Promise<string> {
   if (!body) return "";
 
   return walkDocxBody(Array.from(body.children), ctx);
+}
+
+// ─── RTF parser ──────────────────────────────────────────────────────────────
+
+/**
+ * Lightweight RTF → HTML converter.
+ *
+ * Supports: paragraphs (\par), bold/italic/underline (\b, \i, \ul),
+ * font size (\fs), colour tables (\colortbl + \cf), font tables (\fonttbl),
+ * headings (\outlinelevel), tabs (\tab), line breaks (\line),
+ * hex escapes (\'xx), and Unicode escapes (\uN).
+ *
+ * Gracefully ignores: OLE objects, tables (\trowd), images (\pict).
+ */
+export function parseRtfToHtml(rtf: string): string {
+  // ── Colour table ──────────────────────────────────────────────────────
+  const colors: string[] = [""];          // index 0 = auto / default
+  const ctMatch = rtf.match(/\{\\colortbl\s*;?([^}]*)}/);
+  if (ctMatch) {
+    const entries = ctMatch[1].split(";").filter(Boolean);
+    for (const entry of entries) {
+      const r = entry.match(/\\red(\d+)/)?.[1] ?? "0";
+      const g = entry.match(/\\green(\d+)/)?.[1] ?? "0";
+      const b = entry.match(/\\blue(\d+)/)?.[1] ?? "0";
+      colors.push(`rgb(${r},${g},${b})`);
+    }
+  }
+
+  // ── Strip header groups we can't use ──────────────────────────────────
+  // Remove {\fonttbl ...}, {\stylesheet ...}, {\info ...}, {\*\... } etc.
+  let body = rtf;
+  // Remove the leading {\rtf1 wrapper (keep content after the first group-close of the preamble)
+  body = body.replace(/^\{\\rtf\d?\s*/, "");
+  // Remove the trailing }
+  if (body.endsWith("}")) body = body.slice(0, -1);
+
+  // Remove known preamble groups (nested braces handled by counting)
+  const stripGroups = ["\\fonttbl", "\\colortbl", "\\stylesheet", "\\info", "\\*\\generator", "\\*\\listtable", "\\*\\listoverridetable"];
+  for (const prefix of stripGroups) {
+    let idx = body.indexOf(`{${prefix}`);
+    while (idx !== -1) {
+      let depth = 0;
+      let end = idx;
+      for (let j = idx; j < body.length; j++) {
+        if (body[j] === "{") depth++;
+        else if (body[j] === "}") { depth--; if (depth === 0) { end = j + 1; break; } }
+      }
+      body = body.slice(0, idx) + body.slice(end);
+      idx = body.indexOf(`{${prefix}`);
+    }
+  }
+
+  // ── Tokenise and walk ─────────────────────────────────────────────────
+  const html: string[] = [];
+  let bold = false, italic = false, underline = false;
+  let fontSize = 0, colorIdx = 0;
+  let outlineLevel = -1;
+  let paraContent = "";
+  let inIgnoredGroup = 0;     // depth inside \trowd, \pict, \object, etc.
+
+  const flushSpan = (text: string): string => {
+    if (!text) return "";
+    let span = escHtml(text);
+    const styles: string[] = [];
+    if (bold) styles.push("font-weight:bold");
+    if (italic) styles.push("font-style:italic");
+    if (underline) styles.push("text-decoration:underline");
+    if (fontSize > 0) styles.push(`font-size:${fontSize / 2}pt`);
+    if (colorIdx > 0 && colorIdx < colors.length) styles.push(`color:${colors[colorIdx]}`);
+    if (styles.length > 0) span = `<span style="${styles.join(";")}">${span}</span>`;
+    return span;
+  };
+
+  const flushPara = () => {
+    const content = paraContent || "<br>";
+    if (outlineLevel >= 0 && outlineLevel <= 5) {
+      const level = Math.min(outlineLevel + 1, 6);
+      html.push(`<h${level}>${content}</h${level}>`);
+    } else {
+      html.push(`<p>${content}</p>`);
+    }
+    paraContent = "";
+    outlineLevel = -1;
+  };
+
+  // Simple regex tokeniser
+  const tokenRe = /(\{|\}|\\[a-z]+[-]?\d*\s?|\\'[0-9a-fA-F]{2}|\\u-?\d+[ ?]?|\\[^a-z]|[^{}\\]+)/g;
+  let m: RegExpExecArray | null;
+  let groupDepth = 0;
+
+  while ((m = tokenRe.exec(body)) !== null) {
+    const tok = m[1];
+
+    if (tok === "{") {
+      groupDepth++;
+      if (inIgnoredGroup > 0) inIgnoredGroup++;
+      continue;
+    }
+    if (tok === "}") {
+      groupDepth--;
+      if (inIgnoredGroup > 0) inIgnoredGroup--;
+      continue;
+    }
+    if (inIgnoredGroup > 0) continue;
+
+    // Control words
+    if (tok.startsWith("\\")) {
+      const cwMatch = tok.match(/^\\([a-z]+)(-?\d+)?\s?$/);
+      if (cwMatch) {
+        const word = cwMatch[1];
+        const param = cwMatch[2] !== undefined ? parseInt(cwMatch[2], 10) : undefined;
+
+        switch (word) {
+          case "par": case "pard":
+            flushPara();
+            if (word === "pard") { bold = false; italic = false; underline = false; fontSize = 0; colorIdx = 0; }
+            break;
+          case "b":
+            bold = param !== 0;
+            break;
+          case "i":
+            italic = param !== 0;
+            break;
+          case "ul": case "ulnone":
+            underline = word === "ul" && param !== 0;
+            break;
+          case "fs":
+            fontSize = param ?? 0;
+            break;
+          case "cf":
+            colorIdx = param ?? 0;
+            break;
+          case "outlinelevel":
+            outlineLevel = param ?? -1;
+            break;
+          case "tab":
+            paraContent += "\t";
+            break;
+          case "line":
+            paraContent += "<br>";
+            break;
+          case "trowd": case "pict": case "object":
+            inIgnoredGroup = 1;
+            break;
+          default:
+            break;
+        }
+        continue;
+      }
+
+      // Hex escape \'xx
+      if (tok.startsWith("\\'")) {
+        const code = parseInt(tok.slice(2), 16);
+        if (!isNaN(code)) paraContent += flushSpan(String.fromCharCode(code));
+        continue;
+      }
+
+      // Unicode escape \uN
+      if (tok.startsWith("\\u")) {
+        const uMatch = tok.match(/^\\u(-?\d+)/);
+        if (uMatch) {
+          let code = parseInt(uMatch[1], 10);
+          if (code < 0) code += 65536;
+          paraContent += flushSpan(String.fromCodePoint(code));
+        }
+        continue;
+      }
+
+      // Other escaped chars like \\ \{ \}
+      if (tok.length === 2 && !tok[1].match(/[a-z]/)) {
+        paraContent += flushSpan(tok[1]);
+        continue;
+      }
+
+      continue;
+    }
+
+    // Plain text
+    paraContent += flushSpan(tok);
+  }
+
+  // Flush remaining paragraph
+  if (paraContent) flushPara();
+
+  return html.join("");
 }
 
 // ─── Document import ──────────────────────────────────────────────────────────
@@ -643,6 +830,12 @@ export async function parseDocumentImport(file: File): Promise<ParsedDocImport> 
   if (ext === "docx") {
     const buf = await file.arrayBuffer();
     const html = await parseDocxToHtml(buf);
+    return { title, type: "html", content: html };
+  }
+
+  if (ext === "rtf") {
+    const text = await file.text();
+    const html = parseRtfToHtml(text);
     return { title, type: "html", content: html };
   }
 

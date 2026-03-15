@@ -60,7 +60,9 @@
       "Bash(wc:*)",
       "Bash(/c/Python314/python:*)",
       "Bash(npm i:*)",
-      "WebFetch(domain:tiptap.dev)"
+      "WebFetch(domain:tiptap.dev)",
+      "Bash(npx madge:*)",
+      "Bash(find:*)"
     ]
   }
 }

@@ -1410,6 +1410,16 @@ async def add_sheet_column(sheet_id: str, req: SheetAddColumn):
         raise HTTPException(status_code=404, detail="Sheet not found")
     return sheet
 
+@app.post("/sheets/{sheet_id}/columns/insert", response_model=Sheet)
+async def insert_sheet_column(sheet_id: str, req: dict):
+    col_index = req.get("col_index", 0)
+    name = req.get("name", "Column")
+    col_type = req.get("type", "text")
+    sheet = sheet_repo.insert_column(sheet_id, col_index, name, col_type)
+    if not sheet:
+        raise HTTPException(status_code=404, detail="Sheet not found")
+    return sheet
+
 @app.put("/sheets/{sheet_id}/clear-range", response_model=Sheet)
 async def clear_cell_range(sheet_id: str, req: dict):
     """Clear all cells in a rectangular range to empty strings."""

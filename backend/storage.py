@@ -489,6 +489,22 @@ class SheetRepository:
                        changed_cells=set())
             return self.get_by_id(sheet_id)
 
+    def insert_column(self, sheet_id: str, col_index: int, name: str, col_type: str = "text") -> Optional[Sheet]:
+        with self.db.get_connection() as conn:
+            sheet = self.get_by_id(sheet_id)
+            if not sheet:
+                return None
+            idx = max(0, min(col_index, len(sheet.columns)))
+            sheet.columns.insert(idx, SheetColumn(name=name, type=col_type))
+            for row in sheet.rows:
+                row.insert(idx, "")
+            formulas = self._shift_formulas(sheet.formulas, 'col', idx, +1)
+            formats = self._shift_formulas(sheet.formats, 'col', idx, +1)
+            alignments = self._shift_formulas(sheet.alignments, 'col', idx, +1)
+            self._save(conn, sheet_id, sheet.columns, sheet.rows, formulas,
+                       formats=formats, alignments=alignments)
+            return self.get_by_id(sheet_id)
+
     @staticmethod
     def validate_cell(value: str, col_type: str) -> Optional[str]:
         """Validate value against column type. Returns error message or None."""

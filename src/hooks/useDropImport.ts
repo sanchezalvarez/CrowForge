@@ -11,6 +11,7 @@ export const IMPORT_FORMAT_LABELS: Record<string, string> = {
   docx: "Word Document",
   md:   "Markdown File",
   txt:  "Plain Text File",
+  rtf:  "Rich Text Format",
 };
 
 export interface DropImportState {

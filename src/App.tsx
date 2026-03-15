@@ -10,6 +10,7 @@ import {
   PanelRightOpen,
   CpuIcon,
   Bot,
+  Calculator,
 } from "lucide-react";
 import crowforgeLogo from "./assets/crowforge_ico.png";
 import { cn } from "./lib/utils";
@@ -19,6 +20,7 @@ import { DocumentsPage } from "./pages/DocumentsPage";
 import { SheetsPage } from "./pages/SheetsPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { AgentPage } from "./pages/AgentPage";
+import { CalculatorPage } from "./pages/CalculatorPage";
 import { SplashScreen } from "./components/SplashScreen";
 import { OnboardingPage } from "./pages/OnboardingPage";
 import { Toaster } from "./components/ui/toaster";
@@ -58,7 +60,7 @@ class PageErrorBoundary extends Component<{ children: ReactNode; page: string },
 }
 
 type AppStatus = "loading" | "onboarding" | "ready" | "failed";
-type AppPage = "chat" | "agent" | "documents" | "sheets" | "benchmark" | "settings";
+type AppPage = "chat" | "agent" | "documents" | "sheets" | "calculator" | "benchmark" | "settings";
 
 export interface DocumentContext {
   title: string;
@@ -226,6 +228,7 @@ export default function App() {
     { page: "agent", label: "Agent", icon: Bot },
     { page: "documents", label: "Documents", icon: FileText },
     { page: "sheets", label: "Sheets", icon: Table2 },
+    { page: "calculator", label: "Calculator", icon: Calculator },
     { page: "benchmark", label: "Benchmark", icon: Gauge },
     { page: "settings", label: "Settings", icon: Settings },
   ];
@@ -286,6 +289,8 @@ export default function App() {
             <DocumentsPage onContextChange={setDocContext} tuningParams={tuningParams} />
           ) : currentPage === "sheets" ? (
             <SheetsPage tuningParams={tuningParams} />
+          ) : currentPage === "calculator" ? (
+            <CalculatorPage />
           ) : currentPage === "benchmark" ? (
             <BenchmarkPage />
           ) : currentPage === "settings" ? (

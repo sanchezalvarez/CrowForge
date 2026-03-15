@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import axios from "axios";
 import { PlusCircle, Table2, Trash2, Plus, X, AlertCircle, Sparkles, Square, Loader2, LayoutTemplate, FileSpreadsheet, ListTodo, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Copy, Pencil, Filter, Eraser, Tags, ListChecks, Undo2, Redo2, AlignLeft, AlignCenter, AlignRight, AlignVerticalJustifyStart, AlignVerticalJustifyCenter, AlignVerticalJustifyEnd, Bold, Italic, Paintbrush, Type, WrapText, RotateCcw, Upload, Download, ChevronDown, DollarSign, BarChart2, ChevronRight } from "lucide-react";
 import { Button } from "../components/ui/button";
@@ -51,7 +51,7 @@ const SHEET_TEMPLATES: SheetTemplate[] = [
   {
     id: "grid",
     name: "Grid",
-    description: "Columns A–F with 30 empty rows, ready for data",
+    description: "Columns A–K with 50 empty rows, ready for data",
     icon: LayoutTemplate,
     title: "Sheet 1",
     columns: [
@@ -61,9 +61,14 @@ const SHEET_TEMPLATES: SheetTemplate[] = [
       { name: "D", type: "text" },
       { name: "E", type: "text" },
       { name: "F", type: "text" },
+      { name: "G", type: "text" },
+      { name: "H", type: "text" },
+      { name: "I", type: "text" },
+      { name: "J", type: "text" },
+      { name: "K", type: "text" },
     ],
-    rows: Array.from({ length: 30 }, () => ["", "", "", "", "", ""]),
-    formats: _hdrFmt(6, "#64748b"),
+    rows: Array.from({ length: 50 }, () => ["", "", "", "", "", "", "", "", "", "", ""]),
+    formats: _hdrFmt(11, "#64748b"),
   },
   {
     id: "crm",
@@ -244,6 +249,7 @@ interface CellFormat {
   tc?: string;   // text color hex
   bg?: string;   // background color hex
   wrap?: boolean; // false = nowrap (default true = wrap)
+  fs?: number;   // font size in px
 }
 
 interface Sheet {
@@ -373,8 +379,8 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
   const [scrollRowStart, setScrollRowStart] = useState(0);
   const [editingCell, setEditingCell] = useState<{ row: number; col: number } | null>(null);
   const [editValue, setEditValue] = useState("");
+  const editValueRef = useRef("");
   const cellInputRef = useRef<HTMLInputElement>(null);
-  const cellTextareaRef = useRef<HTMLTextAreaElement>(null);
   const [cellError, setCellError] = useState<string | null>(null);
 
   // Undo / Redo — per-sheet snapshot stacks (local only, max 50)
@@ -523,19 +529,42 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
   useEffect(() => { rowHeightsRef.current = rowHeights; }, [rowHeights]);
 
   // Global mousemove/mouseup for resize dragging
+  // During drag we mutate the DOM directly (no React re-render) for smooth 60fps,
+  // then commit the final size to state + backend on mouseup.
   useEffect(() => {
     if (!resizing) return;
+    const table = gridRef.current?.querySelector('table');
     const onMove = (e: MouseEvent) => {
       if (resizing.type === 'col') {
         const newW = Math.max(MIN_COL_WIDTH, resizing.startSize + (e.clientX - resizing.startPos));
-        setColWidths(prev => ({ ...prev, [resizing.index]: newW }));
+        colWidthsRef.current = { ...colWidthsRef.current, [resizing.index]: newW };
+        // Direct DOM update — skip React render for smooth resize
+        if (table) {
+          const ci = resizing.index;
+          // Update header th
+          const th = table.querySelector(`thead th:nth-child(${ci + 2})`) as HTMLElement | null;
+          if (th) { th.style.width = `${newW}px`; }
+          // Update body td cells in this column
+          const rows = table.querySelectorAll(`tbody tr`);
+          for (let i = 0; i < rows.length; i++) {
+            const td = rows[i].children[ci + 1] as HTMLElement | undefined;
+            if (td) td.style.width = `${newW}px`;
+          }
+        }
       } else {
         const newH = Math.max(MIN_ROW_HEIGHT, resizing.startSize + (e.clientY - resizing.startPos));
-        setRowHeights(prev => ({ ...prev, [resizing.index]: newH }));
+        rowHeightsRef.current = { ...rowHeightsRef.current, [resizing.index]: newH };
+        if (table) {
+          // Row number cell holds the row height
+          const rowEl = table.querySelector(`tbody tr:nth-child(${resizing.index + 1}) td:first-child`) as HTMLElement | null;
+          if (rowEl) rowEl.style.height = `${newH}px`;
+        }
       }
     };
     const onUp = () => {
-      // Persist sizes to backend using refs for latest values
+      // Commit final sizes to React state + backend
+      setColWidths({ ...colWidthsRef.current });
+      setRowHeights({ ...rowHeightsRef.current });
       if (activeSheet) {
         const sizes = { colWidths: colWidthsRef.current, rowHeights: rowHeightsRef.current };
         axios.put(`${API_BASE}/sheets/${activeSheet.id}/sizes`, sizes).catch(() => {});
@@ -571,10 +600,6 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
     if (editingCell) {
       if (cellInputRef.current) {
         cellInputRef.current.focus();
-        cellInputRef.current.select();
-      } else if (cellTextareaRef.current) {
-        cellTextareaRef.current.focus();
-        cellTextareaRef.current.select();
       }
     } else if (!editingCell && selection) {
       // Return focus to grid so arrow keys work
@@ -659,8 +684,10 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
     // If the cell has a formula, edit the formula text instead of computed value
     const formulaKey = `${ri},${ci}`;
     const formula = activeSheet?.formulas?.[formulaKey];
+    const val = formula ?? currentValue;
     setEditingCell({ row: ri, col: ci });
-    setEditValue(formula ?? currentValue);
+    setEditValue(val);
+    editValueRef.current = val;
     setSelection({ r1: ri, c1: ci, r2: ri, c2: ci });
     setSelAnchor({ row: ri, col: ci });
   }, [activeSheet]);
@@ -670,7 +697,8 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
     const { row, col } = editingCell;
     const formulaKey = `${row},${col}`;
     const original = activeSheet.formulas?.[formulaKey] ?? activeSheet.rows[row]?.[col] ?? "";
-    if (editValue !== original) {
+    const currentValue = editValueRef.current;
+    if (currentValue !== original) {
       // Clear editing state synchronously first to prevent clobbering a new edit session
       setEditingCell(null);
       setCellError(null);
@@ -678,7 +706,7 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
         const res = await axios.put(`${API_BASE}/sheets/${activeSheet.id}/cell`, {
           row_index: row,
           col_index: col,
-          value: editValue,
+          value: currentValue,
         });
         updateSheet(res.data);
       } catch (err: any) {
@@ -686,13 +714,14 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
         setCellError(detail || "Invalid value");
         // Re-open edit on error so user can fix
         setEditingCell({ row, col });
+        setEditValue(currentValue);
         return;
       }
     } else {
       setEditingCell(null);
       setCellError(null);
     }
-  }, [editingCell, editValue, activeSheet]);
+  }, [editingCell, activeSheet]);
 
   const cancelEdit = useCallback(() => {
     setEditingCell(null);
@@ -712,6 +741,31 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
   }, [selection]);
 
   const handleCellMouseDown = useCallback((ri: number, ci: number, e: React.MouseEvent) => {
+    // If editing a formula, clicking another cell inserts its reference
+    if (editingCell && (editingCell.row !== ri || editingCell.col !== ci) && editValue.startsWith("=")) {
+      e.preventDefault();
+      const ref = `${idxToCol(ci)}${ri + 1}`;
+      // Insert reference at cursor position or append
+      if (cellInputRef.current) {
+        const input = cellInputRef.current;
+        const pos = input.selectionStart ?? editValue.length;
+        const newVal = editValue.slice(0, pos) + ref + editValue.slice(pos);
+        editValueRef.current = newVal;
+        setEditValue(newVal);
+        // Re-focus the input after state update
+        requestAnimationFrame(() => {
+          input.focus();
+          const newPos = pos + ref.length;
+          input.setSelectionRange(newPos, newPos);
+        });
+      } else {
+        const newVal = editValue + ref;
+        editValueRef.current = newVal;
+        setEditValue(newVal);
+      }
+      return;
+    }
+
     // If editing a different cell, commit the edit first
     if (editingCell && (editingCell.row !== ri || editingCell.col !== ci)) {
       commitEdit();
@@ -728,7 +782,7 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
       setIsDragging(true);
     }
     gridRef.current?.focus();
-  }, [editingCell, commitEdit, selAnchor, makeRect]);
+  }, [editingCell, editValue, commitEdit, selAnchor, makeRect]);
 
   const handleCellMouseEnter = useCallback((ri: number, ci: number) => {
     if (!isDragging || !selAnchor) return;
@@ -934,6 +988,18 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
     } catch { /* ignore */ }
     setColMenu(null);
   }
+  async function colInsertAt(ci: number) {
+    if (!activeSheet) return;
+    const name = idxToCol(activeSheet.columns.length);
+    try {
+      const res = await axios.post(`${API_BASE}/sheets/${activeSheet.id}/columns/insert`, {
+        col_index: ci, name, type: "text",
+      });
+      updateSheet(res.data);
+    } catch { toast("Failed to insert column.", "error"); }
+    setColMenu(null);
+  }
+
   function colDelete(ci: number) {
     if (!activeSheet) return;
     setColMenu(null);
@@ -975,8 +1041,8 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
     setColMenu(null);
   }
 
-  // Compute filtered row indices
-  const filteredRowIndices: number[] = (() => {
+  // Compute filtered row indices (memoized for performance)
+  const filteredRowIndices: number[] = useMemo(() => {
     if (!activeSheet || filters.size === 0) return activeSheet?.rows.map((_, i) => i) ?? [];
     return activeSheet.rows.reduce<number[]>((acc, row, ri) => {
       for (const [ci, f] of filters) {
@@ -1001,7 +1067,7 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
       acc.push(ri);
       return acc;
     }, []);
-  })();
+  }, [activeSheet?.rows, activeSheet?.columns, filters]);
 
   // Performance safeguards
   const totalRows = activeSheet?.rows.length ?? 0;
@@ -1066,7 +1132,12 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
   async function loadSheets() {
     try {
       const res = await axios.get(`${API_BASE}/sheets`);
-      setSheets(res.data);
+      const loaded: Sheet[] = res.data;
+      setSheets(loaded);
+      // Auto-select the most recently opened sheet
+      if (!activeSheetId && loaded.length > 0) {
+        setActiveSheetId(loaded[0].id);
+      }
     } catch {
       // backend offline
     }
@@ -1692,6 +1763,7 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
         if (!existing.tc) delete existing.tc;
         if (!existing.bg) delete existing.bg;
         if (existing.wrap !== false) delete existing.wrap;
+        if (!existing.fs) delete existing.fs;
         if (Object.keys(existing).length === 0) delete newFormats[key];
         else newFormats[key] = existing;
       }
@@ -1986,6 +2058,20 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
                   <Button variant={getSelectionFormat().i ? "default" : "outline"} size="sm" className="h-7 w-7 p-0" onClick={toggleItalic} title="Italic (Ctrl+I)">
                     <Italic className="h-3.5 w-3.5" />
                   </Button>
+                  <select
+                    className="h-7 px-1 text-xs border border-border rounded-md bg-background outline-none cursor-pointer"
+                    value={getSelectionFormat().fs ?? ""}
+                    onChange={(e) => {
+                      const val = e.target.value ? parseInt(e.target.value, 10) : undefined;
+                      applyFormat({ fs: val });
+                    }}
+                    title="Font size"
+                  >
+                    <option value="">Size</option>
+                    {[8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 32, 36, 48].map(s => (
+                      <option key={s} value={s}>{s}px</option>
+                    ))}
+                  </select>
                   <div className="relative">
                     <Button variant="outline" size="sm" className="h-7 w-7 p-0" onClick={() => setColorPickerOpen(colorPickerOpen === 'tc' ? null : 'tc')} title="Text color">
                       <Type className="h-3.5 w-3.5" />
@@ -2287,6 +2373,7 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
                     }}
                     onChange={(e) => {
                       if (editingCell) {
+                        editValueRef.current = e.target.value;
                         setEditValue(e.target.value);
                         setCellError(null);
                       }
@@ -2307,6 +2394,12 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
               className="flex-1 overflow-auto"
               tabIndex={-1}
               onScroll={handleGridScroll}
+              onPaste={(e) => {
+                if (editingCell) return;
+                e.preventDefault();
+                const text = e.clipboardData.getData("text/plain");
+                if (text) pasteAtSelection(text);
+              }}
               onKeyDown={(e) => {
                 if (editingCell) return; // let cell input handle its own keys
 
@@ -2401,11 +2494,13 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
                   navigator.clipboard.readText().then((text) => {
                     if (text) pasteAtSelection(text);
                   }).catch(() => {});
+                  return;
                 }
                 // Start editing on printable character
                 if (selection && !e.ctrlKey && !e.metaKey && !e.altKey && e.key.length === 1) {
                   startEditing(selection.r1, selection.c1, "");
                   // Set the typed character as initial value (focus effect runs after render)
+                  editValueRef.current = e.key;
                   setEditValue(e.key);
                 }
               }}
@@ -2494,6 +2589,30 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
                               e.preventDefault();
                               e.stopPropagation();
                               setResizing({ type: 'col', index: ci, startPos: e.clientX, startSize: colWidths[ci] ?? DEFAULT_COL_WIDTH });
+                            }}
+                            onDoubleClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              if (!activeSheet) return;
+                              // Auto-fit: measure longest content in column
+                              const canvas = document.createElement('canvas');
+                              const ctx2d = canvas.getContext('2d');
+                              if (!ctx2d) return;
+                              ctx2d.font = '14px sans-serif'; // matches text-sm
+                              let maxW = ctx2d.measureText(col.name).width + 32; // header + padding
+                              for (const row of activeSheet.rows) {
+                                const val = row[ci] ?? '';
+                                if (val) {
+                                  const w = ctx2d.measureText(val).width + 24; // cell padding
+                                  if (w > maxW) maxW = w;
+                                }
+                              }
+                              const fitW = Math.max(MIN_COL_WIDTH, Math.min(500, Math.ceil(maxW)));
+                              const next = { ...colWidths, [ci]: fitW };
+                              setColWidths(next);
+                              // Persist
+                              const sizes = { colWidths: next, rowHeights };
+                              axios.put(`${API_BASE}/sheets/${activeSheet.id}/sizes`, sizes).catch(() => {});
                             }}
                           />
                         </th>
@@ -2610,7 +2729,7 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
                               key={ci}
                               className={cn(
                                 "border p-0 relative",
-                                isEditing ? "overflow-visible" : "overflow-hidden",
+                                "overflow-hidden",
                                 !isFormulaRef && "border-border",
                                 isEditing && "ring-2 ring-primary/40 ring-inset",
                                 isEditing && cellError && "ring-destructive/60",
@@ -2661,75 +2780,34 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
                             >
                               {isEditing ? (
                                 <div className="relative h-full">
-                                  {!editValue.startsWith("=") && colType !== "number" && colType !== "date" && colType !== "boolean" ? (
-                                    <textarea
-                                      ref={cellTextareaRef}
-                                      className="px-2 py-1 text-sm bg-background border border-primary/60 outline-none resize-none overflow-auto shadow-md"
-                                      style={{
-                                        position: "absolute",
-                                        top: 0,
-                                        left: 0,
-                                        zIndex: 50,
-                                        minWidth: "100%",
-                                        width: "max-content",
-                                        maxWidth: 480,
-                                        minHeight: 28,
-                                        maxHeight: 200,
-                                      }}
-                                      value={editValue}
-                                      rows={Math.min(8, (editValue.match(/\n/g)?.length ?? 0) + 1)}
-                                      onChange={(e) => { setEditValue(e.target.value); setCellError(null); }}
-                                      onBlur={commitEdit}
-                                      onKeyDown={(e) => {
-                                        if (e.key === "Enter" && !e.shiftKey) {
-                                          e.preventDefault();
-                                          commitEdit();
-                                        } else if (e.key === "Escape") {
-                                          e.preventDefault();
-                                          setCellError(null);
-                                          cancelEdit();
-                                        } else if (e.key === "Tab") {
-                                          e.preventDefault();
-                                          commitEdit();
-                                          const nextCol = e.shiftKey ? ci - 1 : ci + 1;
-                                          if (nextCol >= 0 && nextCol < (activeSheet?.columns.length ?? 0)) {
-                                            startEditing(ri, nextCol, row[nextCol] ?? "");
-                                          } else if (!e.shiftKey && ri + 1 < (activeSheet?.rows.length ?? 0)) {
-                                            startEditing(ri + 1, 0, activeSheet?.rows[ri + 1]?.[0] ?? "");
-                                          }
+                                  <input
+                                    ref={cellInputRef}
+                                    type={editValue.startsWith("=") ? "text" : colType === "number" ? "number" : colType === "date" ? "date" : "text"}
+                                    step={colType === "number" ? "any" : undefined}
+                                    className="w-full h-full px-2 py-1 text-sm bg-transparent outline-none"
+                                    value={editValue}
+                                    onChange={(e) => { editValueRef.current = e.target.value; setEditValue(e.target.value); setCellError(null); }}
+                                    onBlur={commitEdit}
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter") {
+                                        e.preventDefault();
+                                        commitEdit();
+                                      } else if (e.key === "Escape") {
+                                        e.preventDefault();
+                                        setCellError(null);
+                                        cancelEdit();
+                                      } else if (e.key === "Tab") {
+                                        e.preventDefault();
+                                        commitEdit();
+                                        const nextCol = e.shiftKey ? ci - 1 : ci + 1;
+                                        if (nextCol >= 0 && nextCol < (activeSheet?.columns.length ?? 0)) {
+                                          startEditing(ri, nextCol, row[nextCol] ?? "");
+                                        } else if (!e.shiftKey && ri + 1 < (activeSheet?.rows.length ?? 0)) {
+                                          startEditing(ri + 1, 0, activeSheet?.rows[ri + 1]?.[0] ?? "");
                                         }
-                                      }}
-                                    />
-                                  ) : (
-                                    <input
-                                      ref={cellInputRef}
-                                      type={editValue.startsWith("=") ? "text" : colType === "number" ? "number" : colType === "date" ? "date" : "text"}
-                                      step={colType === "number" ? "any" : undefined}
-                                      className="w-full px-2 py-1 text-sm bg-transparent outline-none"
-                                      value={editValue}
-                                      onChange={(e) => { setEditValue(e.target.value); setCellError(null); }}
-                                      onBlur={commitEdit}
-                                      onKeyDown={(e) => {
-                                        if (e.key === "Enter") {
-                                          e.preventDefault();
-                                          commitEdit();
-                                        } else if (e.key === "Escape") {
-                                          e.preventDefault();
-                                          setCellError(null);
-                                          cancelEdit();
-                                        } else if (e.key === "Tab") {
-                                          e.preventDefault();
-                                          commitEdit();
-                                          const nextCol = e.shiftKey ? ci - 1 : ci + 1;
-                                          if (nextCol >= 0 && nextCol < (activeSheet?.columns.length ?? 0)) {
-                                            startEditing(ri, nextCol, row[nextCol] ?? "");
-                                          } else if (!e.shiftKey && ri + 1 < (activeSheet?.rows.length ?? 0)) {
-                                            startEditing(ri + 1, 0, activeSheet?.rows[ri + 1]?.[0] ?? "");
-                                          }
-                                        }
-                                      }}
-                                    />
-                                  )}
+                                      }
+                                    }}
+                                  />
                                   {cellError && (
                                     <div className="absolute left-0 top-full z-10 mt-0.5 px-2 py-1 text-xs text-destructive bg-destructive/10 border border-destructive/20 rounded shadow-sm whitespace-nowrap flex items-center gap-1">
                                       <AlertCircle className="h-3 w-3 shrink-0" />
@@ -2738,7 +2816,7 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
                                   )}
                                 </div>
                               ) : (
-                                <div className="px-2 py-1 text-sm cursor-text select-none flex gap-1" style={(() => { const a = activeSheet.alignments?.[`${ri},${ci}`]; const [h, v] = a ? a.split(',') : ['left', 'top']; const fmt: CellFormat = activeSheet.formats?.[`${ri},${ci}`] ?? {}; const noWrap = fmt.wrap === false; const manualH = ri in rowHeights; return { ...(manualH ? { height: rowHeights[ri], overflow: 'hidden' as const } : { minHeight: DEFAULT_ROW_HEIGHT }), whiteSpace: noWrap ? 'nowrap' as const : 'normal' as const, wordBreak: noWrap ? undefined : 'break-word' as const, lineBreak: noWrap ? undefined : 'anywhere' as const, ...(noWrap ? { overflow: 'hidden' as const, textOverflow: 'ellipsis' as const } : {}), textAlign: (h || 'left') as any, justifyContent: h === 'center' ? 'center' : h === 'right' ? 'flex-end' : 'flex-start', alignItems: v === 'middle' ? 'center' : v === 'bottom' ? 'flex-end' : 'flex-start', fontWeight: fmt.b ? 700 : undefined, fontStyle: fmt.i ? 'italic' as const : undefined, color: fmt.tc || undefined, backgroundColor: fmt.bg || undefined }; })()}>
+                                <div className="px-2 py-1 text-sm cursor-text select-none flex gap-1" style={(() => { const a = activeSheet.alignments?.[`${ri},${ci}`]; const [h, v] = a ? a.split(',') : ['left', 'top']; const fmt: CellFormat = activeSheet.formats?.[`${ri},${ci}`] ?? {}; const noWrap = fmt.wrap === false; const manualH = ri in rowHeights; return { ...(manualH ? { height: rowHeights[ri], overflow: 'hidden' as const } : { minHeight: DEFAULT_ROW_HEIGHT }), whiteSpace: noWrap ? 'nowrap' as const : 'normal' as const, wordBreak: noWrap ? undefined : 'break-word' as const, lineBreak: noWrap ? undefined : 'anywhere' as const, ...(noWrap ? { overflow: 'hidden' as const, textOverflow: 'ellipsis' as const } : {}), textAlign: (h || 'left') as any, justifyContent: h === 'center' ? 'center' : h === 'right' ? 'flex-end' : 'flex-start', alignItems: v === 'middle' ? 'center' : v === 'bottom' ? 'flex-end' : 'flex-start', fontWeight: fmt.b ? 700 : undefined, fontStyle: fmt.i ? 'italic' as const : undefined, color: fmt.tc || undefined, backgroundColor: fmt.bg || undefined, fontSize: fmt.fs ? `${fmt.fs}px` : undefined }; })()}>
                                   {hasFormula && !isErrorValue && (
                                     <span className="text-[9px] font-mono text-muted-foreground/40 shrink-0 leading-none">fx</span>
                                   )}
@@ -2873,6 +2951,21 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
           >
             <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
             Rename column
+          </button>
+          <div className="border-t border-border my-1" />
+          <button
+            className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2"
+            onClick={() => colInsertAt(colMenu.colIndex)}
+          >
+            <ArrowLeft className="h-3.5 w-3.5 text-muted-foreground" />
+            Insert column left
+          </button>
+          <button
+            className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2"
+            onClick={() => colInsertAt(colMenu.colIndex + 1)}
+          >
+            <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
+            Insert column right
           </button>
           <div className="border-t border-border my-1" />
           <button

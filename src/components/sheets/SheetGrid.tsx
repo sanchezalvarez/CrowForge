@@ -17,7 +17,7 @@ type SelectionRect = { r1: number; c1: number; r2: number; c2: number };
 type AnchorPoint = { row: number; col: number };
 
 export interface SheetGridProps {
-  activeSheet: Sheet;
+  activeSheet: Sheet | null;
   selection: SelectionRect | null;
   editingCell: { row: number; col: number } | null;
   editValue: string;
@@ -48,6 +48,8 @@ export interface SheetGridProps {
   undoSheet: () => void;
   redoSheet: () => void;
   aiFilling: boolean;
+  canUndo?: boolean;
+  canRedo?: boolean;
   selAnchor: AnchorPoint | null;
   setSelAnchor: (v: AnchorPoint | null) => void;
   selMoving: React.MutableRefObject<AnchorPoint | null>;
@@ -55,11 +57,15 @@ export interface SheetGridProps {
   makeRect: (a: AnchorPoint, b: AnchorPoint) => SelectionRect;
   aiFillCol: number;
   aiFilledRows: Set<number>;
-  aiFillErrors: Map<number, string>;
+  aiFillErrors: Set<number> | Map<number, string>;
   aiOpOpen: boolean;
   aiOpSourceStr: string;
   aiOpTargetStr: string;
   aiOpMode: "row-wise" | "aggregate" | "matrix";
+  setAiOpSourceStr?: (v: string) => void;
+  setAiOpTargetStr?: (v: string) => void;
+  setAiOpMode?: (m: "row-wise" | "aggregate" | "matrix") => void;
+  setAiOpOpen?: (v: boolean) => void;
   updateSheet: (s: Sheet) => void;
   deleteRow: (sheetId: string, ri: number) => void;
   setColMenu: (v: { colIndex: number; x: number; y: number } | null) => void;
@@ -79,7 +85,7 @@ export interface SheetGridProps {
   colNameRef: React.RefObject<HTMLInputElement | null>;
   submitNewColumn: () => void;
   setResizing: (v: { type: "col" | "row"; index: number; startPos: number; startSize: number } | null) => void;
-  setColWidths: React.Dispatch<React.SetStateAction<Record<number, number>>>;
+  setColWidths: (v: Record<number, number>) => void;
   cellInputRef: React.RefObject<HTMLInputElement | null>;
   gridRef: React.RefObject<HTMLDivElement | null>;
 }
@@ -110,7 +116,7 @@ interface SheetRowProps {
   deleteRow: (sheetId: string, ri: number) => void;
   aiFillCol: number;
   aiFilledRows: Set<number>;
-  aiFillErrors: Map<number, string>;
+  aiFillErrors: Set<number> | Map<number, string>;
   formulaRefMap: Map<string, number>;
   aiTargetRect: SelectionRect | null;
   cellInputRef: React.RefObject<HTMLInputElement | null>;
@@ -318,8 +324,12 @@ export function SheetGrid({
   handleGridScroll, startEditing, commitEdit, cancelEdit,
   pasteAtSelection, copySelection, cutSelection, clearSelectedCells,
   toggleBold, toggleItalic, undoSheet, redoSheet, aiFilling,
+  canUndo: _canUndo, canRedo: _canRedo,
   selAnchor, setSelAnchor, selMoving, setSelection, makeRect,
-  aiFillCol, aiFilledRows, aiFillErrors, aiOpOpen, aiOpSourceStr, aiOpTargetStr, aiOpMode,
+  aiFillCol, aiFilledRows, aiFillErrors,
+  aiOpOpen, aiOpSourceStr, aiOpTargetStr, aiOpMode,
+  setAiOpSourceStr: _setAiOpSourceStr, setAiOpTargetStr: _setAiOpTargetStr,
+  setAiOpMode: _setAiOpMode, setAiOpOpen: _setAiOpOpen,
   updateSheet, deleteRow, setColMenu, setRowMenu, setCellMenu,
   renamingCol, setRenamingCol, renameValue, setRenameValue, renameRef, colRenameCommit,
   addingColumn, setAddingColumn, newColName, setNewColName, setNewColType,
@@ -328,7 +338,7 @@ export function SheetGrid({
   // Compute formula ref highlights once per render (only when editing a formula)
   const formulaRefMap = useMemo(() => {
     const map = new Map<string, number>();
-    if (editingCell && editValue.startsWith("=")) {
+    if (activeSheet && editingCell && editValue.startsWith("=")) {
       try {
         const groups: RefGroup[] = parseFormulaRefGroups(editValue, activeSheet.rows.length, activeSheet.columns.length);
         for (const g of groups) {
@@ -339,7 +349,7 @@ export function SheetGrid({
       } catch { /* never crash rendering */ }
     }
     return map;
-  }, [editingCell, editValue, activeSheet.rows.length, activeSheet.columns.length]);
+  }, [editingCell, editValue, activeSheet?.rows.length, activeSheet?.columns.length]);
 
   // Compute AI ghost overlay target rect once per render
   const aiTargetRect = useMemo((): SelectionRect | null => {
@@ -358,6 +368,8 @@ export function SheetGrid({
       return { r1: t.row, c1: t.col, r2: t.row + h, c2: t.col + w };
     }
   }, [aiOpOpen, aiOpSourceStr, aiOpTargetStr, aiOpMode]);
+
+  if (!activeSheet) return null;
 
   const maxRow = (activeSheet.rows.length ?? 1) - 1;
   const maxCol = (activeSheet.columns.length ?? 1) - 1;

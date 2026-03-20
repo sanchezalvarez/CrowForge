@@ -14,7 +14,6 @@ import { ScrollArea } from "../components/ui/scroll-area";
 import { cn } from "../lib/utils";
 import { toast } from "../hooks/useToast";
 import { exportDocumentsAsZip } from "../lib/fileService";
-import type { PageSettings } from "../lib/pageSettings";
 import { DocumentEditor } from "../editor";
 import type { EditorDocument, DocumentContext } from "../editor";
 import type { TuningParams } from "../components/AIControlPanel";
@@ -116,13 +115,6 @@ export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPagePr
       const res = await axios.put(`${API_BASE}/documents/${docId}`, { content_json: content });
       setDocuments((prev) => prev.map((d) => (d.id === docId ? res.data : d)));
     } catch { toast("Failed to save document.", "error"); }
-  }
-
-  async function savePageSettings(docId: string, settings: PageSettings) {
-    try {
-      const res = await axios.put(`${API_BASE}/documents/${docId}`, { page_settings: settings });
-      setDocuments((prev) => prev.map((d) => (d.id === docId ? res.data : d)));
-    } catch { toast("Failed to save page settings.", "error"); }
   }
 
   // ── Rename ──────────────────────────────────────────────────────────────
@@ -257,7 +249,6 @@ export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPagePr
           tuningParams={tuningParams}
           onSaveContent={saveContent}
           onUpdateTitle={updateTitle}
-          onSavePageSettings={savePageSettings}
           onDocumentCreated={(doc) => { setDocuments((prev) => [doc, ...prev]); setActiveDocId(doc.id); }}
           onTitleInputChange={(docId, newTitle) => setDocuments((prev) => prev.map((d) => d.id === docId ? { ...d, title: newTitle } : d))}
           onContextChange={onContextChange}

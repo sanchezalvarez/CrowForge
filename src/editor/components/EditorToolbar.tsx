@@ -1,6 +1,5 @@
 /**
  * Formatting toolbar for the document editor.
- * Receives editor instance and page settings as props.
  */
 
 import { useState, useRef } from "react";
@@ -10,10 +9,9 @@ import {
   Underline as UnderlineIcon, Strikethrough, AlignLeft as AlignLeftIcon,
   AlignCenter, AlignRight, Highlighter, Image as ImageIcon, Search,
   Subscript as SubscriptIcon, Superscript as SuperscriptIcon,
-  ListOrdered, Quote, Minus, Link as LinkIcon, Unlink, Type, Maximize2,
+  ListOrdered, Quote, Minus, Link as LinkIcon, Unlink, Type,
 } from "lucide-react";
 import { Button } from "../../components/ui/button";
-import type { PageSettings } from "../config/pageSettings";
 import {
   DOCUMENT_EXPORT_FORMATS,
   type DocExportFormat,
@@ -21,28 +19,18 @@ import {
 
 interface EditorToolbarProps {
   editor: Editor;
-  pageSettings: PageSettings;
-  pageSettingsOpen: boolean;
   searchOpen: boolean;
-  onPageSettingsOpenChange: (open: boolean) => void;
   onSearchOpenChange: (open: boolean) => void;
   onExport: (fmt: DocExportFormat) => void;
   onImageInsert: (file: File) => void;
-  onPageSettingsChange: (ps: PageSettings) => void;
-  onSavePageSettings: (ps: PageSettings) => void;
 }
 
 export function EditorToolbar({
   editor,
-  pageSettings,
-  pageSettingsOpen,
   searchOpen,
-  onPageSettingsOpenChange,
   onSearchOpenChange,
   onExport,
   onImageInsert,
-  onPageSettingsChange,
-  onSavePageSettings,
 }: EditorToolbarProps) {
   const [colorPickerOpen, setColorPickerOpen] = useState(false);
   const [linkInputOpen, setLinkInputOpen] = useState(false);
@@ -225,90 +213,6 @@ export function EditorToolbar({
             <Button size="sm" className="h-7 text-xs px-2" onClick={() => { if (linkUrl.trim()) editor.chain().focus().setLink({ href: linkUrl.trim() }).run(); setLinkInputOpen(false); setLinkUrl(""); }}>
               OK
             </Button>
-          </div>
-        )}
-      </div>
-      <div className="w-px h-4 bg-border mx-1" />
-
-      {/* Page settings popover */}
-      <div className="relative" onMouseDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
-        <Button variant={pageSettingsOpen ? "secondary" : "ghost"} size="sm" className="h-7 text-xs gap-1 px-2" title="Page settings" onClick={() => onPageSettingsOpenChange(!pageSettingsOpen)}>
-          <Maximize2 className="h-3.5 w-3.5" /> Page
-        </Button>
-        {pageSettingsOpen && (
-          <div className="absolute left-0 top-full mt-1 z-50 bg-background border border-border rounded-md shadow-lg p-3 w-[220px] flex flex-col gap-3">
-            {/* Size */}
-            <div>
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Size</p>
-              <div className="flex flex-wrap gap-1">
-                {(["a4", "letter", "legal", "a5"] as const).map((sz) => (
-                  <button key={sz} className={`h-6 px-2 rounded text-xs border transition-colors ${pageSettings.size === sz ? "bg-primary text-primary-foreground border-primary" : "border-border hover:bg-muted"}`}
-                    onClick={() => { const next = { ...pageSettings, size: sz }; onPageSettingsChange(next); onSavePageSettings(next); }}>
-                    {sz.toUpperCase()}
-                  </button>
-                ))}
-              </div>
-            </div>
-            {/* Orientation */}
-            <div>
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Orientation</p>
-              <div className="flex gap-1">
-                {(["portrait", "landscape"] as const).map((ori) => (
-                  <button key={ori} className={`h-6 px-2 rounded text-xs border transition-colors capitalize ${pageSettings.orientation === ori ? "bg-primary text-primary-foreground border-primary" : "border-border hover:bg-muted"}`}
-                    onClick={() => { const next = { ...pageSettings, orientation: ori }; onPageSettingsChange(next); onSavePageSettings(next); }}>
-                    {ori}
-                  </button>
-                ))}
-              </div>
-            </div>
-            {/* Margins */}
-            <div>
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Margins</p>
-              <div className="flex gap-1">
-                {(["normal", "narrow", "wide"] as const).map((m) => (
-                  <button key={m} className={`h-6 px-2 rounded text-xs border transition-colors capitalize ${pageSettings.margins === m ? "bg-primary text-primary-foreground border-primary" : "border-border hover:bg-muted"}`}
-                    onClick={() => { const next = { ...pageSettings, margins: m }; onPageSettingsChange(next); onSavePageSettings(next); }}>
-                    {m}
-                  </button>
-                ))}
-              </div>
-            </div>
-            {/* Header */}
-            <div>
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Header</p>
-              <input type="text" className="w-full h-6 px-2 rounded text-xs border border-border bg-background focus:outline-none focus:ring-1 focus:ring-primary" placeholder="Header text..."
-                value={pageSettings.headerText ?? ""}
-                onChange={(e) => onPageSettingsChange({ ...pageSettings, headerText: e.target.value })}
-                onBlur={() => onSavePageSettings(pageSettings)} />
-            </div>
-            {/* Footer */}
-            <div>
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Footer</p>
-              <input type="text" className="w-full h-6 px-2 rounded text-xs border border-border bg-background focus:outline-none focus:ring-1 focus:ring-primary" placeholder="Footer text..."
-                value={pageSettings.footerText ?? ""}
-                onChange={(e) => onPageSettingsChange({ ...pageSettings, footerText: e.target.value })}
-                onBlur={() => onSavePageSettings(pageSettings)} />
-            </div>
-            {/* Page numbers */}
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Page Numbers</p>
-                <button className={`h-4 w-7 rounded-full transition-colors relative ${(pageSettings.showPageNumbers ?? true) ? "bg-primary" : "bg-border"}`}
-                  onClick={() => { const next = { ...pageSettings, showPageNumbers: !(pageSettings.showPageNumbers ?? true) }; onPageSettingsChange(next); onSavePageSettings(next); }}>
-                  <span className={`absolute top-0.5 h-3 w-3 rounded-full bg-white transition-transform ${(pageSettings.showPageNumbers ?? true) ? "translate-x-3.5" : "translate-x-0.5"}`} />
-                </button>
-              </div>
-              {(pageSettings.showPageNumbers ?? true) && (
-                <div className="flex gap-1">
-                  {(["header", "footer"] as const).map((pos) => (
-                    <button key={pos} className={`h-6 px-2 rounded text-xs border transition-colors capitalize ${(pageSettings.pageNumberPosition ?? "footer") === pos ? "bg-primary text-primary-foreground border-primary" : "border-border hover:bg-muted"}`}
-                      onClick={() => { const next = { ...pageSettings, pageNumberPosition: pos }; onPageSettingsChange(next); onSavePageSettings(next); }}>
-                      {pos}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
           </div>
         )}
       </div>

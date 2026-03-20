@@ -1,12 +1,10 @@
 /**
  * Hook that manages editor lifecycle — loading documents, saving,
- * syncing page settings, and reporting context to parent.
+ * and reporting context to parent.
  */
 
 import { useEffect, useCallback, useRef } from "react";
 import type { Editor } from "@tiptap/react";
-import type { PageSettings } from "../config/pageSettings";
-import { DEFAULT_PAGE_SETTINGS } from "../config/pageSettings";
 import type { OutlineItem } from "../utils/editorUtils";
 import { extractOutline } from "../utils/editorUtils";
 
@@ -14,7 +12,6 @@ export interface EditorDocument {
   id: string;
   title: string;
   content_json: Record<string, unknown>;
-  page_settings?: PageSettings | null;
   created_at: string;
   updated_at: string;
 }
@@ -34,7 +31,6 @@ interface UseEditorSetupOptions {
   selection: { from: number; to: number; text: string } | null;
   wordCount: { words: number; chars: number };
   onContextChange?: (ctx: DocumentContext | null) => void;
-  onPageSettingsChange: (ps: PageSettings) => void;
   onSave: (docId: string, content: Record<string, unknown>) => void;
   onOutlineChange: (items: OutlineItem[]) => void;
 }
@@ -47,7 +43,6 @@ export function useEditorSetup({
   selection,
   wordCount,
   onContextChange,
-  onPageSettingsChange,
   onSave,
   onOutlineChange,
 }: UseEditorSetupOptions) {
@@ -70,8 +65,6 @@ export function useEditorSetup({
       clearTimeout(saveTimer.current);
       saveTimer.current = null;
     }
-    const ps = activeDoc?.page_settings ?? DEFAULT_PAGE_SETTINGS;
-    onPageSettingsChange(ps);
     if (!editor) return;
     if (activeDoc) {
       const content = activeDoc.content_json;

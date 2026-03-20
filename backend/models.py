@@ -43,32 +43,20 @@ class ChatMessageRequest(BaseModel):
     max_tokens: Optional[int] = None
     scope: Optional[dict] = None  # {"sheet_ids": [...], "document_ids": [...]}
 
-class PageSettings(BaseModel):
-    size: str = "a4"           # a4 | letter | legal | a5
-    orientation: str = "portrait"  # portrait | landscape
-    margins: str = "normal"    # normal | narrow | wide
-    headerText: str = ""
-    footerText: str = ""
-    showPageNumbers: bool = True
-    pageNumberPosition: str = "footer"  # header | footer
-
 class Document(BaseModel):
     id: Optional[str] = Field(default=None)
     title: str = "Untitled"
     content_json: dict = Field(default_factory=dict)
-    page_settings: Optional[PageSettings] = None
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
 
 class DocumentCreate(BaseModel):
     title: str = "Untitled"
     content_json: dict = Field(default_factory=dict)
-    page_settings: Optional[PageSettings] = None
 
 class DocumentUpdate(BaseModel):
     title: Optional[str] = None
     content_json: Optional[dict] = None
-    page_settings: Optional[PageSettings] = None
 
 class DocumentAIRequest(BaseModel):
     action_type: str  # rewrite, summarize, expand, fix_grammar

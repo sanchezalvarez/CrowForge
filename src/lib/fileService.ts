@@ -14,7 +14,7 @@
  */
 
 import jsPDF from "jspdf";
-import { type PageSettings, DEFAULT_PAGE_SETTINGS, PAGE_DIMS_PT, MARGIN_PT } from "./pageSettings";
+import { DEFAULT_PAGE_SETTINGS, PAGE_DIMS_PT, MARGIN_PT } from "./pageSettings";
 import {
   Document as DocxDocument,
   Paragraph as DocxParagraph,
@@ -23,7 +23,6 @@ import {
   AlignmentType,
   Packer,
   ExternalHyperlink,
-  Header,
   Footer,
   PageNumber,
 } from "docx";
@@ -1005,45 +1004,16 @@ function tiptapToDocxParagraphs(node: TiptapNode): DocxParagraph[] {
 export async function exportDocumentAs(
   format: DocExportFormat,
   deps: DocExportDeps,
-  pageSettings?: PageSettings
 ): Promise<void> {
   const { title } = deps;
   try {
     if (format === "docx") {
       const paragraphs = tiptapToDocxParagraphs(deps.json as unknown as TiptapNode);
-      const ps = pageSettings ?? DEFAULT_PAGE_SETTINGS;
 
-      // Build header children
-      const headerChildren: DocxParagraph[] = [];
-      if (ps.headerText) {
-        headerChildren.push(new DocxParagraph({ children: [new TextRun({ text: ps.headerText, size: 16, color: "999999" })] }));
-      }
-      if ((ps.showPageNumbers ?? true) && (ps.pageNumberPosition ?? "footer") === "header") {
-        headerChildren.push(new DocxParagraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ children: [PageNumber.CURRENT], size: 16, color: "999999" })] }));
-      }
-
-      // Build footer children
-      const footerChildren: DocxParagraph[] = [];
-      const footerParts: (TextRun | string)[] = [];
-      if (ps.footerText) {
-        footerParts.push(new TextRun({ text: ps.footerText, size: 16, color: "999999" }));
-      }
-      if (footerParts.length > 0) {
-        footerChildren.push(new DocxParagraph({ children: footerParts as TextRun[] }));
-      }
-      if ((ps.showPageNumbers ?? true) && (ps.pageNumberPosition ?? "footer") === "footer") {
-        footerChildren.push(new DocxParagraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ children: [PageNumber.CURRENT], size: 16, color: "999999" })] }));
-      }
-
-      const sectionProps: Record<string, unknown> = {
-        children: paragraphs.length > 0 ? paragraphs : [new DocxParagraph("")],
-      };
-      if (headerChildren.length > 0) {
-        sectionProps.headers = { default: new Header({ children: headerChildren }) };
-      }
-      if (footerChildren.length > 0) {
-        sectionProps.footers = { default: new Footer({ children: footerChildren }) };
-      }
+      // Simple page-number footer
+      const footerChildren: DocxParagraph[] = [
+        new DocxParagraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ children: [PageNumber.CURRENT], size: 16, color: "999999" })] }),
+      ];
 
       const docxDoc = new DocxDocument({
         numbering: {
@@ -1062,11 +1032,14 @@ export async function exportDocumentAs(
             },
           ],
         },
-        sections: [sectionProps as { children: DocxParagraph[] }],
+        sections: [{
+          children: paragraphs.length > 0 ? paragraphs : [new DocxParagraph("")],
+          footers: { default: new Footer({ children: footerChildren }) },
+        }],
       });
       await downloadBlob(await Packer.toBlob(docxDoc), `${title}.docx`);
     } else if (format === "pdf") {
-      await exportDocumentPDF(deps.json as unknown as TiptapNode, title, pageSettings ?? DEFAULT_PAGE_SETTINGS);
+      await exportDocumentPDF(deps.json as unknown as TiptapNode, title);
     } else if (format === "md") {
       await downloadBlob(
         new Blob([deps.markdown], { type: "text/markdown;charset=utf-8" }),
@@ -1438,11 +1411,11 @@ function renderDocNode(s: PdfState, node: TiptapNode): void {
   }
 }
 
-async function exportDocumentPDF(json: TiptapNode, title: string, ps: PageSettings): Promise<void> {
+async function exportDocumentPDF(json: TiptapNode, title: string): Promise<void> {
+  const ps = DEFAULT_PAGE_SETTINGS;
   const basePt = PAGE_DIMS_PT[ps.size];
-  const landscape = ps.orientation === "landscape";
-  const pageW = landscape ? basePt.h : basePt.w;
-  const pageH = landscape ? basePt.w : basePt.h;
+  const pageW = basePt.w;
+  const pageH = basePt.h;
   const margin = MARGIN_PT[ps.margins];
   const contentW = pageW - margin * 2;
   const footerY = pageH - 28;
@@ -1464,10 +1437,10 @@ async function exportDocumentPDF(json: TiptapNode, title: string, ps: PageSettin
     contentW,
     footerY,
     headerY,
-    headerText: ps.headerText ?? "",
-    footerText: ps.footerText ?? "",
-    showPageNumbers: ps.showPageNumbers ?? true,
-    pageNumberPosition: (ps.pageNumberPosition ?? "footer") as "header" | "footer",
+    headerText: "",
+    footerText: "",
+    showPageNumbers: true,
+    pageNumberPosition: "footer",
   };
 
   // Render page 1 header

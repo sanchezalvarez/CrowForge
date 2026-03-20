@@ -2,7 +2,7 @@
  * DocumentEditor — main editor component.
  *
  * Composes: Tiptap editor, toolbar, AI actions, search/replace,
- * page container, outline panel, and suggestion panels.
+ * outline panel, and suggestion panels.
  */
 
 import { useState, useEffect, useRef, useCallback } from "react";
@@ -27,15 +27,10 @@ import {
   DOCUMENT_IMPORT_EXTS,
   type DocExportFormat,
 } from "./services/fileService";
-import type { PageSettings } from "./config/pageSettings";
-import { DEFAULT_PAGE_SETTINGS, getPageDims, PAGE_GAP } from "./config/pageSettings";
 import { useDocumentEditor } from "./core/createEditor";
-import { usePagination } from "./hooks/usePagination";
-import { useViewportPages } from "./hooks/useViewportPages";
 import { useEditorSetup, type EditorDocument, type DocumentContext } from "./hooks/useEditorSetup";
 import { htmlToFragment, parseHtmlToBlocks, type OutlineItem, type SuggestionBlock } from "./utils/editorUtils";
 import { EditorToolbar } from "./components/EditorToolbar";
-import { PageContainer } from "./components/PageContainer";
 import type { TuningParams } from "../components/AIControlPanel";
 
 const AI_ACTIONS = [
@@ -54,7 +49,6 @@ export interface DocumentEditorProps {
   tuningParams?: TuningParams;
   onSaveContent: (docId: string, content: Record<string, unknown>) => void;
   onUpdateTitle: (docId: string, title: string) => Promise<void>;
-  onSavePageSettings: (docId: string, ps: PageSettings) => Promise<void>;
   onDocumentCreated: (doc: EditorDocument) => void;
   onTitleInputChange: (docId: string, newTitle: string) => void;
   onContextChange?: (ctx: DocumentContext | null) => void;
@@ -67,7 +61,6 @@ export function DocumentEditor({
   tuningParams,
   onSaveContent,
   onUpdateTitle,
-  onSavePageSettings,
   onDocumentCreated,
   onTitleInputChange,
   onContextChange,
@@ -90,9 +83,6 @@ export function DocumentEditor({
   const [savedRecently, setSavedRecently] = useState(false);
   const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [saving, setSaving] = useState(false);
-  const [pageSettings, setPageSettings] = useState<PageSettings>(DEFAULT_PAGE_SETTINGS);
-  const [pageSettingsOpen, setPageSettingsOpen] = useState(false);
-  const pageSettingsRef = useRef<PageSettings>(DEFAULT_PAGE_SETTINGS);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [replaceTerm, setReplaceTerm] = useState("");
@@ -126,25 +116,6 @@ export function DocumentEditor({
     },
   });
 
-  // ── Pagination (needs editor ref) ────────────────────────────────────────
-  const pagination = usePagination(pageSettings, editor);
-
-  // ── Viewport-aware page tracking ───────────────────────────────────────
-  const dims = getPageDims(pageSettings);
-  const { viewport, handleViewportScroll } = useViewportPages(
-    dims.h,
-    PAGE_GAP,
-    pagination.pageCount,
-    2,
-  );
-  const handleCombinedScroll = useCallback(
-    (e: React.UIEvent<HTMLDivElement>) => {
-      pagination.handleEditorScroll(e);
-      handleViewportScroll(e);
-    },
-    [pagination.handleEditorScroll, handleViewportScroll],
-  );
-
   // ── Setup (document loading, context reporting, etc.) ────────────────────
   const saveContent = useCallback(async (docId: string, content: Record<string, unknown>) => {
     setSaving(true);
@@ -166,10 +137,6 @@ export function DocumentEditor({
     selection,
     wordCount,
     onContextChange,
-    onPageSettingsChange: (ps) => {
-      setPageSettings(ps);
-      pageSettingsRef.current = ps;
-    },
     onSave: saveContent,
     onOutlineChange: setOutline,
   });
@@ -184,8 +151,6 @@ export function DocumentEditor({
     setSelection(null);
   }, [activeDocId]);
 
-  // (Page settings changes are picked up by usePagination via its deps)
-
   // Outline panel resize
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
@@ -198,14 +163,6 @@ export function DocumentEditor({
     document.addEventListener("mouseup", onUp);
     return () => { document.removeEventListener("mousemove", onMove); document.removeEventListener("mouseup", onUp); };
   }, []);
-
-  // Close popovers on outside click
-  useEffect(() => {
-    if (!pageSettingsOpen) return;
-    const close = () => setPageSettingsOpen(false);
-    document.addEventListener("mousedown", close);
-    return () => document.removeEventListener("mousedown", close);
-  }, [pageSettingsOpen]);
 
   // Cleanup timers
   useEffect(() => {
@@ -426,7 +383,6 @@ export function DocumentEditor({
         markdown: (editor.storage as unknown as { markdown: { getMarkdown: () => string } }).markdown.getMarkdown(),
         title: activeDoc.title,
       },
-      pageSettings,
     );
   }
 
@@ -484,9 +440,6 @@ export function DocumentEditor({
             <Type className="h-3 w-3" /> {selection.text.length} chars selected
           </Badge>
         )}
-        <span className="text-xs text-muted-foreground shrink-0 font-mono">
-          Page {pagination.currentPage} / {pagination.pageCount}
-        </span>
         <span className="text-[10px] text-muted-foreground font-mono shrink-0">
           {wordCount.words.toLocaleString()}w · {wordCount.chars.toLocaleString()}c
         </span>
@@ -505,15 +458,10 @@ export function DocumentEditor({
       {editor && (
         <EditorToolbar
           editor={editor}
-          pageSettings={pageSettings}
-          pageSettingsOpen={pageSettingsOpen}
           searchOpen={searchOpen}
-          onPageSettingsOpenChange={setPageSettingsOpen}
           onSearchOpenChange={setSearchOpen}
           onExport={handleExportDoc}
           onImageInsert={handleImageInsert}
-          onPageSettingsChange={(ps) => { setPageSettings(ps); pageSettingsRef.current = ps; }}
-          onSavePageSettings={(ps) => onSavePageSettings(activeDocId, ps)}
         />
       )}
 
@@ -590,11 +538,11 @@ export function DocumentEditor({
           </div>
         )}
 
-        {/* A4 editor scroll area */}
-        <div ref={editorScrollRef} className="flex-1 overflow-auto bg-muted" onScroll={handleCombinedScroll}>
-          <PageContainer pageSettings={pageSettings} pageCount={pagination.pageCount} visibleRange={viewport}>
+        {/* Editor scroll area */}
+        <div ref={editorScrollRef} className="flex-1 overflow-auto bg-muted/30">
+          <div className="max-w-[794px] mx-auto bg-background min-h-full shadow-sm px-[95px] py-16">
             <EditorContent editor={editor} />
-          </PageContainer>
+          </div>
         </div>
 
         {/* AI error banner */}

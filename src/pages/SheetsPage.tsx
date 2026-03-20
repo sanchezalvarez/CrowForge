@@ -1,11 +1,8 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { flushSync } from "react-dom";
 import axios from "axios";
-import { PlusCircle, Table2, Trash2, Plus, X, AlertCircle, Sparkles, Square, Loader2, LayoutTemplate, FileSpreadsheet, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Copy, Pencil, Filter, Eraser, Tags, ListChecks, Undo2, Redo2, AlignLeft, AlignCenter, AlignRight, AlignVerticalJustifyStart, AlignVerticalJustifyCenter, AlignVerticalJustifyEnd, Bold, Italic, Paintbrush, Type, WrapText, RotateCcw, Upload, Download, ChevronDown, ChevronRight } from "lucide-react";
+import { Table2, X, AlertCircle, Sparkles, Loader2, LayoutTemplate, FileSpreadsheet, Upload } from "lucide-react";
 import { Button } from "../components/ui/button";
-import { ScrollArea } from "../components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "../components/ui/dialog";
-import { cn } from "../lib/utils";
 import { toast } from "../hooks/useToast";
 import { useDropImport, IMPORT_FORMAT_LABELS } from "../hooks/useDropImport";
 import { useUndoRedo } from "../hooks/useUndoRedo";
@@ -15,20 +12,23 @@ import {
   parseSheetImport,
   exportSheetAs,
   exportAllSheetsXLSX,
-  SHEET_IMPORT_ACCEPT,
   SHEET_IMPORT_EXTS,
-  SHEET_EXPORT_FORMATS,
   type SheetExportFormat,
 } from "../lib/fileService";
 import {
   type Sheet, type CellFormat,
   DEFAULT_COL_WIDTH, DEFAULT_ROW_HEIGHT, MIN_COL_WIDTH, MIN_ROW_HEIGHT,
   ROW_WARN_THRESHOLD, ROW_AI_LIMIT, ROW_RENDER_LIMIT,
-  REF_COLORS, type RefGroup,
-  parseFormulaRefGroups, resolveCellRef, resolveRange, idxToCol,
+  idxToCol,
 } from "../lib/cellUtils";
-import { type SheetTemplate, SHEET_TEMPLATES } from "../lib/sheetTemplates";
+import type { SheetTemplate } from "../lib/sheetTemplates";
+import { SheetDialogs } from "../components/sheets/SheetDialogs";
+import { SheetContextMenus } from "../components/sheets/SheetContextMenus";
+import { SheetToolbar } from "../components/sheets/SheetToolbar";
+import { FormulaBar } from "../components/sheets/FormulaBar";
+import { SheetGrid } from "../components/sheets/SheetGrid";
 import type { TuningParams } from "../components/AIControlPanel";
+import { SheetSidebar } from "../components/sheets/SheetSidebar";
 
 const API_BASE = "http://127.0.0.1:8000";
 
@@ -1078,91 +1078,24 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
       </Dialog>
 
       {/* Sheets sidebar */}
-      <div className="w-[220px] shrink-0 border-r bg-background flex flex-col">
-        <div className="p-3 border-b flex flex-col gap-1.5">
-          <Button variant="outline" size="sm" className="w-full" onClick={() => setTemplatePickerOpen(true)}>
-            <PlusCircle className="h-4 w-4 mr-1.5" />
-            New Sheet
-          </Button>
-          <Button variant="outline" size="sm" className="w-full" onClick={() => setAiGenOpen(true)}>
-            <Sparkles className="h-4 w-4 mr-1.5" />
-            AI Generate
-          </Button>
-          {/* Import — always reachable, creates a new sheet from file */}
-          <input
-            ref={importInputRef}
-            type="file"
-            accept={SHEET_IMPORT_ACCEPT}
-            className="hidden"
-            onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImportFile(f); }}
-          />
-          <Button
-            variant="ghost"
-            size="sm"
-            className="w-full text-xs"
-            onClick={() => importInputRef.current?.click()}
-            disabled={importing}
-            title="Import XLSX / CSV / TSV"
-          >
-            {importing ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Upload className="h-3.5 w-3.5 mr-1.5" />}
-            Import Sheet
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="w-full text-xs"
-            disabled={sheets.length === 0}
-            onClick={handleExportAllXLSX}
-            title="Export every sheet as one XLSX workbook"
-          >
-            <Download className="h-3.5 w-3.5 mr-1.5" />
-            Export all as XLSX
-          </Button>
-        </div>
-        <ScrollArea className="flex-1">
-          <div className="p-2 space-y-0.5">
-            {sheets.map((sheet) => (
-              <div
-                key={sheet.id}
-                className={cn(
-                  "group flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-sm cursor-pointer transition-colors",
-                  activeSheetId === sheet.id
-                    ? "bg-primary/10 text-primary font-medium"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                )}
-                onClick={() => setActiveSheetId(sheet.id)}
-                onContextMenu={(e) => {
-                  e.preventDefault();
-                  setSheetMenu({ sheetId: sheet.id, x: e.clientX, y: e.clientY });
-                }}
-              >
-                <Table2 className="h-3.5 w-3.5 shrink-0" />
-                {renamingSheet === sheet.id ? (
-                  <input
-                    ref={renameSheetRef}
-                    className="flex-1 min-w-0 h-5 px-1 text-xs border border-primary/40 rounded bg-background outline-none"
-                    value={renameSheetValue}
-                    onChange={(e) => setRenameSheetValue(e.target.value)}
-                    onClick={(e) => e.stopPropagation()}
-                    onBlur={sheetRenameCommit}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") sheetRenameCommit();
-                      if (e.key === "Escape") setRenamingSheet(null);
-                    }}
-                  />
-                ) : (
-                  <span className="flex-1 truncate">{sheet.title}</span>
-                )}
-              </div>
-            ))}
-            {sheets.length === 0 && (
-              <p className="text-xs text-muted-foreground text-center py-6">
-                No sheets yet.
-              </p>
-            )}
-          </div>
-        </ScrollArea>
-      </div>
+      <SheetSidebar
+        sheets={sheets}
+        activeSheetId={activeSheetId}
+        setActiveSheetId={setActiveSheetId}
+        renamingSheet={renamingSheet}
+        setRenamingSheet={setRenamingSheet}
+        renameSheetValue={renameSheetValue}
+        setRenameSheetValue={setRenameSheetValue}
+        renameSheetRef={renameSheetRef}
+        sheetRenameCommit={sheetRenameCommit}
+        setSheetMenu={setSheetMenu}
+        setTemplatePickerOpen={setTemplatePickerOpen}
+        setAiGenOpen={setAiGenOpen}
+        importInputRef={importInputRef}
+        handleImportFile={handleImportFile}
+        importing={importing}
+        handleExportAllXLSX={handleExportAllXLSX}
+      />
 
       {/* Main area */}
       <div className="flex-1 flex flex-col min-w-0">
@@ -1204,856 +1137,135 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
               </div>
             )}
 
-            {/* Toolbar */}
-            <div className="border-b px-4 py-1.5 flex items-center gap-2">
-              <Button variant="outline" size="sm" className="h-7 w-7 p-0" onClick={undoSheet} disabled={!canUndo || aiFilling} title={aiFilling ? "Cannot undo while AI is running" : "Undo (Ctrl+Z)"}>
-                <Undo2 className="h-3.5 w-3.5" />
-              </Button>
-              <Button variant="outline" size="sm" className="h-7 w-7 p-0" onClick={redoSheet} disabled={!canRedo || aiFilling} title={aiFilling ? "Cannot redo while AI is running" : "Redo (Ctrl+Y)"}>
-                <Redo2 className="h-3.5 w-3.5" />
-              </Button>
-              <div className="w-px h-5 bg-border mx-1" />
-              <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={() => addRow(activeSheet.id)}>
-                <Plus className="h-3 w-3" />
-                Row
-              </Button>
-              {selection && (
-                <>
-                  <div className="w-px h-5 bg-border mx-1" />
-                  <Button variant={getSelectionFormat().b ? "default" : "outline"} size="sm" className="h-7 w-7 p-0" onClick={toggleBold} title="Bold (Ctrl+B)">
-                    <Bold className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button variant={getSelectionFormat().i ? "default" : "outline"} size="sm" className="h-7 w-7 p-0" onClick={toggleItalic} title="Italic (Ctrl+I)">
-                    <Italic className="h-3.5 w-3.5" />
-                  </Button>
-                  <select
-                    className="h-7 px-1 text-xs border border-border rounded-md bg-background outline-none cursor-pointer"
-                    value={getSelectionFormat().fs ?? ""}
-                    onChange={(e) => {
-                      const val = e.target.value ? parseInt(e.target.value, 10) : undefined;
-                      applyFormat({ fs: val });
-                    }}
-                    title="Font size"
-                  >
-                    <option value="">Size</option>
-                    {[8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 32, 36, 48].map(s => (
-                      <option key={s} value={s}>{s}px</option>
-                    ))}
-                  </select>
-                  <div className="relative">
-                    <Button variant="outline" size="sm" className="h-7 w-7 p-0" onClick={() => setColorPickerOpen(colorPickerOpen === 'tc' ? null : 'tc')} title="Text color">
-                      <Type className="h-3.5 w-3.5" />
-                      {getSelectionFormat().tc && <div className="absolute bottom-0.5 left-1 right-1 h-0.5 rounded" style={{ backgroundColor: getSelectionFormat().tc }} />}
-                    </Button>
-                    {colorPickerOpen === 'tc' && (
-                      <div className="absolute top-full left-0 mt-1 z-50 bg-background border border-border rounded-md shadow-lg p-2 grid grid-cols-6 gap-1 w-[156px]" onMouseDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
-                        {['#000000','#ef4444','#f97316','#eab308','#22c55e','#3b82f6','#8b5cf6','#ec4899','#6b7280','#ffffff','#991b1b','#9a3412'].map(c => (
-                          <button key={c} className="w-5 h-5 rounded border border-border hover:scale-110 transition-transform" style={{ backgroundColor: c }} onClick={() => { applyFormat({ tc: c }); setColorPickerOpen(null); }} />
-                        ))}
-                        <button className="col-span-6 text-[10px] text-muted-foreground hover:text-foreground mt-0.5" onClick={() => { applyFormat({ tc: undefined }); setColorPickerOpen(null); }}>Reset</button>
-                      </div>
-                    )}
-                  </div>
-                  <div className="relative">
-                    <Button variant="outline" size="sm" className="h-7 w-7 p-0" onClick={() => setColorPickerOpen(colorPickerOpen === 'bg' ? null : 'bg')} title="Background color">
-                      <Paintbrush className="h-3.5 w-3.5" />
-                      {getSelectionFormat().bg && <div className="absolute bottom-0.5 left-1 right-1 h-0.5 rounded" style={{ backgroundColor: getSelectionFormat().bg }} />}
-                    </Button>
-                    {colorPickerOpen === 'bg' && (
-                      <div className="absolute top-full left-0 mt-1 z-50 bg-background border border-border rounded-md shadow-lg p-2 grid grid-cols-6 gap-1 w-[156px]" onMouseDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
-                        {['#fef2f2','#fff7ed','#fefce8','#f0fdf4','#eff6ff','#f5f3ff','#fdf2f8','#f9fafb','#fecaca','#fed7aa','#fde68a','#bbf7d0'].map(c => (
-                          <button key={c} className="w-5 h-5 rounded border border-border hover:scale-110 transition-transform" style={{ backgroundColor: c }} onClick={() => { applyFormat({ bg: c }); setColorPickerOpen(null); }} />
-                        ))}
-                        <button className="col-span-6 text-[10px] text-muted-foreground hover:text-foreground mt-0.5" onClick={() => { applyFormat({ bg: undefined }); setColorPickerOpen(null); }}>Reset</button>
-                      </div>
-                    )}
-                  </div>
-                  <Button variant={getSelectionFormat().wrap === false ? "default" : "outline"} size="sm" className="h-7 w-7 p-0" onClick={toggleWrap} title="Toggle text wrap">
-                    <WrapText className="h-3.5 w-3.5" />
-                  </Button>
-                  <div className="w-px h-5 bg-border mx-0.5" />
-                  {([['left', AlignLeft], ['center', AlignCenter], ['right', AlignRight]] as const).map(([val, Icon]) => (
-                    <Button key={val} variant={getSelectionAlignment().h === val ? "default" : "outline"} size="sm" className="h-7 w-7 p-0" onClick={() => applyAlignment('h', val)} title={`Align ${val}`}>
-                      <Icon className="h-3.5 w-3.5" />
-                    </Button>
-                  ))}
-                  <div className="w-px h-5 bg-border mx-0.5" />
-                  {([['top', AlignVerticalJustifyStart], ['middle', AlignVerticalJustifyCenter], ['bottom', AlignVerticalJustifyEnd]] as const).map(([val, Icon]) => (
-                    <Button key={val} variant={getSelectionAlignment().v === val ? "default" : "outline"} size="sm" className="h-7 w-7 p-0" onClick={() => applyAlignment('v', val)} title={`Align ${val}`}>
-                      <Icon className="h-3.5 w-3.5" />
-                    </Button>
-                  ))}
-                </>
-              )}
-              <div className="flex-1" />
-              {filters.size > 0 && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-7 text-xs gap-1 text-destructive border-destructive/40 hover:bg-destructive/10"
-                  onClick={() => setFilters(new Map())}
-                  title="Clear all filters"
-                >
-                  <Filter className="h-3 w-3" />
-                  Clear filters
-                </Button>
-              )}
-              {/* Export dropdown — active sheet only */}
-              <div className="relative" onClick={(e) => e.stopPropagation()}>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-7 text-xs gap-1"
-                  onClick={() => setExportOpen((o) => !o)}
-                  title="Export sheet"
-                >
-                  <Download className="h-3 w-3" />
-                  Export
-                  <ChevronDown className="h-3 w-3" />
-                </Button>
-                {exportOpen && (
-                  <div className="absolute right-0 top-full mt-1 z-50 bg-background border border-border rounded-md shadow-lg py-1 min-w-[130px]">
-                    {SHEET_EXPORT_FORMATS.map(([fmt, label]) => (
-                      <button
-                        key={fmt}
-                        className="w-full text-left px-3 py-1.5 text-xs hover:bg-muted transition-colors"
-                        onClick={() => handleExport(fmt)}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
+            <SheetToolbar
+              activeSheet={activeSheet}
+              undoSheet={undoSheet}
+              redoSheet={redoSheet}
+              canUndo={canUndo}
+              canRedo={canRedo}
+              aiFilling={aiFilling}
+              addRow={addRow}
+              selection={selection}
+              getSelectionFormat={getSelectionFormat}
+              getSelectionAlignment={getSelectionAlignment}
+              toggleBold={toggleBold}
+              toggleItalic={toggleItalic}
+              applyFormat={applyFormat}
+              applyAlignment={applyAlignment}
+              toggleWrap={toggleWrap}
+              colorPickerOpen={colorPickerOpen}
+              setColorPickerOpen={setColorPickerOpen}
+              filters={filters}
+              setFilters={setFilters}
+              exportOpen={exportOpen}
+              setExportOpen={setExportOpen}
+              handleExport={handleExport}
+              aiDisabled={aiDisabled}
+              aiFillOpen={aiFillOpen}
+              setAiFillOpen={setAiFillOpen}
+              cancelAiFill={cancelAiFill}
+              setAiOpTargetStr={setAiOpTargetStr}
+              setAiOpMode={setAiOpMode}
+              setAiOpSourceStr={setAiOpSourceStr}
+              setAiOpOpen={setAiOpOpen}
+              setGenRowsOpen={setGenRowsOpen}
+              setGenRowsError={setGenRowsError}
+              setGenRowsProgress={setGenRowsProgress}
+              activeEngine={activeEngine}
+              aiFillCol={aiFillCol}
+              setAiFillCol={setAiFillCol}
+              aiFillInstructionRef={aiFillInstructionRef}
+              aiFillInstruction={aiFillInstruction}
+              setAiFillInstruction={setAiFillInstruction}
+              startAiFill={startAiFill}
+              aiFillProgress={aiFillProgress}
+              setAiFillProgress={setAiFillProgress}
+            />
 
-            {/* AI bar */}
-            {activeSheet.columns.length > 0 && (
-              <div className="sticky top-0 z-10 border-b px-4 py-1.5 flex items-center gap-2 bg-background/95 backdrop-blur-sm">
-                <Sparkles className="h-3.5 w-3.5 text-primary" />
-                <span className="text-xs font-medium text-primary mr-1">AI</span>
-                <Button
-                  size="sm"
-                  className="h-7 text-xs"
-                  variant={aiFillOpen ? "default" : "outline"}
-                  onClick={() => { setAiFillOpen(!aiFillOpen); if (aiFillOpen) cancelAiFill(); }}
-                  disabled={aiDisabled}
-                  title={aiDisabled ? `AI disabled for tables > ${ROW_AI_LIMIT.toLocaleString()} rows` : undefined}
-                >Fill</Button>
-                <Button
-                  size="sm"
-                  className="h-7 text-xs"
-                  variant="outline"
-                  onClick={() => {
-                    if (selection) {
-                      setAiOpTargetStr(`${idxToCol(selection.c1)}${selection.r1 + 1}`);
-                      if (selection.r1 !== selection.r2 || selection.c1 !== selection.c2) {
-                        setAiOpMode("row-wise");
-                        setAiOpSourceStr(`${idxToCol(selection.c1)}${selection.r1 + 1}:${idxToCol(selection.c2)}${selection.r2 + 1}`);
-                      } else if (selection.c1 > 0) {
-                        setAiOpMode("row-wise");
-                        setAiOpSourceStr(`${idxToCol(selection.c1 - 1)}${selection.r1 + 1}`);
-                      } else {
-                        setAiOpSourceStr(`${idxToCol(selection.c1)}${selection.r1 + 1}`);
-                      }
-                    } else {
-                      setAiOpTargetStr("");
-                      setAiOpSourceStr("");
-                    }
-                    setAiOpOpen(true);
-                  }}
-                  disabled={aiDisabled}
-                  title="Process a single cell or range with AI"
-                >Range</Button>
-                <Button
-                  size="sm"
-                  className="h-7 text-xs"
-                  variant="outline"
-                  onClick={() => { setGenRowsOpen(true); setGenRowsError(null); setGenRowsProgress(0); }}
-                  disabled={aiDisabled}
-                  title="Generate new rows with AI"
-                >
-                  <Sparkles className="h-3 w-3 mr-1" />
-                  Generate rows
-                </Button>
-                <span className="ml-auto text-[10px] text-muted-foreground font-mono">{activeEngine}</span>
-              </div>
-            )}
+            <FormulaBar
+              activeSheet={activeSheet}
+              selection={selection}
+              editingCell={editingCell}
+              editValue={editValue}
+              editValueRef={editValueRef}
+              setEditValue={setEditValue}
+              setCellError={setCellError}
+              commitEdit={commitEdit}
+              cancelEdit={cancelEdit}
+              startEditing={startEditing}
+              setAiOpTargetStr={setAiOpTargetStr}
+              setAiOpMode={setAiOpMode}
+              setAiOpSourceStr={setAiOpSourceStr}
+              setAiOpOpen={setAiOpOpen}
+            />
 
-            {/* AI Fill panel */}
-            {aiFillOpen && (
-              <div className="border-b px-4 py-2 bg-muted/30 flex items-center gap-2 flex-wrap">
-                <label className="text-xs text-muted-foreground shrink-0">Column:</label>
-                <select
-                  className="h-7 px-1.5 text-xs border border-border rounded-md bg-background outline-none"
-                  value={aiFillCol}
-                  onChange={(e) => setAiFillCol(Number(e.target.value))}
-                  disabled={aiFilling}
-                >
-                  {activeSheet.columns.map((col, ci) => (
-                    <option key={ci} value={ci}>{col.name}</option>
-                  ))}
-                </select>
-                <div className="flex items-center gap-1 flex-wrap">
-                  {["Fill with realistic values", "Translate to English", "Categorize", "Extract from context"].map((preset) => (
-                    <button
-                      key={preset}
-                      className="px-1.5 py-0.5 text-[10px] rounded-full border border-border hover:bg-muted transition-colors shrink-0"
-                      onClick={() => setAiFillInstruction(preset)}
-                      disabled={aiFilling}
-                    >{preset}</button>
-                  ))}
-                  <input
-                    ref={aiFillInstructionRef}
-                    className="h-7 flex-1 min-w-[160px] px-2 text-xs border border-border rounded-md bg-background outline-none focus:ring-1 focus:ring-primary/40"
-                    placeholder='Instruction, e.g. "generate short description"'
-                    value={aiFillInstruction}
-                    onChange={(e) => setAiFillInstruction(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === "Enter" && !aiFilling) startAiFill(); }}
-                    disabled={aiFilling}
-                  />
-                </div>
-                {aiFilling ? (
-                  <Button variant="destructive" size="sm" className="h-7 text-xs gap-1" onClick={cancelAiFill}>
-                    <Square className="h-3 w-3" />
-                    Stop
-                  </Button>
-                ) : (
-                  <Button variant="default" size="sm" className="h-7 text-xs gap-1" onClick={startAiFill} disabled={!aiFillInstruction.trim()}>
-                    <Sparkles className="h-3 w-3" />
-                    Fill
-                  </Button>
-                )}
-                {aiFillProgress && (
-                  <span className="text-xs text-muted-foreground flex items-center gap-1">
-                    {aiFilling && <Loader2 className="h-3 w-3 animate-spin" />}
-                    {aiFillProgress}
-                  </span>
-                )}
-              </div>
-            )}
-
-            {/* AI Tool progress bar (shown when tool runs without AI Fill panel) */}
-            {aiFilling && !aiFillOpen && (
-              <div className="border-b px-4 py-1.5 bg-muted/30 flex items-center gap-2">
-                <Sparkles className="h-3 w-3 text-primary shrink-0" />
-                <span className="text-xs text-muted-foreground flex items-center gap-1 flex-1">
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                  {aiFillProgress}
-                </span>
-                <Button variant="destructive" size="sm" className="h-6 text-xs gap-1" onClick={cancelAiFill}>
-                  <Square className="h-2.5 w-2.5" />
-                  Cancel
-                </Button>
-              </div>
-            )}
-            {/* AI Tool done message (shown briefly after tool finishes) */}
-            {!aiFilling && !aiFillOpen && aiFillProgress && (
-              <div className="border-b px-4 py-1.5 bg-muted/30 flex items-center gap-2">
-                <Sparkles className="h-3 w-3 text-primary shrink-0" />
-                <span className="text-xs text-muted-foreground flex-1">{aiFillProgress}</span>
-                <button className="text-muted-foreground hover:text-foreground" onClick={() => setAiFillProgress(null)}>
-                  <X className="h-3 w-3" />
-                </button>
-              </div>
-            )}
-
-            {/* Formula bar */}
-            {activeSheet.columns.length > 0 && (() => {
-              const singleSel = selection && selection.r1 === selection.r2 && selection.c1 === selection.c2;
-              const selKey = singleSel ? `${selection!.r1},${selection!.c1}` : null;
-              const selFormula = selKey ? activeSheet.formulas?.[selKey] : null;
-              const displayLabel = editingCell
-                ? `${idxToCol(editingCell.col)}${editingCell.row + 1}`
-                : singleSel
-                  ? `${idxToCol(selection!.c1)}${selection!.r1 + 1}`
-                  : "—";
-              const displayValue = editingCell
-                ? editValue
-                : selFormula ?? (selKey ? (activeSheet.rows[selection!.r1]?.[selection!.c1] ?? "") : "");
-              const FUNS = ["SUM", "AVG", "COUNT", "MIN", "MAX"];
-              // Convert column index to letter(s): 0→A, 25→Z, 26→AA …
-
-              return (
-                <div className="border-b px-2 py-1 flex items-center gap-1 bg-muted/20 shrink-0">
-                  <span className="text-[11px] font-mono text-muted-foreground w-10 text-center shrink-0 bg-muted rounded px-1 py-0.5">{displayLabel}</span>
-                  <div className="w-px h-5 bg-border mx-1" />
-                  {/* Function buttons: select a range then click to insert formula below/right */}
-                  {FUNS.map((fn) => (
-                    <button
-                      key={fn}
-                      className="text-[10px] px-1.5 py-0.5 rounded bg-muted hover:bg-primary/20 text-muted-foreground hover:text-foreground font-mono shrink-0 transition-colors"
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => {
-                        if (!selection) return;
-                        const { r1, c1, r2, c2 } = selection;
-                        const rangeStr = `${idxToCol(c1)}${r1+1}:${idxToCol(c2)}${r2+1}`;
-                        const formula = `=${fn}(${rangeStr})`;
-                        // Place formula in the cell below the selection if it exists,
-                        // otherwise to the right of the selection.
-                        if (r2 + 1 < activeSheet.rows.length) {
-                          startEditing(r2 + 1, c1, formula);
-                        } else if (c2 + 1 < activeSheet.columns.length) {
-                          startEditing(r1, c2 + 1, formula);
-                        } else {
-                          // Just pre-fill the formula bar for the current cell
-                          startEditing(r1, c1, formula);
-                        }
-                      }}
-                    >
-                      {fn}
-                    </button>
-                  ))}
-                  <button
-                    className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 hover:bg-primary/20 text-primary font-medium shrink-0 transition-colors flex items-center gap-1"
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => {
-                      if (selection) {
-                        setAiOpTargetStr(`${idxToCol(selection.c1)}${selection.r1 + 1}`);
-                        if (selection.r1 !== selection.r2 || selection.c1 !== selection.c2) {
-                          setAiOpMode("row-wise");
-                          setAiOpSourceStr(`${idxToCol(selection.c1)}${selection.r1 + 1}:${idxToCol(selection.c2)}${selection.r2 + 1}`);
-                        } else {
-                          setAiOpSourceStr(`${idxToCol(selection.c1)}${selection.r1 + 1}`);
-                        }
-                      } else {
-                        setAiOpSourceStr("");
-                        setAiOpTargetStr("");
-                      }
-                      setAiOpOpen(true);
-                    }}
-                    title="AI Cell Action"
-                  >
-                    <Sparkles className="h-2.5 w-2.5" />
-                    AI
-                  </button>
-                  <div className="w-px h-5 bg-border mx-1" />
-                  {/* Editable formula input */}
-                  <input
-                    className="flex-1 text-xs font-mono bg-transparent outline-none text-foreground px-1"
-                    placeholder={editingCell || singleSel ? "Enter value or =formula…" : selection ? `${idxToCol(selection.c1)}${selection.r1+1}:${idxToCol(selection.c2)}${selection.r2+1} — select then click function` : "Select a cell"}
-                    readOnly={!singleSel && !editingCell}
-                    value={displayValue}
-                    onFocus={() => {
-                      if (singleSel && !editingCell) {
-                        startEditing(selection!.r1, selection!.c1, displayValue);
-                      }
-                    }}
-                    onChange={(e) => {
-                      if (editingCell) {
-                        editValueRef.current = e.target.value;
-                        setEditValue(e.target.value);
-                        setCellError(null);
-                      }
-                    }}
-                    onBlur={() => { if (editingCell) commitEdit(); }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") { e.preventDefault(); commitEdit(); }
-                      if (e.key === "Escape") { e.preventDefault(); cancelEdit(); }
-                    }}
-                  />
-                </div>
-              );
-            })()}
-
-            {/* Grid */}
-            <div
-              ref={gridRef}
-              className="flex-1 overflow-auto"
-              tabIndex={-1}
-              onScroll={handleGridScroll}
-              onPaste={(e) => {
-                if (editingCell) return;
-                e.preventDefault();
-                const text = e.clipboardData.getData("text/plain");
-                if (text) pasteAtSelection(text);
-              }}
-              onKeyDown={(e) => {
-                if (editingCell) return; // let cell input handle its own keys
-
-                // F2 — enter edit mode
-                if (e.key === "F2" && selection) {
-                  e.preventDefault();
-                  const displayValue = activeSheet?.rows[selection.r1]?.[selection.c1] ?? "";
-                  startEditing(selection.r1, selection.c1, displayValue);
-                  return;
-                }
-
-                // Bold / Italic
-                if ((e.ctrlKey || e.metaKey) && e.key === "b") {
-                  e.preventDefault();
-                  toggleBold();
-                  return;
-                }
-                if ((e.ctrlKey || e.metaKey) && e.key === "i") {
-                  e.preventDefault();
-                  toggleItalic();
-                  return;
-                }
-
-                // Undo / Redo
-                if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) {
-                  e.preventDefault();
-                  if (!aiFilling) undoSheet();
-                  return;
-                }
-                if ((e.ctrlKey || e.metaKey) && (e.key === "y" || (e.key === "z" && e.shiftKey))) {
-                  e.preventDefault();
-                  if (!aiFilling) redoSheet();
-                  return;
-                }
-                const maxRow = (activeSheet?.rows.length ?? 1) - 1;
-                const maxCol = (activeSheet?.columns.length ?? 1) - 1;
-
-                // Arrow / Enter / Tab navigation
-                const isArrow = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key);
-                const isNav = isArrow || e.key === "Enter" || e.key === "Tab";
-                if (isNav && activeSheet && maxRow >= 0 && maxCol >= 0) {
-                  e.preventDefault();
-                  const anchor = selAnchor ?? { row: 0, col: 0 };
-                  let nr = anchor.row;
-                  let nc = anchor.col;
-
-                  if (e.key === "ArrowUp") nr = Math.max(0, nr - 1);
-                  else if (e.key === "ArrowDown" || e.key === "Enter") nr = Math.min(maxRow, nr + 1);
-                  else if (e.key === "ArrowLeft") nc = Math.max(0, nc - 1);
-                  else if (e.key === "ArrowRight") nc = Math.min(maxCol, nc + 1);
-                  else if (e.key === "Tab") {
-                    if (e.shiftKey) { nc--; if (nc < 0) { nc = maxCol; nr = Math.max(0, nr - 1); } }
-                    else { nc++; if (nc > maxCol) { nc = 0; nr = Math.min(maxRow, nr + 1); } }
-                  }
-
-                  if (e.shiftKey && isArrow) {
-                    // Extend selection: anchor stays fixed, moving end shifts
-                    const mov = selMoving.current ?? { ...anchor };
-                    if (e.key === "ArrowUp") mov.row = Math.max(0, mov.row - 1);
-                    else if (e.key === "ArrowDown") mov.row = Math.min(maxRow, mov.row + 1);
-                    else if (e.key === "ArrowLeft") mov.col = Math.max(0, mov.col - 1);
-                    else if (e.key === "ArrowRight") mov.col = Math.min(maxCol, mov.col + 1);
-                    selMoving.current = { ...mov };
-                    setSelection(makeRect(anchor, mov));
-                  } else {
-                    // Move single-cell selection
-                    setSelAnchor({ row: nr, col: nc });
-                    selMoving.current = { row: nr, col: nc };
-                    setSelection({ r1: nr, c1: nc, r2: nr, c2: nc });
-                  }
-                  return;
-                }
-
-                if (e.key === "Escape" && selection) {
-                  setSelection(null);
-                  setSelAnchor(null);
-                }
-                if ((e.key === "Delete" || e.key === "Backspace") && selection) {
-                  e.preventDefault();
-                  clearSelectedCells();
-                }
-                if ((e.ctrlKey || e.metaKey) && e.key === "c" && selection) {
-                  e.preventDefault();
-                  copySelection();
-                }
-                if ((e.ctrlKey || e.metaKey) && e.key === "x" && selection) {
-                  e.preventDefault();
-                  cutSelection();
-                }
-                if ((e.ctrlKey || e.metaKey) && e.key === "v") {
-                  e.preventDefault();
-                  navigator.clipboard.readText().then((text) => {
-                    if (text) pasteAtSelection(text);
-                  }).catch(() => {});
-                  return;
-                }
-                // Start editing on printable character
-                if (selection && !e.ctrlKey && !e.metaKey && !e.altKey && e.key.length === 1) {
-                  flushSync(() => {
-                    startEditing(selection.r1, selection.c1, "");
-                  });
-                  cellInputRef.current?.focus();
-                }
-              }}
-            >
-              {activeSheet.columns.length === 0 ? (
-                <div className="flex-1 flex items-center justify-center h-full text-muted-foreground">
-                  <div className="text-center">
-                    <Table2 className="h-10 w-10 mx-auto mb-3 text-muted-foreground/40" />
-                    <p className="text-sm font-medium mb-2">No columns yet</p>
-                    {addingColumn ? (
-                      <div className="flex items-center gap-1.5 justify-center">
-                        <input
-                          ref={colNameRef}
-                          className="h-7 px-2 text-xs border border-border rounded-md bg-background outline-none focus:ring-1 focus:ring-primary/40 w-32"
-                          placeholder="Column name"
-                          value={newColName}
-                          onChange={(e) => setNewColName(e.target.value)}
-                          onKeyDown={(e) => {
-                            e.stopPropagation();
-                            if (e.key === "Enter") submitNewColumn();
-                            if (e.key === "Escape") setAddingColumn(false);
-                          }}
-                        />
-                        <Button variant="outline" size="sm" className="h-7 text-xs" onClick={submitNewColumn}>Add</Button>
-                      </div>
-                    ) : (
-                      <Button variant="outline" size="sm" className="gap-1" onClick={() => { setAddingColumn(true); setNewColName(""); setNewColType("text"); }}>
-                        <Plus className="h-3 w-3" />
-                        Add Column
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <table className="border-collapse text-sm select-none" style={{ tableLayout: 'fixed', width: 'max-content' }} onMouseUp={handleMouseUp}>
-                  <thead className="sticky top-0 z-20">
-                    <tr>
-                      <th className="sticky left-0 z-30 border border-border bg-muted px-2 py-1.5 text-left text-xs font-medium text-muted-foreground w-10">#</th>
-                      {activeSheet.columns.map((col, ci) => (
-                        <th
-                          key={ci}
-                          className="group border border-border bg-muted px-2 py-1.5 text-left text-xs font-medium text-muted-foreground cursor-context-menu relative"
-                          style={{ width: colWidths[ci] ?? DEFAULT_COL_WIDTH, minWidth: MIN_COL_WIDTH }}
-                          onClick={() => {
-                            const lastRow = activeSheet.rows.length - 1;
-                            if (lastRow < 0) return;
-                            setSelAnchor({ row: 0, col: ci });
-                            selMoving.current = { row: lastRow, col: ci };
-                            setSelection({ r1: 0, c1: ci, r2: lastRow, c2: ci });
-                            gridRef.current?.focus();
-                          }}
-                          onContextMenu={(e) => {
-                            e.preventDefault();
-                            setColMenu({ colIndex: ci, x: e.clientX, y: e.clientY });
-                          }}
-                        >
-                          {renamingCol === ci ? (
-                            <input
-                              ref={renameRef}
-                              className="w-full h-5 px-1 text-xs border border-primary/40 rounded bg-background outline-none"
-                              value={renameValue}
-                              onChange={(e) => setRenameValue(e.target.value)}
-                              onBlur={colRenameCommit}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") colRenameCommit();
-                                if (e.key === "Escape") setRenamingCol(null);
-                              }}
-                            />
-                          ) : (
-                            <div className="flex items-center justify-between gap-1">
-                              <span className="truncate">{col.name}</span>
-                              <span className="flex items-center gap-0.5 shrink-0">
-                                {filters.has(ci) && <Filter className="h-3 w-3 text-primary" />}
-                                {col.type !== "text" && (
-                                  <span className="text-[10px] px-1 py-0 rounded bg-muted-foreground/10 text-muted-foreground/60">
-                                    {col.type}
-                                  </span>
-                                )}
-                              </span>
-                            </div>
-                          )}
-                          {/* Column resize handle */}
-                          <div
-                            className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-primary/40 z-10"
-                            onMouseDown={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              setResizing({ type: 'col', index: ci, startPos: e.clientX, startSize: colWidths[ci] ?? DEFAULT_COL_WIDTH });
-                            }}
-                            onDoubleClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              if (!activeSheet) return;
-                              // Auto-fit: measure longest content in column
-                              const canvas = document.createElement('canvas');
-                              const ctx2d = canvas.getContext('2d');
-                              if (!ctx2d) return;
-                              ctx2d.font = '14px sans-serif'; // matches text-sm
-                              let maxW = ctx2d.measureText(col.name).width + 32; // header + padding
-                              for (const row of activeSheet.rows) {
-                                const val = row[ci] ?? '';
-                                if (val) {
-                                  const w = ctx2d.measureText(val).width + 24; // cell padding
-                                  if (w > maxW) maxW = w;
-                                }
-                              }
-                              const fitW = Math.max(MIN_COL_WIDTH, Math.min(500, Math.ceil(maxW)));
-                              const next = { ...colWidths, [ci]: fitW };
-                              setColWidths(next);
-                              // Persist
-                              const sizes = { colWidths: next, rowHeights };
-                              axios.put(`${API_BASE}/sheets/${activeSheet.id}/sizes`, sizes).catch(() => {});
-                            }}
-                          />
-                        </th>
-                      ))}
-                      <th className="border border-border bg-muted px-1 py-1 min-w-[120px]">
-                        {addingColumn ? (
-                          <div className="flex items-center gap-1">
-                            <input
-                              ref={colNameRef}
-                              className="h-6 flex-1 px-1.5 text-xs border border-border rounded bg-background outline-none focus:ring-1 focus:ring-primary/40"
-                              placeholder="Name"
-                              value={newColName}
-                              onChange={(e) => setNewColName(e.target.value)}
-                              onKeyDown={(e) => {
-                                e.stopPropagation();
-                                if (e.key === "Enter") submitNewColumn();
-                                if (e.key === "Escape") setAddingColumn(false);
-                              }}
-                              onBlur={() => { if (!newColName.trim()) setAddingColumn(false); }}
-                            />
-                          </div>
-                        ) : (
-                          <button
-                            onClick={() => { setAddingColumn(true); setNewColName(""); setNewColType("text"); }}
-                            className="w-full flex items-center justify-center text-muted-foreground/50 hover:text-primary transition-colors"
-                          >
-                            <Plus className="h-3.5 w-3.5" />
-                          </button>
-                        )}
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {/* Virtual scroll spacer top */}
-                    {filteredRowIndices.length > ROW_RENDER_LIMIT && scrollRowStart > 0 && (
-                      <tr><td colSpan={activeSheet.columns.length + 2} style={{ height: filteredRowIndices.slice(0, scrollRowStart).reduce((sum, ri) => sum + (rowHeights[ri] ?? DEFAULT_ROW_HEIGHT) + 1, 0), padding: 0, border: "none" }} /></tr>
-                    )}
-                    {/* Compute formula ref highlights and AI ghost overlay once per render */}
-                    {(() => {
-                      const formulaRefMap = new Map<string, number>();
-                      let refGroups: RefGroup[] = [];
-                      try {
-                        if (editingCell && editValue.startsWith("=")) {
-                          refGroups = parseFormulaRefGroups(editValue, activeSheet.rows.length, activeSheet.columns.length);
-                          for (const g of refGroups) {
-                            for (const k of g.cells) {
-                              if (!formulaRefMap.has(k)) formulaRefMap.set(k, g.colorIdx);
-                            }
-                          }
-                        }
-                      } catch { /* never crash rendering */ }
-
-                      // AI Ghost Overlay Calculation
-                      let aiTargetRect: { r1: number, c1: number, r2: number, c2: number } | null = null;
-                      if (aiOpOpen && aiOpSourceStr && aiOpTargetStr) {
-                        const s = resolveRange(aiOpSourceStr);
-                        const t = resolveCellRef(aiOpTargetStr);
-                        if (s && t) {
-                          if (aiOpMode === "row-wise") {
-                            // Target is height of source, but only 1 column wide
-                            const h = s.r2 - s.r1;
-                            aiTargetRect = { r1: t.row, c1: t.col, r2: t.row + h, c2: t.col }; 
-                          } else if (aiOpMode === "aggregate") {
-                            // Target is single cell
-                            aiTargetRect = { r1: t.row, c1: t.col, r2: t.row, c2: t.col };
-                          } else if (aiOpMode === "matrix") {
-                            // Target shape usually matches source (N->N)
-                            const h = s.r2 - s.r1;
-                            const w = s.c2 - s.c1;
-                            aiTargetRect = { r1: t.row, c1: t.col, r2: t.row + h, c2: t.col + w };
-                          }
-                        }
-                      }
-
-                      return visibleRowIndices.map((ri) => {
-                      const row = activeSheet.rows[ri];
-                      return (
-                      <tr key={ri}>
-                        <td
-                          className="sticky left-0 z-10 border border-border bg-muted/50 px-2 py-1 text-xs text-muted-foreground text-center cursor-context-menu select-none relative"
-                          style={ri in rowHeights ? { height: rowHeights[ri] } : { minHeight: DEFAULT_ROW_HEIGHT }}
-                          onContextMenu={(e) => {
-                            e.preventDefault();
-                            setRowMenu({ rowIndex: ri, x: e.clientX, y: e.clientY });
-                          }}
-                        >
-                          {ri + 1}
-                          {/* Row resize handle */}
-                          <div
-                            className="absolute bottom-0 left-0 w-full h-1 cursor-row-resize hover:bg-primary/40 z-10"
-                            onMouseDown={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              setResizing({ type: 'row', index: ri, startPos: e.clientY, startSize: rowHeights[ri] ?? DEFAULT_ROW_HEIGHT });
-                            }}
-                          />
-                        </td>
-                        {row.map((cell, ci) => {
-                          const isEditing = editingCell?.row === ri && editingCell?.col === ci;
-                          const colType = activeSheet.columns[ci]?.type ?? "text";
-                          const justFilled = ci === aiFillCol && aiFilledRows.has(ri);
-                          const fillError = ci === aiFillCol && aiFillErrors.has(ri);
-                          const selected = !isEditing && isCellSelected(ri, ci);
-                          const refColorIdx = formulaRefMap.get(`${ri},${ci}`);
-                          const isFormulaRef = refColorIdx !== undefined;
-                          const hasFormula = !!activeSheet.formulas?.[`${ri},${ci}`];
-                          const isErrorValue = hasFormula && typeof cell === 'string' && cell.startsWith("#");
-                          const refColor = isFormulaRef ? REF_COLORS[refColorIdx] : null;
-                          
-                          const isAiTarget = aiTargetRect && ri >= aiTargetRect.r1 && ri <= aiTargetRect.r2 && ci >= aiTargetRect.c1 && ci <= aiTargetRect.c2;
-
-                          return (
-                            <td
-                              key={ci}
-                              className={cn(
-                                "border p-0 relative",
-                                "overflow-hidden",
-                                !isFormulaRef && "border-border",
-                                isEditing && "ring-2 ring-primary/40 ring-inset",
-                                isEditing && cellError && "ring-destructive/60",
-                                selected && !isFormulaRef && "bg-primary/10",
-                                justFilled && "bg-green-500/10",
-                                fillError && "bg-destructive/10",
-                                isAiTarget && "bg-purple-500/10" // Ghost highlight
-                              )}
-                              style={(() => {
-                                const fmt: CellFormat = activeSheet.formats?.[`${ri},${ci}`] ?? {};
-                                const baseStyle = {
-                                  width: colWidths[ci] ?? DEFAULT_COL_WIDTH,
-                                  minWidth: MIN_COL_WIDTH,
-                                  ...(isFormulaRef && !isEditing
-                                    ? { backgroundColor: refColor!.bg, borderColor: refColor!.border }
-                                    : fmt.bg ? { backgroundColor: fmt.bg } : {}),
-                                };
-                                // Overlay dashed border for AI target
-                                if (isAiTarget) {
-                                    return { ...baseStyle, outline: "2px dashed rgba(168,85,247,0.4)", outlineOffset: "-2px" };
-                                }
-                                return baseStyle;
-                              })()}
-                              onContextMenu={(e) => {
-                                if (hasFormula) {
-                                  e.preventDefault();
-                                  setCellMenu({ row: ri, col: ci, x: e.clientX, y: e.clientY });
-                                }
-                              }}
-                              onMouseDown={(e) => {
-                                if (!isEditing) {
-                                  e.preventDefault();
-                                  handleCellMouseDown(ri, ci, e);
-                                }
-                              }}
-                              onMouseEnter={() => handleCellMouseEnter(ri, ci)}
-                              onClick={() => {
-                                if (colType === "boolean" && !isEditing) {
-                                  const next = cell.toLowerCase() === "true" ? "false" : "true";
-                                  axios.put(`${API_BASE}/sheets/${activeSheet.id}/cell`, {
-                                    row_index: ri, col_index: ci, value: next,
-                                  }).then((res) => updateSheet(res.data)).catch(() => {});
-                                } else if (!isEditing && selection && selection.r1 === ri && selection.c1 === ci && selection.r2 === ri && selection.c2 === ci) {
-                                  // Start editing on second click (cell already selected)
-                                  startEditing(ri, ci, cell);
-                                }
-                              }}
-                            >
-                              {isEditing ? (
-                                <div className="relative h-full">
-                                  <input
-                                    ref={cellInputRef}
-                                    type={editValue.startsWith("=") ? "text" : colType === "number" ? "number" : colType === "date" ? "date" : "text"}
-                                    step={colType === "number" ? "any" : undefined}
-                                    className="w-full h-full px-2 py-1 text-sm bg-transparent outline-none"
-                                    value={editValue}
-                                    onChange={(e) => { editValueRef.current = e.target.value; setEditValue(e.target.value); setCellError(null); }}
-                                    onBlur={commitEdit}
-                                    onKeyDown={(e) => {
-                                      if (e.key === "Enter") {
-                                        e.preventDefault();
-                                        commitEdit();
-                                      } else if (e.key === "Escape") {
-                                        e.preventDefault();
-                                        setCellError(null);
-                                        cancelEdit();
-                                      } else if (e.key === "Tab") {
-                                        e.preventDefault();
-                                        commitEdit();
-                                        const nextCol = e.shiftKey ? ci - 1 : ci + 1;
-                                        if (nextCol >= 0 && nextCol < (activeSheet?.columns.length ?? 0)) {
-                                          startEditing(ri, nextCol, row[nextCol] ?? "");
-                                        } else if (!e.shiftKey && ri + 1 < (activeSheet?.rows.length ?? 0)) {
-                                          startEditing(ri + 1, 0, activeSheet?.rows[ri + 1]?.[0] ?? "");
-                                        }
-                                      }
-                                    }}
-                                  />
-                                  {cellError && (
-                                    <div className="absolute left-0 top-full z-10 mt-0.5 px-2 py-1 text-xs text-destructive bg-destructive/10 border border-destructive/20 rounded shadow-sm whitespace-nowrap flex items-center gap-1">
-                                      <AlertCircle className="h-3 w-3 shrink-0" />
-                                      {cellError}
-                                    </div>
-                                  )}
-                                </div>
-                              ) : (
-                                <div className="px-2 py-1 text-sm cursor-text select-none flex gap-1" style={(() => { const a = activeSheet.alignments?.[`${ri},${ci}`]; const [h, v] = a ? a.split(',') : ['left', 'top']; const fmt: CellFormat = activeSheet.formats?.[`${ri},${ci}`] ?? {}; const noWrap = fmt.wrap === false; const manualH = ri in rowHeights; return { ...(manualH ? { height: rowHeights[ri], overflow: 'hidden' as const } : { minHeight: DEFAULT_ROW_HEIGHT }), whiteSpace: noWrap ? 'nowrap' as const : 'normal' as const, wordBreak: noWrap ? undefined : 'break-word' as const, lineBreak: noWrap ? undefined : 'anywhere' as const, ...(noWrap ? { overflow: 'hidden' as const, textOverflow: 'ellipsis' as const } : {}), textAlign: (h || 'left') as any, justifyContent: h === 'center' ? 'center' : h === 'right' ? 'flex-end' : 'flex-start', alignItems: v === 'middle' ? 'center' : v === 'bottom' ? 'flex-end' : 'flex-start', fontWeight: fmt.b ? 700 : undefined, fontStyle: fmt.i ? 'italic' as const : undefined, color: fmt.tc || undefined, backgroundColor: fmt.bg || undefined, fontSize: fmt.fs ? `${fmt.fs}px` : undefined }; })()}>
-                                  {hasFormula && !isErrorValue && (
-                                    <span className="text-[9px] font-mono text-muted-foreground/40 shrink-0 leading-none">fx</span>
-                                  )}
-                                  {colType === "boolean" ? (
-                                    <span className={(cell ?? "").toLowerCase() === "true" ? "text-green-500" : "text-muted-foreground/50"}>
-                                      {(cell ?? "").toLowerCase() === "true" ? "Yes" : "No"}
-                                    </span>
-                                  ) : isErrorValue ? (
-                                    <span className="text-destructive font-mono text-xs cursor-help flex items-center gap-0.5" title={`${cell}\nFormula: ${activeSheet.formulas[`${ri},${ci}`]}`}><AlertCircle className="h-2.5 w-2.5 shrink-0" />{cell}</span>
-                                  ) : (
-                                    <span>{cell || <span className="text-muted-foreground/30">&nbsp;</span>}</span>
-                                  )}
-                                </div>
-                              )}
-                            </td>
-                          );
-                        })}
-                        <td className="border border-border p-0">
-                          <button
-                            onClick={() => deleteRow(activeSheet.id, ri)}
-                            className="w-full h-full flex items-center justify-center px-1 py-1 text-muted-foreground/40 hover:text-destructive transition-colors"
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </button>
-                        </td>
-                      </tr>
-                      );
-                    });
-                    })()}
-                    {/* Virtual scroll spacer bottom */}
-                    {filteredRowIndices.length > ROW_RENDER_LIMIT && (scrollRowStart + ROW_RENDER_LIMIT) < filteredRowIndices.length && (
-                      <tr><td colSpan={activeSheet.columns.length + 2} style={{ height: filteredRowIndices.slice(scrollRowStart + ROW_RENDER_LIMIT).reduce((sum, ri) => sum + (rowHeights[ri] ?? DEFAULT_ROW_HEIGHT) + 1, 0), padding: 0, border: "none" }} /></tr>
-                    )}
-                    {filteredRowIndices.length === 0 && (
-                      <tr>
-                        <td colSpan={activeSheet.columns.length + 2} className="border border-border px-4 py-6 text-center text-xs text-muted-foreground">
-                          {activeSheet.rows.length === 0
-                            ? 'No rows yet. Click "+ Row" to add one.'
-                            : `All ${activeSheet.rows.length} rows hidden by filters.`}
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              )}
-            </div>
-
-            {/* Status bar */}
-            <div className="border-t px-4 py-1 flex items-center gap-4 text-[11px] text-muted-foreground bg-muted/30 shrink-0">
-              <span>{activeSheet.rows.length} rows</span>
-              <span>{activeSheet.columns.length} columns</span>
-              {selection && (() => {
-                const count = (selection.r2 - selection.r1 + 1) * (selection.c2 - selection.c1 + 1);
-                return count > 1 ? <span className="text-primary font-medium">{count} cells selected</span> : null;
-              })()}
-              {selection && selection.r1 === selection.r2 && selection.c1 === selection.c2 && activeSheet.columns[selection.c1] && (
-                activeSheet.formulas?.[`${selection.r1},${selection.c1}`]
-                  ? <span className="text-blue-500 font-medium">Formula</span>
-                  : <span>Type: {activeSheet.columns[selection.c1].type}</span>
-              )}
-              {selection && selection.r1 === selection.r2 && selection.c1 === selection.c2 && (
-                <span className="text-muted-foreground/60">
-                  Cell {idxToCol(selection.c1)}{selection.r1 + 1}
-                </span>
-              )}
-              {filters.size > 0 && (
-                <span className="ml-auto">Filtered: {filteredRowIndices.length}/{activeSheet.rows.length}</span>
-              )}
-            </div>
+            <SheetGrid
+              activeSheet={activeSheet}
+              selection={selection}
+              editingCell={editingCell}
+              editValue={editValue}
+              editValueRef={editValueRef}
+              setEditValue={setEditValue}
+              cellError={cellError}
+              setCellError={setCellError}
+              colWidths={colWidths}
+              rowHeights={rowHeights}
+              filteredRowIndices={filteredRowIndices}
+              visibleRowIndices={visibleRowIndices}
+              scrollRowStart={scrollRowStart}
+              filters={filters}
+              isCellSelected={isCellSelected}
+              handleCellMouseDown={handleCellMouseDown}
+              handleCellMouseEnter={handleCellMouseEnter}
+              handleMouseUp={handleMouseUp}
+              handleGridScroll={handleGridScroll}
+              startEditing={startEditing}
+              commitEdit={commitEdit}
+              cancelEdit={cancelEdit}
+              pasteAtSelection={pasteAtSelection}
+              copySelection={copySelection}
+              cutSelection={cutSelection}
+              clearSelectedCells={clearSelectedCells}
+              toggleBold={toggleBold}
+              toggleItalic={toggleItalic}
+              undoSheet={undoSheet}
+              redoSheet={redoSheet}
+              aiFilling={aiFilling}
+              selAnchor={selAnchor}
+              setSelAnchor={setSelAnchor}
+              selMoving={selMoving}
+              setSelection={setSelection}
+              makeRect={makeRect}
+              aiFillCol={aiFillCol}
+              aiFilledRows={aiFilledRows}
+              aiFillErrors={aiFillErrors}
+              aiOpOpen={aiOpOpen}
+              aiOpSourceStr={aiOpSourceStr}
+              aiOpTargetStr={aiOpTargetStr}
+              aiOpMode={aiOpMode}
+              updateSheet={updateSheet}
+              deleteRow={deleteRow}
+              setColMenu={setColMenu}
+              setRowMenu={setRowMenu}
+              setCellMenu={setCellMenu}
+              renamingCol={renamingCol}
+              setRenamingCol={setRenamingCol}
+              renameValue={renameValue}
+              setRenameValue={setRenameValue}
+              renameRef={renameRef}
+              colRenameCommit={colRenameCommit}
+              addingColumn={addingColumn}
+              setAddingColumn={setAddingColumn}
+              newColName={newColName}
+              setNewColName={setNewColName}
+              setNewColType={setNewColType}
+              colNameRef={colNameRef}
+              submitNewColumn={submitNewColumn}
+              setResizing={setResizing}
+              setColWidths={setColWidths}
+              cellInputRef={cellInputRef}
+              gridRef={gridRef}
+            />
           </>
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground">
@@ -2074,722 +1286,113 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
         )}
       </div>
 
-      {/* Sheet sidebar context menu */}
-      {sheetMenu && (
-        <div
-          className="fixed z-50 bg-background border border-border rounded-md shadow-lg py-1 min-w-[150px] text-sm"
-          style={{ left: sheetMenu.x, top: sheetMenu.y }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <button
-            className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2"
-            onClick={() => { sheetRenameStart(sheetMenu.sheetId); setSheetMenu(null); }}
-          >
-            <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
-            Rename
-          </button>
-          <button
-            className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2"
-            onClick={() => { duplicateSheet(sheetMenu.sheetId); setSheetMenu(null); }}
-          >
-            <Copy className="h-3.5 w-3.5 text-muted-foreground" />
-            Duplicate
-          </button>
-          <div className="border-t border-border my-1" />
-          <button
-            className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2 text-destructive"
-            onClick={() => { deleteSheet(sheetMenu.sheetId); setSheetMenu(null); }}
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-            Delete
-          </button>
-        </div>
-      )}
+      <SheetContextMenus
+        sheetMenu={sheetMenu}
+        setSheetMenu={setSheetMenu}
+        sheetRenameStart={sheetRenameStart}
+        duplicateSheet={duplicateSheet}
+        deleteSheet={deleteSheet}
+        colMenu={colMenu}
+        colRenameStart={colRenameStart}
+        colInsertAt={colInsertAt}
+        colMoveLeft={colMoveLeft}
+        colMoveRight={colMoveRight}
+        colSort={colSort}
+        openFilterEditor={openFilterEditor}
+        filters={filters}
+        removeFilter={removeFilter}
+        colDelete={colDelete}
+        colToolClean={colToolClean}
+        colToolNormalize={colToolNormalize}
+        colToolCategorize={colToolCategorize}
+        aiDisabled={aiDisabled}
+        aiFilling={aiFilling}
+        activeSheet={activeSheet}
+        filterEditCol={filterEditCol}
+        setFilterEditCol={setFilterEditCol}
+        filterOp={filterOp}
+        setFilterOp={setFilterOp}
+        filterVal={filterVal}
+        setFilterVal={setFilterVal}
+        applyFilter={applyFilter}
+        cellMenu={cellMenu}
+        setCellMenu={setCellMenu}
+        explainFormula={explainFormula}
+        setAiOpSourceStr={setAiOpSourceStr}
+        setAiOpTargetStr={setAiOpTargetStr}
+        setAiOpMode={setAiOpMode}
+        setAiOpOpen={setAiOpOpen}
+        formulaExplanation={formulaExplanation}
+        setFormulaExplanation={setFormulaExplanation}
+        gridRef={gridRef}
+        rowMenu={rowMenu}
+        setRowMenu={setRowMenu}
+        rowInsertAbove={rowInsertAbove}
+        rowInsertBelow={rowInsertBelow}
+        rowDuplicate={rowDuplicate}
+        rowDelete={rowDelete}
+        rowHeights={rowHeights}
+        setRowHeights={setRowHeights}
+        setSheets={setSheets}
+        activeSheetId={activeSheetId}
+        pendingDelete={pendingDelete}
+        setPendingDelete={setPendingDelete}
+        confirmDelete={confirmDelete}
+      />
 
-      {/* Column context menu */}
-      {colMenu && (
-        <div
-          className="fixed z-50 bg-background border border-border rounded-md shadow-lg py-1 min-w-[170px] text-sm"
-          style={{ left: colMenu.x, top: colMenu.y }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <button
-            className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2"
-            onClick={() => colRenameStart(colMenu.colIndex)}
-          >
-            <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
-            Rename column
-          </button>
-          <div className="border-t border-border my-1" />
-          <button
-            className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2"
-            onClick={() => colInsertAt(colMenu.colIndex)}
-          >
-            <ArrowLeft className="h-3.5 w-3.5 text-muted-foreground" />
-            Insert column left
-          </button>
-          <button
-            className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2"
-            onClick={() => colInsertAt(colMenu.colIndex + 1)}
-          >
-            <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
-            Insert column right
-          </button>
-          <div className="border-t border-border my-1" />
-          <button
-            className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2 disabled:opacity-40 disabled:cursor-default"
-            onClick={() => colMoveLeft(colMenu.colIndex)}
-            disabled={colMenu.colIndex === 0}
-          >
-            <ArrowLeft className="h-3.5 w-3.5 text-muted-foreground" />
-            Move left
-          </button>
-          <button
-            className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2 disabled:opacity-40 disabled:cursor-default"
-            onClick={() => colMoveRight(colMenu.colIndex)}
-            disabled={!activeSheet || colMenu.colIndex >= activeSheet.columns.length - 1}
-          >
-            <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
-            Move right
-          </button>
-          <div className="border-t border-border my-1" />
-          <button
-            className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2"
-            onClick={() => colSort(colMenu.colIndex, true)}
-          >
-            <ArrowUp className="h-3.5 w-3.5 text-muted-foreground" />
-            Sort ascending
-          </button>
-          <button
-            className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2"
-            onClick={() => colSort(colMenu.colIndex, false)}
-          >
-            <ArrowDown className="h-3.5 w-3.5 text-muted-foreground" />
-            Sort descending
-          </button>
-          <div className="border-t border-border my-1" />
-          <button
-            className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2"
-            onClick={() => openFilterEditor(colMenu.colIndex)}
-          >
-            <Filter className="h-3.5 w-3.5 text-muted-foreground" />
-            {filters.has(colMenu.colIndex) ? "Edit filter" : "Filter column"}
-          </button>
-          {filters.has(colMenu.colIndex) && (
-            <button
-              className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2 text-orange-500"
-              onClick={() => removeFilter(colMenu.colIndex)}
-            >
-              <X className="h-3.5 w-3.5" />
-              Remove filter
-            </button>
-          )}
-          <div className="border-t border-border my-1" />
-          <div className="px-3 py-1 text-[10px] text-muted-foreground/60 uppercase tracking-wider">AI Tools</div>
-          {aiDisabled ? (
-            <div className="px-3 py-1.5 text-xs text-muted-foreground/50">Disabled for large tables</div>
-          ) : (
-            <>
-              <button
-                className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2 disabled:opacity-40"
-                onClick={() => colToolClean(colMenu.colIndex)}
-                disabled={aiFilling}
-              >
-                <Eraser className="h-3.5 w-3.5 text-muted-foreground" />
-                Clean data
-              </button>
-              <button
-                className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2 disabled:opacity-40"
-                onClick={() => colToolNormalize(colMenu.colIndex)}
-                disabled={aiFilling}
-              >
-                <ListChecks className="h-3.5 w-3.5 text-muted-foreground" />
-                Normalize values
-              </button>
-              <button
-                className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2 disabled:opacity-40"
-                onClick={() => colToolCategorize(colMenu.colIndex)}
-                disabled={aiFilling}
-              >
-                <Tags className="h-3.5 w-3.5 text-muted-foreground" />
-                Categorize
-              </button>
-            </>
-          )}
-          <div className="border-t border-border my-1" />
-          <button
-            className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2 text-destructive"
-            onClick={() => colDelete(colMenu.colIndex)}
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-            Delete column
-          </button>
-        </div>
-      )}
-
-      {/* Filter editor popup */}
-      {filterEditCol !== null && activeSheet && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setFilterEditCol(null)}>
-          <div className="bg-background border rounded-lg shadow-lg w-[320px] p-4" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center gap-2 mb-3">
-              <Filter className="h-4 w-4 text-primary" />
-              <h3 className="text-sm font-medium">Filter: {activeSheet.columns[filterEditCol]?.name}</h3>
-            </div>
-            <div className="flex gap-2 mb-3">
-              <select
-                className="h-8 px-2 text-sm border border-border rounded-md bg-background outline-none"
-                value={filterOp}
-                onChange={(e) => setFilterOp(e.target.value)}
-              >
-                <option value="contains">Contains</option>
-                <option value="=">=</option>
-                <option value=">">&gt;</option>
-                <option value="<">&lt;</option>
-              </select>
-              <input
-                className="flex-1 h-8 px-2 text-sm border border-border rounded-md bg-background outline-none focus:ring-1 focus:ring-primary/40"
-                placeholder="Value..."
-                value={filterVal}
-                onChange={(e) => setFilterVal(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") applyFilter(filterEditCol); if (e.key === "Escape") setFilterEditCol(null); }}
-                autoFocus
-              />
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setFilterEditCol(null)}>Cancel</Button>
-              <Button variant="default" size="sm" className="h-7 text-xs" onClick={() => applyFilter(filterEditCol)}>Apply</Button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Cell context menu (formula cells only) */}
-      {cellMenu && (
-        <div
-          className="fixed z-50 bg-background border border-border rounded-md shadow-lg py-1 min-w-[160px] text-sm"
-          style={{ left: cellMenu.x, top: cellMenu.y }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <button
-            className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2"
-            onClick={() => explainFormula(cellMenu.row, cellMenu.col)}
-          >
-            <Sparkles className="h-3.5 w-3.5 text-muted-foreground" />
-            Explain formula
-          </button>
-          
-          <div className="border-t border-border my-1" />
-          
-          <div className="relative group/ai">
-            <button className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2">
-              <Sparkles className="h-3.5 w-3.5 text-primary" />
-              <span>AI</span>
-              <ChevronRight className="h-3.5 w-3.5 ml-auto text-muted-foreground" />
-            </button>
-            <div className="absolute left-full top-[-5px] hidden group-hover/ai:block bg-background border border-border rounded-md shadow-lg py-1 min-w-[180px]">
-              <button
-                className="w-full px-3 py-1.5 text-left hover:bg-muted"
-                onClick={() => {
-                  setAiOpSourceStr(`${idxToCol(cellMenu.col)}${cellMenu.row + 1}`);
-                  setAiOpTargetStr(`${idxToCol(cellMenu.col)}${cellMenu.row + 1}`);
-                  setAiOpMode("row-wise");
-                  setAiOpOpen(true);
-                  setCellMenu(null);
-                }}
-              >
-                Apply to selection...
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Formula explanation popover */}
-      {formulaExplanation && (() => {
-        const cellEl = gridRef.current?.querySelector(
-          `tr:nth-child(${formulaExplanation.row + 1}) td:nth-child(${formulaExplanation.col + 2})`
-        );
-        const rect = cellEl?.getBoundingClientRect();
-        const x = rect ? rect.left : 200;
-        const y = rect ? rect.bottom + 4 : 200;
-        return (
-          <div
-            className="fixed z-50 bg-background border border-border rounded-lg shadow-lg p-3 max-w-[320px] text-sm"
-            style={{ left: x, top: y }}
-            data-formula-explanation
-          >
-            <div className="flex items-center gap-1.5 mb-1.5">
-              <Sparkles className="h-3.5 w-3.5 text-primary shrink-0" />
-              <span className="text-xs font-medium text-muted-foreground">Formula Explanation</span>
-              <button className="ml-auto text-muted-foreground hover:text-foreground" onClick={() => setFormulaExplanation(null)}>
-                <X className="h-3 w-3" />
-              </button>
-            </div>
-            {formulaExplanation.loading ? (
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <Loader2 className="h-3 w-3 animate-spin" />
-                Thinking...
-              </div>
-            ) : (
-              <p className="text-xs leading-relaxed text-foreground">{formulaExplanation.text}</p>
-            )}
-          </div>
-        );
-      })()}
-
-      {/* Row context menu */}
-      {rowMenu && (
-        <div
-          className="fixed z-50 bg-background border border-border rounded-md shadow-lg py-1 min-w-[160px] text-sm"
-          style={{ left: rowMenu.x, top: rowMenu.y }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <button
-            className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2"
-            onClick={() => rowInsertAbove(rowMenu.rowIndex)}
-          >
-            <ArrowUp className="h-3.5 w-3.5 text-muted-foreground" />
-            Insert row above
-          </button>
-          <button
-            className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2"
-            onClick={() => rowInsertBelow(rowMenu.rowIndex)}
-          >
-            <ArrowDown className="h-3.5 w-3.5 text-muted-foreground" />
-            Insert row below
-          </button>
-          <button
-            className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2"
-            onClick={() => rowDuplicate(rowMenu.rowIndex)}
-          >
-            <Copy className="h-3.5 w-3.5 text-muted-foreground" />
-            Duplicate row
-          </button>
-          {rowMenu.rowIndex in rowHeights && (
-            <button
-              className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2"
-              onClick={() => {
-                const next = { ...rowHeights };
-                delete next[rowMenu.rowIndex];
-                setRowHeights(next);
-                const sizes = activeSheet!.sizes ?? {};
-                const updated = { ...sizes, colWidths: sizes.colWidths ?? {}, rowHeights: next };
-                setSheets(prev => prev.map(s => s.id === activeSheetId ? { ...s, sizes: updated } : s));
-                axios.put(`${API_BASE}/sheets/${activeSheetId}/sizes`, updated).catch(() => {});
-                setRowMenu(null);
-              }}
-            >
-              <RotateCcw className="h-3.5 w-3.5 text-muted-foreground" />
-              Reset row height
-            </button>
-          )}
-          <div className="border-t border-border my-1" />
-          <button
-            className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2 text-destructive"
-            onClick={() => rowDelete(rowMenu.rowIndex)}
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-            Delete row
-          </button>
-        </div>
-      )}
-
-      {/* Delete confirmation dialog */}
-      <Dialog open={!!pendingDelete} onOpenChange={(o) => { if (!o) setPendingDelete(null); }}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Delete {pendingDelete?.type === "col" ? "column" : "row"}?</DialogTitle>
-            <DialogDescription>
-              This action cannot be undone. The {pendingDelete?.type === "col" ? "column and all its data" : "row"} will be permanently removed.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setPendingDelete(null)}>Cancel</Button>
-            <Button variant="destructive" size="sm" onClick={confirmDelete}>Delete</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Template picker overlay */}
-      {templatePickerOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setTemplatePickerOpen(false)}>
-          <div className="bg-background border rounded-lg shadow-lg w-[480px] p-4" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center gap-2 mb-3">
-              <LayoutTemplate className="h-4 w-4 text-primary" />
-              <h3 className="text-sm font-medium">Create from Template</h3>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              {SHEET_TEMPLATES.map((t) => {
-                const Icon = t.icon;
-                return (
-                  <button
-                    key={t.id}
-                    onClick={() => createFromTemplate(t)}
-                    className="flex items-start gap-3 p-3 rounded-md border border-border hover:border-primary/40 hover:bg-primary/5 text-left transition-colors"
-                  >
-                    <Icon className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" />
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-foreground">{t.name}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">{t.description}</p>
-                      {t.columns.length > 0 && (
-                        <p className="text-[10px] text-muted-foreground/60 mt-1 truncate">
-                          {t.columns.map((c) => c.name).join(" · ")}
-                        </p>
-                      )}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-            <div className="flex justify-end mt-3">
-              <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setTemplatePickerOpen(false)}>
-                Cancel
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* AI Generate overlay — two-phase: prompt → preview → create */}
-      {aiGenOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => { if (!aiGenLoading) { setAiGenOpen(false); setAiGenError(null); setAiGenPreview(null); } }}>
-          <div className="bg-background border rounded-lg shadow-lg w-[480px] p-4" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center gap-2 mb-3">
-              <Sparkles className="h-4 w-4 text-primary" />
-              <h3 className="text-sm font-medium">
-                {aiGenPreview ? "Review Table Schema" : "Generate Table with AI"}
-              </h3>
-            </div>
-
-            {!aiGenPreview ? (
-              <>
-                <p className="text-xs text-muted-foreground mb-3">
-                  Describe the table you need. AI will suggest a name and columns for your review.
-                </p>
-                <input
-                  ref={aiGenRef}
-                  className="w-full h-8 px-3 text-sm border border-border rounded-md bg-background outline-none focus:ring-1 focus:ring-primary/40 mb-2"
-                  placeholder='e.g. "CRM for small business" or "weekly meal planner"'
-                  value={aiGenPrompt}
-                  onChange={(e) => { setAiGenPrompt(e.target.value); setAiGenError(null); }}
-                  onKeyDown={(e) => { if (e.key === "Enter" && !aiGenLoading) generateSchema(); if (e.key === "Escape" && !aiGenLoading) setAiGenOpen(false); }}
-                  disabled={aiGenLoading}
-                />
-                {aiGenError && (
-                  <p className="text-xs text-destructive flex items-center gap-1 mb-2">
-                    <AlertCircle className="h-3 w-3 shrink-0" />
-                    {aiGenError}
-                  </p>
-                )}
-                <div className="flex justify-end gap-2">
-                  <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => { setAiGenOpen(false); setAiGenError(null); }} disabled={aiGenLoading}>
-                    Cancel
-                  </Button>
-                  <Button variant="default" size="sm" className="h-7 text-xs gap-1" onClick={generateSchema} disabled={!aiGenPrompt.trim() || aiGenLoading}>
-                    {aiGenLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
-                    {aiGenLoading ? "Generating..." : "Generate"}
-                  </Button>
-                </div>
-              </>
-            ) : (
-              <>
-                {/* Preview phase: editable title + columns */}
-                <div className="mb-3">
-                  <label className="text-xs text-muted-foreground mb-1 block">Table name</label>
-                  <input
-                    className="w-full h-8 px-3 text-sm border border-border rounded-md bg-background outline-none focus:ring-1 focus:ring-primary/40"
-                    value={aiGenPreview.title}
-                    onChange={(e) => setAiGenPreview({ ...aiGenPreview, title: e.target.value })}
-                  />
-                </div>
-
-                <label className="text-xs text-muted-foreground mb-1 block">Columns</label>
-                <div className="border border-border rounded-md mb-3 max-h-[240px] overflow-auto">
-                  {aiGenPreview.columns.map((col, i) => (
-                    <div key={i} className="flex items-center gap-1.5 px-2 py-1.5 border-b border-border last:border-b-0">
-                      <input
-                        className="flex-1 h-6 px-1.5 text-xs border border-border rounded bg-background outline-none focus:ring-1 focus:ring-primary/40"
-                        value={col.name}
-                        onChange={(e) => aiGenUpdateCol(i, "name", e.target.value)}
-                      />
-                      <select
-                        className="h-6 px-1 text-xs border border-border rounded bg-background outline-none"
-                        value={col.type}
-                        onChange={(e) => aiGenUpdateCol(i, "type", e.target.value)}
-                      >
-                        <option value="text">text</option>
-                        <option value="number">number</option>
-                        <option value="boolean">boolean</option>
-                        <option value="date">date</option>
-                      </select>
-                      <button onClick={() => aiGenRemoveCol(i)} className="text-muted-foreground hover:text-destructive">
-                        <X className="h-3 w-3" />
-                      </button>
-                    </div>
-                  ))}
-                  <button
-                    onClick={aiGenAddCol}
-                    className="w-full px-2 py-1.5 text-xs text-muted-foreground hover:text-primary flex items-center gap-1 justify-center"
-                  >
-                    <Plus className="h-3 w-3" /> Add column
-                  </button>
-                </div>
-
-                <div className="flex justify-between">
-                  <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setAiGenPreview(null)}>
-                    Back
-                  </Button>
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => { setAiGenOpen(false); setAiGenPreview(null); }}>
-                      Cancel
-                    </Button>
-                    <Button
-                      variant="default" size="sm" className="h-7 text-xs gap-1"
-                      onClick={confirmAiGenCreate}
-                      disabled={aiGenPreview.columns.length === 0 || aiGenPreview.columns.some((c) => !c.name.trim())}
-                    >
-                      Create Table
-                    </Button>
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* AI Cell overlay */}
-      {/* AI Range Operation Modal */}
-      {aiOpOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => { if (!aiOpLoading) setAiOpOpen(false); }}>
-          <div className="bg-background border rounded-lg shadow-lg w-[440px] p-4" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center gap-2 mb-3">
-              <Sparkles className="h-4 w-4 text-primary" />
-              <h3 className="text-sm font-medium">AI Range Operation</h3>
-            </div>
-            
-            <div className="space-y-4 mb-4">
-              {/* Mode Selection */}
-              <div className="grid grid-cols-4 items-center gap-3">
-                <label className="text-xs text-muted-foreground text-right">Mode</label>
-                <div className="col-span-3">
-                  <select
-                    className="w-full h-8 px-2 text-sm border border-border rounded-md bg-background outline-none focus:ring-1 focus:ring-primary/40"
-                    value={aiOpMode}
-                    onChange={(e) => setAiOpMode(e.target.value as any)}
-                  >
-                    <option value="row-wise">Row-wise (1 → 1)</option>
-                    <option value="aggregate">Aggregate (Range → 1)</option>
-                    <option value="matrix">Matrix (Table → Table)</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Action Selection */}
-              <div className="grid grid-cols-4 items-center gap-3">
-                <label className="text-xs text-muted-foreground text-right">Action</label>
-                <div className="col-span-3 flex gap-2">
-                  <select
-                    className="flex-1 h-8 px-2 text-sm border border-border rounded-md bg-background outline-none focus:ring-1 focus:ring-primary/40"
-                    value={aiOpAction}
-                    onChange={(e) => setAiOpAction(e.target.value as any)}
-                  >
-                    <option value="translate">Translate</option>
-                    <option value="rewrite">Rewrite</option>
-                    <option value="summarize">Summarize</option>
-                    <option value="custom">Custom Instruction</option>
-                  </select>
-                  {aiOpAction === "translate" && (
-                    <select
-                      className="flex-1 h-8 px-2 text-sm border border-border rounded-md bg-background outline-none focus:ring-1 focus:ring-primary/40"
-                      value={aiOpLanguage}
-                      onChange={(e) => setAiOpLanguage(e.target.value)}
-                    >
-                      <option value="Slovak">Slovak</option>
-                      <option value="English">English</option>
-                      <option value="German">German</option>
-                      <option value="French">French</option>
-                      <option value="Spanish">Spanish</option>
-                      <option value="Italian">Italian</option>
-                      <option value="Japanese">Japanese</option>
-                      <option value="Chinese">Chinese</option>
-                    </select>
-                  )}
-                </div>
-              </div>
-
-              {/* Source & Target */}
-              <div className="grid grid-cols-4 items-center gap-3">
-                <label className="text-xs text-muted-foreground text-right">Source</label>
-                <div className="col-span-3 flex gap-2">
-                  <input
-                    className="flex-1 h-8 px-2 text-sm border border-border rounded-md bg-background outline-none focus:ring-1 focus:ring-primary/40"
-                    placeholder="e.g. A1:A10"
-                    value={aiOpSourceStr}
-                    onChange={(e) => setAiOpSourceStr(e.target.value)}
-                  />
-                  <Button variant="outline" size="sm" className="h-8 text-[10px] px-2" onClick={() => {
-                    if (selection) {
-                      if (selection.r1 === selection.r2 && selection.c1 === selection.c2) {
-                        setAiOpSourceStr(`${idxToCol(selection.c1)}${selection.r1 + 1}`);
-                      } else {
-                        setAiOpSourceStr(`${idxToCol(selection.c1)}${selection.r1 + 1}:${idxToCol(selection.c2)}${selection.r2 + 1}`);
-                      }
-                    }
-                  }}>Select</Button>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-4 items-center gap-3">
-                <label className="text-xs text-muted-foreground text-right">Target</label>
-                <div className="col-span-3 flex gap-2">
-                  <input
-                    className="flex-1 h-8 px-2 text-sm border border-border rounded-md bg-background outline-none focus:ring-1 focus:ring-primary/40"
-                    placeholder="Start cell (e.g. B1)"
-                    value={aiOpTargetStr}
-                    onChange={(e) => setAiOpTargetStr(e.target.value)}
-                  />
-                  <Button variant="outline" size="sm" className="h-8 text-[10px] px-2" onClick={() => {
-                    if (selection) {
-                      setAiOpTargetStr(`${idxToCol(selection.c1)}${selection.r1 + 1}`);
-                    }
-                  }}>Select</Button>
-                </div>
-              </div>
-
-              {/* Instruction */}
-              <div className="grid grid-cols-4 items-start gap-3">
-                <label className="text-xs text-muted-foreground text-right mt-1.5">Prompt</label>
-                <textarea
-                  className="col-span-3 min-h-[80px] w-full p-2 text-sm border border-border rounded-md bg-background outline-none focus:ring-1 focus:ring-primary/40 resize-none"
-                  placeholder={aiOpAction === "custom" ? 'e.g. "Fix formatting", "Make it more professional"' : 'Autogenerated from action'}
-                  value={aiOpAction === "custom" ? aiOpInstruction : ""}
-                  onChange={(e) => setAiOpInstruction(e.target.value)}
-                  disabled={aiOpAction !== "custom"}
-                />
-              </div>
-
-              {/* Model & Creativity */}
-              <div className="grid grid-cols-4 items-center gap-3">
-                <label className="text-xs text-muted-foreground text-right">Model</label>
-                <div className="col-span-3">
-                  <select
-                    className="w-full h-8 px-2 text-sm border border-border rounded-md bg-background outline-none focus:ring-1 focus:ring-primary/40"
-                    value={aiOpModel}
-                    onChange={(e) => setAiOpModel(e.target.value)}
-                  >
-                    <option value="">Default (Auto)</option>
-                    {availableModels.map((m) => (
-                      <option key={m.id} value={m.id}>{m.name}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-4 items-center gap-3">
-                <label className="text-xs text-muted-foreground text-right">Creativity</label>
-                <div className="col-span-3 flex items-center gap-3">
-                  <input
-                    type="range"
-                    min="0" max="1" step="0.1"
-                    className="flex-1 h-2"
-                    value={aiOpTemp}
-                    onChange={(e) => setAiOpTemp(parseFloat(e.target.value))}
-                  />
-                  <span className="text-xs text-muted-foreground w-8 text-right">{aiOpTemp}</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setAiOpOpen(false)} disabled={aiOpLoading}>
-                Cancel
-              </Button>
-              <Button variant="default" size="sm" className="h-8 text-xs gap-1.5" onClick={runAiOp} disabled={aiOpLoading}>
-                {aiOpLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-                Run
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Generate Rows dialog */}
-      {genRowsOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => { if (!genRowsRunning) { setGenRowsOpen(false); cancelGenerateRows(); } }}>
-          <div className="bg-background border rounded-lg shadow-lg w-[420px] p-4" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center gap-2 mb-3">
-              <Sparkles className="h-4 w-4 text-primary" />
-              <h3 className="text-sm font-medium">Generate Rows with AI</h3>
-            </div>
-
-            <div className="space-y-3 mb-4">
-              <div>
-                <label className="text-xs text-muted-foreground block mb-1">Number of rows (1–100)</label>
-                <input
-                  type="number"
-                  min={1}
-                  max={100}
-                  className="h-8 w-24 px-2 text-sm border border-border rounded-md bg-background outline-none focus:ring-1 focus:ring-primary/40"
-                  value={genRowsCount}
-                  onChange={(e) => setGenRowsCount(Math.max(1, Math.min(100, Number(e.target.value) || 10)))}
-                  disabled={genRowsRunning}
-                />
-              </div>
-
-              <div>
-                <label className="text-xs text-muted-foreground block mb-1">Instruction</label>
-                <div className="flex flex-wrap gap-1 mb-1.5">
-                  {["Random sample data", "Continue the pattern", "Diverse international records"].map((preset) => (
-                    <button
-                      key={preset}
-                      className="px-2 py-0.5 text-xs rounded-full border border-border hover:bg-muted transition-colors"
-                      onClick={() => setGenRowsInstruction(preset)}
-                      disabled={genRowsRunning}
-                    >{preset}</button>
-                  ))}
-                </div>
-                <textarea
-                  className="w-full min-h-[72px] p-2 text-sm border border-border rounded-md bg-background outline-none focus:ring-1 focus:ring-primary/40 resize-none"
-                  placeholder='e.g. "Generate realistic customer records" or "Continue the pattern"'
-                  value={genRowsInstruction}
-                  onChange={(e) => setGenRowsInstruction(e.target.value)}
-                  disabled={genRowsRunning}
-                />
-              </div>
-
-              {genRowsRunning && (
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                  Generating... {genRowsProgress}/{genRowsCount} rows
-                </div>
-              )}
-              {genRowsError && (
-                <div className="text-xs text-destructive flex items-center gap-1">
-                  <AlertCircle className="h-3 w-3" />
-                  {genRowsError}
-                </div>
-              )}
-            </div>
-
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => { setGenRowsOpen(false); cancelGenerateRows(); }} disabled={false}>
-                {genRowsRunning ? "Stop" : "Cancel"}
-              </Button>
-              <Button
-                variant="default"
-                size="sm"
-                className="h-8 text-xs gap-1.5"
-                onClick={handleGenerateRows}
-                disabled={genRowsRunning || !genRowsInstruction.trim()}
-              >
-                {genRowsRunning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-                Generate
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      <SheetDialogs
+        templatePickerOpen={templatePickerOpen}
+        setTemplatePickerOpen={setTemplatePickerOpen}
+        createFromTemplate={createFromTemplate}
+        aiGenOpen={aiGenOpen}
+        setAiGenOpen={setAiGenOpen}
+        aiGenPrompt={aiGenPrompt}
+        setAiGenPrompt={setAiGenPrompt}
+        aiGenLoading={aiGenLoading}
+        aiGenError={aiGenError}
+        setAiGenError={setAiGenError}
+        aiGenRef={aiGenRef}
+        aiGenPreview={aiGenPreview}
+        setAiGenPreview={setAiGenPreview}
+        generateSchema={generateSchema}
+        confirmAiGenCreate={confirmAiGenCreate}
+        aiGenUpdateCol={aiGenUpdateCol}
+        aiGenRemoveCol={aiGenRemoveCol}
+        aiGenAddCol={aiGenAddCol}
+        aiOpOpen={aiOpOpen}
+        setAiOpOpen={setAiOpOpen}
+        aiOpMode={aiOpMode}
+        setAiOpMode={setAiOpMode}
+        aiOpSourceStr={aiOpSourceStr}
+        setAiOpSourceStr={setAiOpSourceStr}
+        aiOpTargetStr={aiOpTargetStr}
+        setAiOpTargetStr={setAiOpTargetStr}
+        aiOpInstruction={aiOpInstruction}
+        setAiOpInstruction={setAiOpInstruction}
+        aiOpAction={aiOpAction}
+        setAiOpAction={setAiOpAction}
+        aiOpLanguage={aiOpLanguage}
+        setAiOpLanguage={setAiOpLanguage}
+        aiOpModel={aiOpModel}
+        setAiOpModel={setAiOpModel}
+        aiOpTemp={aiOpTemp}
+        setAiOpTemp={setAiOpTemp}
+        aiOpLoading={aiOpLoading}
+        availableModels={availableModels}
+        runAiOp={runAiOp}
+        selection={selection}
+        genRowsOpen={genRowsOpen}
+        setGenRowsOpen={setGenRowsOpen}
+        genRowsInstruction={genRowsInstruction}
+        setGenRowsInstruction={setGenRowsInstruction}
+        genRowsCount={genRowsCount}
+        setGenRowsCount={setGenRowsCount}
+        genRowsRunning={genRowsRunning}
+        genRowsProgress={genRowsProgress}
+        genRowsError={genRowsError}
+        handleGenerateRows={handleGenerateRows}
+        cancelGenerateRows={cancelGenerateRows}
+      />
     </div>
   );
 }

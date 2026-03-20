@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { flushSync } from "react-dom";
 import axios from "axios";
 import { PlusCircle, Table2, Trash2, Plus, X, AlertCircle, Sparkles, Square, Loader2, LayoutTemplate, FileSpreadsheet, ListTodo, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Copy, Pencil, Filter, Eraser, Tags, ListChecks, Undo2, Redo2, AlignLeft, AlignCenter, AlignRight, AlignVerticalJustifyStart, AlignVerticalJustifyCenter, AlignVerticalJustifyEnd, Bold, Italic, Paintbrush, Type, WrapText, RotateCcw, Upload, Download, ChevronDown, DollarSign, BarChart2, ChevronRight } from "lucide-react";
 import { Button } from "../components/ui/button";
@@ -2498,10 +2499,10 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
                 }
                 // Start editing on printable character
                 if (selection && !e.ctrlKey && !e.metaKey && !e.altKey && e.key.length === 1) {
-                  startEditing(selection.r1, selection.c1, "");
-                  // Set the typed character as initial value (focus effect runs after render)
-                  editValueRef.current = e.key;
-                  setEditValue(e.key);
+                  flushSync(() => {
+                    startEditing(selection.r1, selection.c1, "");
+                  });
+                  cellInputRef.current?.focus();
                 }
               }}
             >

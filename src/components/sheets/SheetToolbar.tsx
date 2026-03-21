@@ -1,5 +1,5 @@
 import {
-  Plus, Undo2, Redo2, Bold, Italic, Type, Paintbrush, WrapText,
+  Plus, Undo2, Redo2, Bold, Italic, Strikethrough, Type, Paintbrush, WrapText,
   AlignLeft, AlignCenter, AlignRight, AlignVerticalJustifyStart,
   AlignVerticalJustifyCenter, AlignVerticalJustifyEnd,
   Filter, Download, ChevronDown, Sparkles, Square, Loader2, X, ArrowUpDown, Palette,
@@ -27,6 +27,7 @@ export interface SheetToolbarProps {
   getSelectionAlignment: () => { h: string; v: string };
   toggleBold: () => void;
   toggleItalic: () => void;
+  toggleStrikethrough: () => void;
   applyFormat: (patch: Partial<CellFormat>) => void;
   applyAlignment: (axis: "h" | "v", value: string) => void;
   toggleWrap: () => void;
@@ -76,7 +77,7 @@ export function SheetToolbar({
   undoSheet, redoSheet, canUndo, canRedo, aiFilling,
   addRow,
   selection, getSelectionFormat, getSelectionAlignment,
-  toggleBold, toggleItalic, applyFormat, applyAlignment, toggleWrap,
+  toggleBold, toggleItalic, toggleStrikethrough, applyFormat, applyAlignment, toggleWrap,
   colorPickerOpen, setColorPickerOpen,
   filters, setFilters,
   exportOpen, setExportOpen, handleExport,
@@ -110,6 +111,9 @@ export function SheetToolbar({
             </Button>
             <Button variant={getSelectionFormat().i ? "default" : "outline"} size="sm" className="h-7 w-7 p-0" onClick={toggleItalic} title="Italic (Ctrl+I)">
               <Italic className="h-3.5 w-3.5" />
+            </Button>
+            <Button variant={getSelectionFormat().s ? "default" : "outline"} size="sm" className="h-7 w-7 p-0" onClick={toggleStrikethrough} title="Strikethrough (Ctrl+5)">
+              <Strikethrough className="h-3.5 w-3.5" />
             </Button>
             <select
               className="h-7 px-1 text-xs border border-border rounded-md bg-background outline-none cursor-pointer"

@@ -479,6 +479,14 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
       .catch(() => {});
   }, [activeSheet]);
 
+  const toggleFreezeRow = useCallback(() => {
+    if (!activeSheet) return;
+    const sizes = { ...activeSheet.sizes, freezeFirstRow: !activeSheet.sizes?.freezeFirstRow };
+    axios.put(`${API_BASE}/sheets/${activeSheet.id}/sizes`, sizes)
+      .then((res) => updateSheet(res.data))
+      .catch(() => {});
+  }, [activeSheet]);
+
   type SelectionRect2 = { r1: number; c1: number; r2: number; c2: number };
 
   const fillDragExecute = useCallback(async (origin: SelectionRect2, fillRect: SelectionRect2) => {
@@ -1292,6 +1300,11 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
     applyFormat({ i: !cur.i });
   }
 
+  function toggleStrikethrough() {
+    const cur = getSelectionFormat();
+    applyFormat({ s: !cur.s });
+  }
+
   function toggleWrap() {
     const cur = getSelectionFormat();
     // wrap defaults to true (normal), toggling sets to false (nowrap)
@@ -1490,6 +1503,7 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
               getSelectionAlignment={getSelectionAlignment}
               toggleBold={toggleBold}
               toggleItalic={toggleItalic}
+              toggleStrikethrough={toggleStrikethrough}
               applyFormat={applyFormat}
               applyAlignment={applyAlignment}
               toggleWrap={toggleWrap}
@@ -1572,6 +1586,7 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
               clearSelectedCells={clearSelectedCells}
               toggleBold={toggleBold}
               toggleItalic={toggleItalic}
+              toggleStrikethrough={toggleStrikethrough}
               undoSheet={undoSheet}
               redoSheet={redoSheet}
               aiFilling={aiFilling}
@@ -1621,6 +1636,7 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
               autoFitAllCols={autoFitAllCols}
               fillDragExecute={fillDragExecute}
               toggleFreezeCol={toggleFreezeCol}
+              toggleFreezeRow={toggleFreezeRow}
             />
             {findOpen && (
               <FindBar

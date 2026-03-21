@@ -11,6 +11,7 @@ export interface SheetSizes {
   hiddenRows?: number[];
   hiddenCols?: number[];
   freezeFirstCol?: boolean;
+  freezeFirstRow?: boolean;
   condRules?: ConditionalRule[];
 }
 
@@ -30,6 +31,7 @@ export interface ConditionalRule {
 export interface CellFormat {
   b?: boolean;   // bold
   i?: boolean;   // italic
+  s?: boolean;   // strikethrough
   tc?: string;   // text color hex
   bg?: string;   // background color hex
   wrap?: boolean; // false = nowrap (default true = wrap)

@@ -27,6 +27,7 @@ import { SheetContextMenus } from "../components/sheets/SheetContextMenus";
 import { SheetToolbar } from "../components/sheets/SheetToolbar";
 import { FormulaBar } from "../components/sheets/FormulaBar";
 import { SheetGrid } from "../components/sheets/SheetGrid";
+import { FindBar } from "../components/sheets/FindBar";
 import type { TuningParams } from "../components/AIControlPanel";
 import { SheetSidebar } from "../components/sheets/SheetSidebar";
 
@@ -470,6 +471,134 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
     } catch { /* ignore */ }
   }, [selection, activeSheet]);
 
+  const fillDown = useCallback(async () => {
+    if (!selection || !activeSheet) return;
+    const { r1, c1, r2, c2 } = selection;
+    if (r1 === r2) return;
+    const firstRow: string[] = [];
+    for (let ci = c1; ci <= c2; ci++) {
+      const key = `${r1},${ci}`;
+      firstRow.push(activeSheet.formulas?.[key] ?? activeSheet.rows[r1]?.[ci] ?? "");
+    }
+    const data = Array.from({ length: r2 - r1 + 1 }, () => [...firstRow]);
+    try {
+      const res = await axios.put(`${API_BASE}/sheets/${activeSheet.id}/paste`, {
+        start_row: r1, start_col: c1, data, source_row: r1, source_col: c1,
+      });
+      updateSheet(res.data);
+    } catch { /* ignore */ }
+  }, [selection, activeSheet]);
+
+  const fillRight = useCallback(async () => {
+    if (!selection || !activeSheet) return;
+    const { r1, c1, r2, c2 } = selection;
+    if (c1 === c2) return;
+    const data: string[][] = [];
+    for (let ri = r1; ri <= r2; ri++) {
+      const key = `${ri},${c1}`;
+      const firstVal = activeSheet.formulas?.[key] ?? activeSheet.rows[ri]?.[c1] ?? "";
+      data.push(Array.from({ length: c2 - c1 + 1 }, () => firstVal));
+    }
+    try {
+      const res = await axios.put(`${API_BASE}/sheets/${activeSheet.id}/paste`, {
+        start_row: r1, start_col: c1, data, source_row: r1, source_col: c1,
+      });
+      updateSheet(res.data);
+    } catch { /* ignore */ }
+  }, [selection, activeSheet]);
+
+  // Hide/Unhide rows & columns
+  const saveSizes = useCallback(async (newHiddenRows: number[], newHiddenCols: number[]) => {
+    if (!activeSheet) return;
+    try {
+      const res = await axios.put(`${API_BASE}/sheets/${activeSheet.id}/sizes`, {
+        colWidths, rowHeights, hiddenRows: newHiddenRows, hiddenCols: newHiddenCols,
+      });
+      updateSheet(res.data);
+    } catch { /* ignore */ }
+  }, [activeSheet, colWidths, rowHeights]);
+
+  const hideRow = useCallback(async (ri: number) => {
+    if (!activeSheet) return;
+    const hidden = new Set(activeSheet.sizes?.hiddenRows ?? []);
+    hidden.add(ri);
+    await saveSizes([...hidden].sort((a, b) => a - b), activeSheet.sizes?.hiddenCols ?? []);
+    setRowMenu(null);
+  }, [activeSheet, saveSizes]);
+
+  const unhideRows = useCallback(async (rows: number[]) => {
+    if (!activeSheet) return;
+    const hidden = new Set(activeSheet.sizes?.hiddenRows ?? []);
+    for (const r of rows) hidden.delete(r);
+    await saveSizes([...hidden].sort((a, b) => a - b), activeSheet.sizes?.hiddenCols ?? []);
+  }, [activeSheet, saveSizes]);
+
+  const hideCol = useCallback(async (ci: number) => {
+    if (!activeSheet) return;
+    const hidden = new Set(activeSheet.sizes?.hiddenCols ?? []);
+    hidden.add(ci);
+    await saveSizes(activeSheet.sizes?.hiddenRows ?? [], [...hidden].sort((a, b) => a - b));
+    setColMenu(null);
+  }, [activeSheet, saveSizes]);
+
+  const unhideCol = useCallback(async (ci: number) => {
+    if (!activeSheet) return;
+    const hidden = new Set(activeSheet.sizes?.hiddenCols ?? []);
+    hidden.delete(ci);
+    await saveSizes(activeSheet.sizes?.hiddenRows ?? [], [...hidden].sort((a, b) => a - b));
+  }, [activeSheet, saveSizes]);
+
+  // Find (Ctrl+F)
+  const [findOpen, setFindOpen] = useState(false);
+  const [findQuery, setFindQuery] = useState("");
+  const [findIndex, setFindIndex] = useState(0);
+
+  const findResults = useMemo(() => {
+    if (!activeSheet || !findQuery.trim()) return [] as { r: number; c: number }[];
+    const q = findQuery.toLowerCase();
+    const results: { r: number; c: number }[] = [];
+    for (let ri = 0; ri < activeSheet.rows.length; ri++) {
+      for (let ci = 0; ci < activeSheet.columns.length; ci++) {
+        const val = (activeSheet.rows[ri]?.[ci] ?? "").toLowerCase();
+        if (val.includes(q)) results.push({ r: ri, c: ci });
+      }
+    }
+    return results;
+  }, [activeSheet, findQuery]);
+
+  const findMatches = useMemo(() => {
+    const s = new Set<string>();
+    for (const { r, c } of findResults) s.add(`${r},${c}`);
+    return s;
+  }, [findResults]);
+
+  const findCurrentKey = findResults.length > 0 && findIndex < findResults.length
+    ? `${findResults[findIndex].r},${findResults[findIndex].c}` : null;
+
+  // Reset index + navigate on query or sheet change
+  useEffect(() => {
+    setFindIndex(0);
+  }, [findQuery, activeSheetId]);
+
+  useEffect(() => {
+    if (findResults.length > 0) {
+      const idx = Math.min(findIndex, findResults.length - 1);
+      const { r, c } = findResults[idx];
+      setSelAnchor({ row: r, col: c });
+      setSelection({ r1: r, c1: c, r2: r, c2: c });
+    }
+  }, [findIndex, findResults]);
+
+  const findNext = useCallback(() => {
+    if (findResults.length === 0) return;
+    setFindIndex((i) => (i + 1) % findResults.length);
+  }, [findResults.length]);
+
+  const findPrev = useCallback(() => {
+    if (findResults.length === 0) return;
+    setFindIndex((i) => (i - 1 + findResults.length) % findResults.length);
+  }, [findResults.length]);
+
   // Row context menu operations
   async function rowInsertAbove(ri: number) {
     if (!activeSheet) return;
@@ -639,8 +768,14 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
 
   // Compute filtered row indices (memoized for performance)
   const filteredRowIndices: number[] = useMemo(() => {
-    if (!activeSheet || filters.size === 0) return activeSheet?.rows.map((_, i) => i) ?? [];
-    return activeSheet.rows.reduce<number[]>((acc, row, ri) => {
+    if (!activeSheet) return [];
+    const hiddenRows = new Set(activeSheet.sizes?.hiddenRows ?? []);
+    const visible = activeSheet.rows
+      .map((_, i) => i)
+      .filter((i) => !hiddenRows.has(i));
+    if (filters.size === 0) return visible;
+    return visible.filter((ri) => {
+      const row = activeSheet.rows[ri];
       for (const [ci, f] of filters) {
         const cell = (row[ci] ?? "").toLowerCase();
         const fv = f.value.toLowerCase();
@@ -648,22 +783,21 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
         if (colType === "number") {
           const num = parseFloat(cell);
           const fnum = parseFloat(fv);
-          if (isNaN(num) || isNaN(fnum)) return acc;
-          if (f.operator === ">" && !(num > fnum)) return acc;
-          if (f.operator === "<" && !(num < fnum)) return acc;
-          if (f.operator === "=" && !(num === fnum)) return acc;
-          if (f.operator === "contains" && !cell.includes(fv)) return acc;
+          if (isNaN(num) || isNaN(fnum)) return false;
+          if (f.operator === ">" && !(num > fnum)) return false;
+          if (f.operator === "<" && !(num < fnum)) return false;
+          if (f.operator === "=" && !(num === fnum)) return false;
+          if (f.operator === "contains" && !cell.includes(fv)) return false;
         } else {
-          if (f.operator === "contains" && !cell.includes(fv)) return acc;
-          if (f.operator === "=" && cell !== fv) return acc;
-          if (f.operator === ">" && !(cell > fv)) return acc;
-          if (f.operator === "<" && !(cell < fv)) return acc;
+          if (f.operator === "contains" && !cell.includes(fv)) return false;
+          if (f.operator === "=" && cell !== fv) return false;
+          if (f.operator === ">" && !(cell > fv)) return false;
+          if (f.operator === "<" && !(cell < fv)) return false;
         }
       }
-      acc.push(ri);
-      return acc;
-    }, []);
-  }, [activeSheet?.rows, activeSheet?.columns, filters]);
+      return true;
+    });
+  }, [activeSheet?.rows, activeSheet?.columns, activeSheet?.sizes?.hiddenRows, filters]);
 
   // Performance safeguards
   const totalRows = activeSheet?.rows.length ?? 0;
@@ -1098,7 +1232,7 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
       />
 
       {/* Main area */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 relative">
         {activeSheet ? (
           <>
             {/* Title bar */}
@@ -1265,7 +1399,26 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
               setColWidths={setColWidths}
               cellInputRef={cellInputRef}
               gridRef={gridRef}
+              fillDown={fillDown}
+              fillRight={fillRight}
+              hiddenCols={new Set(activeSheet.sizes?.hiddenCols ?? [])}
+              onUnhideCol={unhideCol}
+              onUnhideRows={unhideRows}
+              findMatches={findMatches}
+              findCurrentKey={findCurrentKey}
+              onFindOpen={() => setFindOpen(true)}
             />
+            {findOpen && (
+              <FindBar
+                query={findQuery}
+                onQueryChange={setFindQuery}
+                onClose={() => { setFindOpen(false); setFindQuery(""); }}
+                onNext={findNext}
+                onPrev={findPrev}
+                resultCount={findResults.length}
+                currentIndex={Math.min(findIndex, Math.max(0, findResults.length - 1))}
+              />
+            )}
           </>
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground">
@@ -1331,6 +1484,8 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
         rowInsertBelow={rowInsertBelow}
         rowDuplicate={rowDuplicate}
         rowDelete={rowDelete}
+        hideRow={hideRow}
+        colHide={hideCol}
         rowHeights={rowHeights}
         setRowHeights={setRowHeights}
         setSheets={setSheets}

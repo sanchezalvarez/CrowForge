@@ -9,7 +9,7 @@ import {
   DEFAULT_COL_WIDTH, DEFAULT_ROW_HEIGHT, MIN_COL_WIDTH,
   ROW_RENDER_LIMIT, REF_COLORS,
   parseFormulaRefGroups, resolveRange, resolveCellRef, idxToCol,
-  ctrlArrowMove,
+  ctrlArrowMove, matchCondRule,
 } from "../../lib/cellUtils";
 
 const API_BASE = "http://127.0.0.1:8000";
@@ -46,6 +46,7 @@ export interface SheetGridProps {
   clearSelectedCells: () => Promise<void> | void;
   toggleBold: () => void;
   toggleItalic: () => void;
+  toggleStrikethrough: () => void;
   undoSheet: () => void;
   redoSheet: () => void;
   aiFilling: boolean;
@@ -101,6 +102,8 @@ export interface SheetGridProps {
   autoFitAllCols: () => void;
   fillDragExecute: (origin: SelectionRect, fillRect: SelectionRect) => void;
   toggleFreezeCol: () => void;
+  toggleFreezeRow: () => void;
+  copyAsMarkdown: () => void;
 }
 
 // ---- Number format helper ----
@@ -155,6 +158,8 @@ interface SheetRowProps {
   onFillHandleMouseDown: (e: React.MouseEvent) => void;
   fillPreviewCells: Set<string>;
   freezeFirstCol: boolean;
+  freezeFirstRow: boolean;
+  onRowNumberClick: (ri: number) => void;
 }
 
 const SheetRow = React.memo(function SheetRow({
@@ -172,12 +177,20 @@ const SheetRow = React.memo(function SheetRow({
   cellInputRef,
   hiddenCols, findMatches, findCurrentKey,
   fillHandleCell, onFillHandleMouseDown, fillPreviewCells, freezeFirstCol,
+  freezeFirstRow, onRowNumberClick,
 }: SheetRowProps) {
   return (
     <tr key={ri}>
       <td
-        className="sticky left-0 z-10 border border-border bg-muted/50 px-2 py-1 text-xs text-muted-foreground text-center cursor-context-menu select-none relative"
-        style={ri in rowHeights ? { height: rowHeights[ri] } : { minHeight: DEFAULT_ROW_HEIGHT }}
+        className={cn(
+          "sticky left-0 border border-border bg-muted/50 px-2 py-1 text-xs text-muted-foreground text-center cursor-pointer select-none relative",
+          freezeFirstRow && ri === 0 ? "z-[12]" : "z-10",
+        )}
+        style={{
+          ...(ri in rowHeights ? { height: rowHeights[ri] } : { minHeight: DEFAULT_ROW_HEIGHT }),
+          ...(freezeFirstRow && ri === 0 ? { top: 29 } : {}),
+        }}
+        onClick={() => onRowNumberClick(ri)}
         onContextMenu={(e) => {
           e.preventDefault();
           setRowMenu({ rowIndex: ri, x: e.clientX, y: e.clientY });
@@ -213,6 +226,7 @@ const SheetRow = React.memo(function SheetRow({
         const isFillHandle = fillHandleCell?.row === ri && fillHandleCell?.col === ci;
         const isFillPreview = fillPreviewCells.has(`${ri},${ci}`);
         const isFreezeCol = freezeFirstCol && ci === 0;
+        const isFreezeRow = freezeFirstRow && ri === 0;
 
         return (
           <td
@@ -233,6 +247,8 @@ const SheetRow = React.memo(function SheetRow({
               isFindCurrent && "bg-yellow-400/50 ring-1 ring-yellow-500/60 ring-inset",
               isFillPreview && "bg-primary/20 ring-1 ring-primary/50 ring-inset",
               isFreezeCol && "sticky z-[8] bg-background",
+              isFreezeRow && !isFreezeCol && "sticky z-[9] bg-background",
+              isFreezeRow && isFreezeCol && "sticky z-[10] bg-background",
             )}
             style={(() => {
               const fmt: CellFormat = activeSheet.formats?.[`${ri},${ci}`] ?? {};
@@ -243,11 +259,17 @@ const SheetRow = React.memo(function SheetRow({
                   ? { backgroundColor: refColor!.bg, borderColor: refColor!.border }
                   : fmt.bg ? { backgroundColor: fmt.bg } : {}),
                 ...(isFreezeCol ? { left: 41 } : {}),
+              ...(isFreezeRow ? { top: 29 } : {}),
               };
+              const borderStyle = fmt.border === "thick"
+                ? { boxShadow: "inset 0 0 0 2.5px rgba(0,0,0,0.75)" }
+                : fmt.border === "thin"
+                  ? { boxShadow: "inset 0 0 0 1.5px rgba(0,0,0,0.45)" }
+                  : {};
               if (isAiTarget) {
-                return { ...baseStyle, outline: "2px dashed rgba(168,85,247,0.4)", outlineOffset: "-2px" };
+                return { ...baseStyle, ...borderStyle, outline: "2px dashed rgba(168,85,247,0.4)", outlineOffset: "-2px" };
               }
-              return baseStyle;
+              return { ...baseStyle, ...borderStyle };
             })()}
             onContextMenu={(e) => {
               if (hasFormula) {
@@ -322,7 +344,15 @@ const SheetRow = React.memo(function SheetRow({
                   const a = activeSheet.alignments?.[`${ri},${ci}`];
                   const [h, v] = a ? a.split(",") : ["left", "top"];
                   const fmt: CellFormat = activeSheet.formats?.[`${ri},${ci}`] ?? {};
-                  const noWrap = fmt.wrap === false;
+                  // Apply conditional formatting rules (later rules override earlier)
+                  const condRules = activeSheet.sizes?.condRules ?? [];
+                  const condFmt: Partial<CellFormat> = {};
+                  for (const rule of condRules) {
+                    if (rule.col !== null && rule.col !== ci) continue;
+                    if (matchCondRule(rule, cell)) Object.assign(condFmt, rule.format);
+                  }
+                  const ef = { ...fmt, ...condFmt };
+                  const noWrap = ef.wrap === false;
                   const manualH = ri in rowHeights;
                   return {
                     ...(manualH ? { height: rowHeights[ri], overflow: "hidden" as const } : { minHeight: DEFAULT_ROW_HEIGHT }),
@@ -333,11 +363,12 @@ const SheetRow = React.memo(function SheetRow({
                     textAlign: (h || "left") as "left" | "center" | "right",
                     justifyContent: h === "center" ? "center" : h === "right" ? "flex-end" : "flex-start",
                     alignItems: v === "middle" ? "center" : v === "bottom" ? "flex-end" : "flex-start",
-                    fontWeight: fmt.b ? 700 : undefined,
-                    fontStyle: fmt.i ? ("italic" as const) : undefined,
-                    color: fmt.tc || undefined,
-                    backgroundColor: fmt.bg || undefined,
-                    fontSize: fmt.fs ? `${fmt.fs}px` : undefined,
+                    fontWeight: ef.b ? 700 : undefined,
+                    fontStyle: ef.i ? ("italic" as const) : undefined,
+                    textDecoration: ef.s ? "line-through" : undefined,
+                    color: ef.tc || undefined,
+                    backgroundColor: ef.bg || undefined,
+                    fontSize: ef.fs ? `${ef.fs}px` : undefined,
                   };
                 })()}
               >
@@ -386,7 +417,7 @@ export function SheetGrid({
   isCellSelected, handleCellMouseDown, handleCellMouseEnter, handleMouseUp,
   handleGridScroll, startEditing, commitEdit, cancelEdit,
   pasteAtSelection, copySelection, cutSelection, clearSelectedCells,
-  toggleBold, toggleItalic, undoSheet, redoSheet, aiFilling,
+  toggleBold, toggleItalic, toggleStrikethrough, undoSheet, redoSheet, aiFilling,
   canUndo: _canUndo, canRedo: _canRedo,
   selAnchor, setSelAnchor, selMoving, setSelection, makeRect,
   aiFillCol, aiFilledRows, aiFillErrors,
@@ -398,7 +429,7 @@ export function SheetGrid({
   addingColumn, setAddingColumn, newColName, setNewColName, setNewColType,
   colNameRef, submitNewColumn, setResizing, setColWidths, cellInputRef, gridRef,
   fillDown, fillRight, hiddenCols, onUnhideCol, findMatches, findCurrentKey, onFindOpen, onUnhideRows,
-  pasteValuesOnly, autoFitAllCols, fillDragExecute, toggleFreezeCol,
+  pasteValuesOnly, autoFitAllCols, fillDragExecute, toggleFreezeCol, toggleFreezeRow, copyAsMarkdown,
 }: SheetGridProps) {
   // Compute formula ref highlights once per render (only when editing a formula)
   const formulaRefMap = useMemo(() => {
@@ -542,6 +573,16 @@ export function SheetGrid({
           if (isCtrl && e.key === "i") {
             e.preventDefault();
             toggleItalic();
+            return;
+          }
+          if (isCtrl && e.key === "5") {
+            e.preventDefault();
+            toggleStrikethrough();
+            return;
+          }
+          if (isCtrl && e.shiftKey && (e.key === "m" || e.key === "M") && selection) {
+            e.preventDefault();
+            copyAsMarkdown();
             return;
           }
 
@@ -731,12 +772,20 @@ export function SheetGrid({
                     key={ci}
                     className="group border border-border bg-muted px-2 py-1.5 text-left text-xs font-medium text-muted-foreground cursor-context-menu relative"
                     style={{ width: colWidths[ci] ?? DEFAULT_COL_WIDTH, minWidth: MIN_COL_WIDTH }}
-                    onClick={() => {
+                    onClick={(e) => {
                       const lastRow = activeSheet.rows.length - 1;
                       if (lastRow < 0) return;
-                      setSelAnchor({ row: 0, col: ci });
-                      selMoving.current = { row: lastRow, col: ci };
-                      setSelection({ r1: 0, c1: ci, r2: lastRow, c2: ci });
+                      if (e.shiftKey && selAnchor) {
+                        // Extend selection to this column, preserving anchor col
+                        const c1 = Math.min(selAnchor.col, ci);
+                        const c2 = Math.max(selAnchor.col, ci);
+                        selMoving.current = { row: lastRow, col: ci };
+                        setSelection({ r1: 0, c1, r2: lastRow, c2 });
+                      } else {
+                        setSelAnchor({ row: 0, col: ci });
+                        selMoving.current = { row: lastRow, col: ci };
+                        setSelection({ r1: 0, c1: ci, r2: lastRow, c2: ci });
+                      }
                       gridRef.current?.focus();
                     }}
                     onContextMenu={(e) => {
@@ -902,6 +951,15 @@ export function SheetGrid({
                   }}
                   fillPreviewCells={fillPreviewCells}
                   freezeFirstCol={!!(activeSheet.sizes?.freezeFirstCol)}
+                  freezeFirstRow={!!(activeSheet.sizes?.freezeFirstRow)}
+                  onRowNumberClick={(ri) => {
+                    const lastCol = activeSheet.columns.length - 1;
+                    if (lastCol < 0) return;
+                    setSelAnchor({ row: ri, col: 0 });
+                    selMoving.current = { row: ri, col: lastCol };
+                    setSelection({ r1: ri, c1: 0, r2: ri, c2: lastCol });
+                    gridRef.current?.focus();
+                  }}
                 />
                 </React.Fragment>
                 );
@@ -954,6 +1012,18 @@ export function SheetGrid({
         {filters.size > 0 && (
           <span>Filtered: {filteredRowIndices.length}/{activeSheet.rows.length}</span>
         )}
+        <button
+          className={cn(
+            "text-[11px] transition-colors px-1",
+            activeSheet.sizes?.freezeFirstRow
+              ? "text-primary font-medium hover:text-primary/70"
+              : "text-muted-foreground/60 hover:text-foreground"
+          )}
+          onClick={toggleFreezeRow}
+          title="Freeze / unfreeze first row"
+        >
+          ⬛ Freeze row
+        </button>
         <button
           className={cn(
             "text-[11px] transition-colors px-1",

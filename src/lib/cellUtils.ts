@@ -11,17 +11,34 @@ export interface SheetSizes {
   hiddenRows?: number[];
   hiddenCols?: number[];
   freezeFirstCol?: boolean;
+  freezeFirstRow?: boolean;
+  condRules?: ConditionalRule[];
+}
+
+export type CondOperator =
+  | ">" | "<" | ">=" | "<=" | "==" | "!="
+  | "contains" | "startsWith" | "endsWith"
+  | "isEmpty" | "isNotEmpty";
+
+export interface ConditionalRule {
+  id: string;
+  col: number | null;  // null = all columns
+  operator: CondOperator;
+  value: string;       // ignored for isEmpty / isNotEmpty
+  format: Partial<CellFormat>;
 }
 
 export interface CellFormat {
   b?: boolean;   // bold
   i?: boolean;   // italic
+  s?: boolean;   // strikethrough
   tc?: string;   // text color hex
   bg?: string;   // background color hex
   wrap?: boolean; // false = nowrap (default true = wrap)
   fs?: number;   // font size in px
   numFmt?: "pct" | "cur"; // percent (%) or currency ($)
   numDecimals?: number;   // fixed decimal places (0-9)
+  border?: "thin" | "thick"; // cell border overlay
 }
 
 export interface Sheet {
@@ -126,6 +143,28 @@ export function resolveRange(ref: string): { r1: number; c1: number; r2: number;
     };
   }
   return null;
+}
+
+/** Returns true if the cell value matches the conditional rule. */
+export function matchCondRule(rule: ConditionalRule, value: string): boolean {
+  const v = value ?? "";
+  const rv = rule.value ?? "";
+  const num = parseFloat(v);
+  const rnum = parseFloat(rv);
+  switch (rule.operator) {
+    case "isEmpty":    return v.trim() === "";
+    case "isNotEmpty": return v.trim() !== "";
+    case "contains":   return v.toLowerCase().includes(rv.toLowerCase());
+    case "startsWith": return v.toLowerCase().startsWith(rv.toLowerCase());
+    case "endsWith":   return v.toLowerCase().endsWith(rv.toLowerCase());
+    case "==": return !isNaN(num) && !isNaN(rnum) ? num === rnum : v === rv;
+    case "!=": return !isNaN(num) && !isNaN(rnum) ? num !== rnum : v !== rv;
+    case ">":  return !isNaN(num) && !isNaN(rnum) && num > rnum;
+    case "<":  return !isNaN(num) && !isNaN(rnum) && num < rnum;
+    case ">=": return !isNaN(num) && !isNaN(rnum) && num >= rnum;
+    case "<=": return !isNaN(num) && !isNaN(rnum) && num <= rnum;
+    default:   return false;
+  }
 }
 
 /**

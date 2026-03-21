@@ -28,8 +28,11 @@ import { SheetToolbar } from "../components/sheets/SheetToolbar";
 import { FormulaBar } from "../components/sheets/FormulaBar";
 import { SheetGrid } from "../components/sheets/SheetGrid";
 import { FindBar } from "../components/sheets/FindBar";
+import { MultiSortDialog, type SortLevel } from "../components/sheets/MultiSortDialog";
+import { CondFormatDialog } from "../components/sheets/CondFormatDialog";
 import type { TuningParams } from "../components/AIControlPanel";
 import { SheetSidebar } from "../components/sheets/SheetSidebar";
+import type { ConditionalRule } from "../lib/cellUtils";
 
 const API_BASE = "http://127.0.0.1:8000";
 
@@ -476,6 +479,14 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
       .catch(() => {});
   }, [activeSheet]);
 
+  const toggleFreezeRow = useCallback(() => {
+    if (!activeSheet) return;
+    const sizes = { ...activeSheet.sizes, freezeFirstRow: !activeSheet.sizes?.freezeFirstRow };
+    axios.put(`${API_BASE}/sheets/${activeSheet.id}/sizes`, sizes)
+      .then((res) => updateSheet(res.data))
+      .catch(() => {});
+  }, [activeSheet]);
+
   type SelectionRect2 = { r1: number; c1: number; r2: number; c2: number };
 
   const fillDragExecute = useCallback(async (origin: SelectionRect2, fillRect: SelectionRect2) => {
@@ -684,6 +695,27 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
     hidden.delete(ci);
     await saveSizes(activeSheet.sizes?.hiddenRows ?? [], [...hidden].sort((a, b) => a - b));
   }, [activeSheet, saveSizes]);
+
+  // Multi-level sort dialog
+  const [multiSortOpen, setMultiSortOpen] = useState(false);
+  const applyMultiSort = useCallback(async (levels: SortLevel[]) => {
+    if (!activeSheet) return;
+    try {
+      const res = await axios.put(`${API_BASE}/sheets/${activeSheet.id}/columns/sort-multi`, { levels });
+      updateSheet(res.data);
+    } catch { toast("Sort failed.", "error"); }
+  }, [activeSheet]);
+
+  // Conditional formatting dialog
+  const [condFormatOpen, setCondFormatOpen] = useState(false);
+  const saveCondRules = useCallback(async (rules: ConditionalRule[]) => {
+    if (!activeSheet) return;
+    const sizes = { ...activeSheet.sizes, condRules: rules };
+    try {
+      const res = await axios.put(`${API_BASE}/sheets/${activeSheet.id}/sizes`, sizes);
+      updateSheet(res.data);
+    } catch { toast("Failed to save rules.", "error"); }
+  }, [activeSheet]);
 
   // Find (Ctrl+F)
   const [findOpen, setFindOpen] = useState(false);
@@ -1244,10 +1276,13 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
         // Clean up falsy/default values
         if (!existing.b) delete existing.b;
         if (!existing.i) delete existing.i;
+        if (!existing.s) delete existing.s;
         if (!existing.tc) delete existing.tc;
         if (!existing.bg) delete existing.bg;
         if (existing.wrap !== false) delete existing.wrap;
         if (!existing.fs) delete existing.fs;
+        if (!existing.numFmt) delete existing.numFmt;
+        if (!existing.border) delete existing.border;
         if (Object.keys(existing).length === 0) delete newFormats[key];
         else newFormats[key] = existing;
       }
@@ -1268,10 +1303,37 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
     applyFormat({ i: !cur.i });
   }
 
+  function toggleStrikethrough() {
+    const cur = getSelectionFormat();
+    applyFormat({ s: !cur.s });
+  }
+
   function toggleWrap() {
     const cur = getSelectionFormat();
     // wrap defaults to true (normal), toggling sets to false (nowrap)
     applyFormat({ wrap: cur.wrap === false ? undefined : false });
+  }
+
+  function copyAsMarkdown() {
+    if (!activeSheet || !selection) return;
+    const { r1, c1, r2, c2 } = selection;
+    const hidden = new Set(activeSheet.sizes?.hiddenCols ?? []);
+    const visibleCols: number[] = [];
+    for (let ci = c1; ci <= c2; ci++) {
+      if (!hidden.has(ci)) visibleCols.push(ci);
+    }
+    if (visibleCols.length === 0) return;
+    const headers = visibleCols.map((ci) => (activeSheet.columns[ci]?.name ?? "").replace(/\|/g, "\\|"));
+    const separator = headers.map(() => "---");
+    const rows = activeSheet.rows.slice(r1, r2 + 1).map((row) =>
+      visibleCols.map((ci) => (row[ci] ?? "").replace(/\|/g, "\\|"))
+    );
+    const md = [
+      "| " + headers.join(" | ") + " |",
+      "| " + separator.join(" | ") + " |",
+      ...rows.map((row) => "| " + row.join(" | ") + " |"),
+    ].join("\n");
+    navigator.clipboard.writeText(md).catch(() => {});
   }
 
   // Color picker state
@@ -1466,6 +1528,7 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
               getSelectionAlignment={getSelectionAlignment}
               toggleBold={toggleBold}
               toggleItalic={toggleItalic}
+              toggleStrikethrough={toggleStrikethrough}
               applyFormat={applyFormat}
               applyAlignment={applyAlignment}
               toggleWrap={toggleWrap}
@@ -1497,6 +1560,10 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
               aiFillProgress={aiFillProgress}
               setAiFillProgress={setAiFillProgress}
               autoFitAllCols={autoFitAllCols}
+              onOpenMultiSort={() => setMultiSortOpen(true)}
+              onOpenCondFormat={() => setCondFormatOpen(true)}
+              hasCondRules={(activeSheet.sizes?.condRules?.length ?? 0) > 0}
+              copyAsMarkdown={copyAsMarkdown}
             />
 
             <FormulaBar
@@ -1545,6 +1612,7 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
               clearSelectedCells={clearSelectedCells}
               toggleBold={toggleBold}
               toggleItalic={toggleItalic}
+              toggleStrikethrough={toggleStrikethrough}
               undoSheet={undoSheet}
               redoSheet={redoSheet}
               aiFilling={aiFilling}
@@ -1594,6 +1662,8 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
               autoFitAllCols={autoFitAllCols}
               fillDragExecute={fillDragExecute}
               toggleFreezeCol={toggleFreezeCol}
+              toggleFreezeRow={toggleFreezeRow}
+              copyAsMarkdown={copyAsMarkdown}
             />
             {findOpen && (
               <FindBar
@@ -1609,6 +1679,21 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
                 onReplace={replaceOne}
                 onReplaceAll={replaceAll}
                 replaceCount={replaceCount}
+              />
+            )}
+            {multiSortOpen && (
+              <MultiSortDialog
+                sheet={activeSheet}
+                onApply={applyMultiSort}
+                onClose={() => setMultiSortOpen(false)}
+              />
+            )}
+            {condFormatOpen && (
+              <CondFormatDialog
+                sheet={activeSheet}
+                rules={activeSheet.sizes?.condRules ?? []}
+                onSave={saveCondRules}
+                onClose={() => setCondFormatOpen(false)}
               />
             )}
           </>

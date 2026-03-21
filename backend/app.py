@@ -1361,12 +1361,9 @@ async def update_sheet_alignments(sheet_id: str, body: dict):
 
 @app.put("/sheets/{sheet_id}/sizes")
 async def update_sheet_sizes(sheet_id: str, body: dict):
-    sizes = {
-        "colWidths": body.get("colWidths", {}),
-        "rowHeights": body.get("rowHeights", {}),
-        "hiddenRows": body.get("hiddenRows", []),
-        "hiddenCols": body.get("hiddenCols", []),
-    }
+    # Pass through ALL fields (colWidths, rowHeights, hiddenRows, hiddenCols,
+    # freezeFirstCol, condRules, and any future fields)
+    sizes = dict(body)
     sheet = sheet_repo.update_sizes(sheet_id, sizes)
     if not sheet:
         raise HTTPException(status_code=404, detail="Sheet not found")
@@ -1595,6 +1592,16 @@ async def sort_sheet_column(sheet_id: str, req: dict):
     col_index = req.get("col_index", 0)
     ascending = req.get("ascending", True)
     sheet = sheet_repo.sort_by_column(sheet_id, col_index, ascending)
+    if not sheet:
+        raise HTTPException(status_code=404, detail="Sheet not found or invalid column")
+    return sheet
+
+@app.put("/sheets/{sheet_id}/columns/sort-multi", response_model=Sheet)
+async def sort_sheet_columns_multi(sheet_id: str, req: dict):
+    levels = req.get("levels", [])  # [{col_index, ascending}, ...]
+    if not levels:
+        raise HTTPException(status_code=400, detail="levels required")
+    sheet = sheet_repo.sort_by_columns(sheet_id, levels)
     if not sheet:
         raise HTTPException(status_code=404, detail="Sheet not found or invalid column")
     return sheet

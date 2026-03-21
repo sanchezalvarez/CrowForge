@@ -635,6 +635,79 @@ class SheetRepository:
                        formats=new_formats, alignments=new_alignments)
             return self.get_by_id(sheet_id)
 
+    def sort_by_columns(self, sheet_id: str, levels: list) -> Optional[Sheet]:
+        """Multi-level sort. levels = [{"col_index": int, "ascending": bool}, ...]"""
+        with self.db.get_connection() as conn:
+            sheet = self.get_by_id(sheet_id)
+            if not sheet:
+                return None
+            valid_levels = [l for l in levels if 0 <= l.get("col_index", -1) < len(sheet.columns)]
+            if not valid_levels:
+                return sheet
+
+            def sort_key(item):
+                _, row = item
+                keys = []
+                for lv in valid_levels:
+                    ci = lv["col_index"]
+                    col_type = sheet.columns[ci].type
+                    val = row[ci] if ci < len(row) else ""
+                    if col_type == "number":
+                        try:
+                            keys.append(float(val))
+                        except (ValueError, TypeError):
+                            keys.append(float("inf"))
+                    else:
+                        keys.append((val or "").lower())
+                return keys
+
+            def _has_any_val(item):
+                _, row = item
+                return any(
+                    bool(row[lv["col_index"]] if lv["col_index"] < len(row) else "")
+                    for lv in valid_levels
+                )
+
+            indexed = list(enumerate(sheet.rows))
+            data_rows = [it for it in indexed if _has_any_val(it)]
+            empty_rows = [it for it in indexed if not _has_any_val(it)]
+
+            # Multi-key sort: sort from last level to first (stable sort)
+            for lv in reversed(valid_levels):
+                ci = lv["col_index"]
+                asc = lv.get("ascending", True)
+                col_type = sheet.columns[ci].type
+
+                def _key(item, _ci=ci, _ct=col_type):
+                    _, row = item
+                    val = row[_ci] if _ci < len(row) else ""
+                    if _ct == "number":
+                        try:
+                            return float(val)
+                        except (ValueError, TypeError):
+                            return float("inf")
+                    return (val or "").lower()
+
+                data_rows.sort(key=_key, reverse=not asc)
+
+            indexed = data_rows + empty_rows
+            old_to_new = {old_i: new_i for new_i, (old_i, _) in enumerate(indexed)}
+            sheet.rows = [row for _, row in indexed]
+
+            def _remap(d: dict) -> dict:
+                new = {}
+                for key, val in d.items():
+                    r, c = map(int, key.split(','))
+                    if r in old_to_new:
+                        new[f"{old_to_new[r]},{c}"] = val
+                return new
+
+            self._save(conn, sheet_id, sheet.columns, sheet.rows,
+                       _remap(sheet.formulas),
+                       formats=_remap(sheet.formats),
+                       alignments=_remap(sheet.alignments))
+            return self.get_by_id(sheet_id)
+
     def rename_column(self, sheet_id: str, col_index: int, name: str) -> Optional[Sheet]:
         with self.db.get_connection() as conn:
             sheet = self.get_by_id(sheet_id)

@@ -1,8 +1,9 @@
 import {
-  Plus, Undo2, Redo2, Bold, Italic, Type, Paintbrush, WrapText,
+  Plus, Undo2, Redo2, Bold, Italic, Strikethrough, Type, Paintbrush, WrapText,
   AlignLeft, AlignCenter, AlignRight, AlignVerticalJustifyStart,
   AlignVerticalJustifyCenter, AlignVerticalJustifyEnd,
-  Filter, Download, ChevronDown, Sparkles, Square, Loader2, X,
+  Filter, Download, ChevronDown, Sparkles, Square, Loader2, X, ArrowUpDown, Palette,
+  ClipboardList,
 } from "lucide-react";
 import { Button } from "../ui/button";
 import { idxToCol, ROW_AI_LIMIT, type CellFormat, type Sheet } from "../../lib/cellUtils";
@@ -27,6 +28,7 @@ export interface SheetToolbarProps {
   getSelectionAlignment: () => { h: string; v: string };
   toggleBold: () => void;
   toggleItalic: () => void;
+  toggleStrikethrough: () => void;
   applyFormat: (patch: Partial<CellFormat>) => void;
   applyAlignment: (axis: "h" | "v", value: string) => void;
   toggleWrap: () => void;
@@ -66,6 +68,10 @@ export interface SheetToolbarProps {
   aiFillProgress: string | null;
   setAiFillProgress: (v: string | null) => void;
   autoFitAllCols: () => void;
+  onOpenMultiSort: () => void;
+  onOpenCondFormat: () => void;
+  hasCondRules: boolean;
+  copyAsMarkdown: () => void;
 }
 
 export function SheetToolbar({
@@ -73,7 +79,7 @@ export function SheetToolbar({
   undoSheet, redoSheet, canUndo, canRedo, aiFilling,
   addRow,
   selection, getSelectionFormat, getSelectionAlignment,
-  toggleBold, toggleItalic, applyFormat, applyAlignment, toggleWrap,
+  toggleBold, toggleItalic, toggleStrikethrough, applyFormat, applyAlignment, toggleWrap,
   colorPickerOpen, setColorPickerOpen,
   filters, setFilters,
   exportOpen, setExportOpen, handleExport,
@@ -82,7 +88,7 @@ export function SheetToolbar({
   setGenRowsOpen, setGenRowsError, setGenRowsProgress, activeEngine,
   aiFillCol, setAiFillCol, aiFillInstructionRef, aiFillInstruction,
   setAiFillInstruction, startAiFill, aiFillProgress, setAiFillProgress,
-  autoFitAllCols,
+  autoFitAllCols, onOpenMultiSort, onOpenCondFormat, hasCondRules, copyAsMarkdown,
 }: SheetToolbarProps) {
   return (
     <>
@@ -107,6 +113,28 @@ export function SheetToolbar({
             </Button>
             <Button variant={getSelectionFormat().i ? "default" : "outline"} size="sm" className="h-7 w-7 p-0" onClick={toggleItalic} title="Italic (Ctrl+I)">
               <Italic className="h-3.5 w-3.5" />
+            </Button>
+            <Button variant={getSelectionFormat().s ? "default" : "outline"} size="sm" className="h-7 w-7 p-0" onClick={toggleStrikethrough} title="Strikethrough (Ctrl+5)">
+              <Strikethrough className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              variant={getSelectionFormat().border ? "default" : "outline"}
+              size="sm" className="h-7 w-7 p-0"
+              title={`Cell border: ${getSelectionFormat().border ?? "none"} → cycle thin→thick→none`}
+              onClick={() => {
+                const cur = getSelectionFormat().border;
+                applyFormat({ border: cur === undefined ? "thin" : cur === "thin" ? "thick" : undefined });
+              }}
+            >
+              <Square className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              variant="outline"
+              size="sm" className="h-7 w-7 p-0"
+              title="Copy selection as Markdown table (Ctrl+Shift+M)"
+              onClick={copyAsMarkdown}
+            >
+              <ClipboardList className="h-3.5 w-3.5" />
             </Button>
             <select
               className="h-7 px-1 text-xs border border-border rounded-md bg-background outline-none cursor-pointer"
@@ -205,6 +233,17 @@ export function SheetToolbar({
         )}
         <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={autoFitAllCols} title="Auto-fit all columns to their content">
           ↔
+        </Button>
+        <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={onOpenMultiSort} title="Multi-level sort">
+          <ArrowUpDown className="h-3 w-3" /> Sort
+        </Button>
+        <Button
+          variant={hasCondRules ? "default" : "outline"}
+          size="sm" className="h-7 text-xs gap-1"
+          onClick={onOpenCondFormat}
+          title="Conditional formatting"
+        >
+          <Palette className="h-3 w-3" /> Cond.
         </Button>
         {/* Export dropdown — active sheet only */}
         <div className="relative" onClick={(e) => e.stopPropagation()}>

@@ -1276,10 +1276,13 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
         // Clean up falsy/default values
         if (!existing.b) delete existing.b;
         if (!existing.i) delete existing.i;
+        if (!existing.s) delete existing.s;
         if (!existing.tc) delete existing.tc;
         if (!existing.bg) delete existing.bg;
         if (existing.wrap !== false) delete existing.wrap;
         if (!existing.fs) delete existing.fs;
+        if (!existing.numFmt) delete existing.numFmt;
+        if (!existing.border) delete existing.border;
         if (Object.keys(existing).length === 0) delete newFormats[key];
         else newFormats[key] = existing;
       }
@@ -1314,11 +1317,16 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
   function copyAsMarkdown() {
     if (!activeSheet || !selection) return;
     const { r1, c1, r2, c2 } = selection;
-    // Header row: column names for selected range
-    const headers = activeSheet.columns.slice(c1, c2 + 1).map((c) => c.name.replace(/\|/g, "\\|"));
+    const hidden = new Set(activeSheet.sizes?.hiddenCols ?? []);
+    const visibleCols: number[] = [];
+    for (let ci = c1; ci <= c2; ci++) {
+      if (!hidden.has(ci)) visibleCols.push(ci);
+    }
+    if (visibleCols.length === 0) return;
+    const headers = visibleCols.map((ci) => (activeSheet.columns[ci]?.name ?? "").replace(/\|/g, "\\|"));
     const separator = headers.map(() => "---");
     const rows = activeSheet.rows.slice(r1, r2 + 1).map((row) =>
-      row.slice(c1, c2 + 1).map((v) => (v ?? "").replace(/\|/g, "\\|"))
+      visibleCols.map((ci) => (row[ci] ?? "").replace(/\|/g, "\\|"))
     );
     const md = [
       "| " + headers.join(" | ") + " |",

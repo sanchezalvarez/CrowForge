@@ -182,8 +182,14 @@ const SheetRow = React.memo(function SheetRow({
   return (
     <tr key={ri}>
       <td
-        className="sticky left-0 z-10 border border-border bg-muted/50 px-2 py-1 text-xs text-muted-foreground text-center cursor-pointer select-none relative"
-        style={ri in rowHeights ? { height: rowHeights[ri] } : { minHeight: DEFAULT_ROW_HEIGHT }}
+        className={cn(
+          "sticky left-0 border border-border bg-muted/50 px-2 py-1 text-xs text-muted-foreground text-center cursor-pointer select-none relative",
+          freezeFirstRow && ri === 0 ? "z-[12]" : "z-10",
+        )}
+        style={{
+          ...(ri in rowHeights ? { height: rowHeights[ri] } : { minHeight: DEFAULT_ROW_HEIGHT }),
+          ...(freezeFirstRow && ri === 0 ? { top: 29 } : {}),
+        }}
         onClick={() => onRowNumberClick(ri)}
         onContextMenu={(e) => {
           e.preventDefault();
@@ -253,7 +259,7 @@ const SheetRow = React.memo(function SheetRow({
                   ? { backgroundColor: refColor!.bg, borderColor: refColor!.border }
                   : fmt.bg ? { backgroundColor: fmt.bg } : {}),
                 ...(isFreezeCol ? { left: 41 } : {}),
-              ...(isFreezeRow ? { top: 33 } : {}),
+              ...(isFreezeRow ? { top: 29 } : {}),
               };
               const borderStyle = fmt.border === "thick"
                 ? { boxShadow: "inset 0 0 0 2.5px rgba(0,0,0,0.75)" }

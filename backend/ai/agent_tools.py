@@ -3,6 +3,7 @@
 import json
 from typing import Optional
 from backend.ai.tool_registry import ToolRegistry
+from backend.ai.web_tools import search_web, get_page_content
 
 
 def _extract_text_from_content_json(content_json) -> str:
@@ -190,6 +191,14 @@ def build_tool_registry(
             return {"error": f"Document not found: {document_id}"}
         return {"ok": True, "document_id": document_id}
 
+    async def web_search_handler(query: str, max_results: int = 5):
+        results = search_web(query, max_results=max_results)
+        return results
+
+    async def read_web_page_handler(url: str):
+        content = get_page_content(url)
+        return {"url": url, "content": content}
+
     registry.register("list_sheets", list_sheets)
     registry.register("read_sheet", read_sheet)
     registry.register("write_to_sheet", write_to_sheet)
@@ -201,5 +210,7 @@ def build_tool_registry(
     registry.register("create_sheet", create_sheet)
     registry.register("create_document", create_document)
     registry.register("update_document", update_document)
+    registry.register("web_search", web_search_handler)
+    registry.register("read_web_page", read_web_page_handler)
 
     return registry

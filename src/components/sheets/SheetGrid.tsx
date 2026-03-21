@@ -103,6 +103,7 @@ export interface SheetGridProps {
   fillDragExecute: (origin: SelectionRect, fillRect: SelectionRect) => void;
   toggleFreezeCol: () => void;
   toggleFreezeRow: () => void;
+  copyAsMarkdown: () => void;
 }
 
 // ---- Number format helper ----
@@ -254,10 +255,15 @@ const SheetRow = React.memo(function SheetRow({
                 ...(isFreezeCol ? { left: 41 } : {}),
               ...(isFreezeRow ? { top: 33 } : {}),
               };
+              const borderStyle = fmt.border === "thick"
+                ? { boxShadow: "inset 0 0 0 2.5px rgba(0,0,0,0.75)" }
+                : fmt.border === "thin"
+                  ? { boxShadow: "inset 0 0 0 1.5px rgba(0,0,0,0.45)" }
+                  : {};
               if (isAiTarget) {
-                return { ...baseStyle, outline: "2px dashed rgba(168,85,247,0.4)", outlineOffset: "-2px" };
+                return { ...baseStyle, ...borderStyle, outline: "2px dashed rgba(168,85,247,0.4)", outlineOffset: "-2px" };
               }
-              return baseStyle;
+              return { ...baseStyle, ...borderStyle };
             })()}
             onContextMenu={(e) => {
               if (hasFormula) {
@@ -417,7 +423,7 @@ export function SheetGrid({
   addingColumn, setAddingColumn, newColName, setNewColName, setNewColType,
   colNameRef, submitNewColumn, setResizing, setColWidths, cellInputRef, gridRef,
   fillDown, fillRight, hiddenCols, onUnhideCol, findMatches, findCurrentKey, onFindOpen, onUnhideRows,
-  pasteValuesOnly, autoFitAllCols, fillDragExecute, toggleFreezeCol, toggleFreezeRow,
+  pasteValuesOnly, autoFitAllCols, fillDragExecute, toggleFreezeCol, toggleFreezeRow, copyAsMarkdown,
 }: SheetGridProps) {
   // Compute formula ref highlights once per render (only when editing a formula)
   const formulaRefMap = useMemo(() => {
@@ -566,6 +572,11 @@ export function SheetGrid({
           if (isCtrl && e.key === "5") {
             e.preventDefault();
             toggleStrikethrough();
+            return;
+          }
+          if (isCtrl && e.shiftKey && (e.key === "m" || e.key === "M") && selection) {
+            e.preventDefault();
+            copyAsMarkdown();
             return;
           }
 
@@ -755,12 +766,20 @@ export function SheetGrid({
                     key={ci}
                     className="group border border-border bg-muted px-2 py-1.5 text-left text-xs font-medium text-muted-foreground cursor-context-menu relative"
                     style={{ width: colWidths[ci] ?? DEFAULT_COL_WIDTH, minWidth: MIN_COL_WIDTH }}
-                    onClick={() => {
+                    onClick={(e) => {
                       const lastRow = activeSheet.rows.length - 1;
                       if (lastRow < 0) return;
-                      setSelAnchor({ row: 0, col: ci });
-                      selMoving.current = { row: lastRow, col: ci };
-                      setSelection({ r1: 0, c1: ci, r2: lastRow, c2: ci });
+                      if (e.shiftKey && selAnchor) {
+                        // Extend selection to this column, preserving anchor col
+                        const c1 = Math.min(selAnchor.col, ci);
+                        const c2 = Math.max(selAnchor.col, ci);
+                        selMoving.current = { row: lastRow, col: ci };
+                        setSelection({ r1: 0, c1, r2: lastRow, c2 });
+                      } else {
+                        setSelAnchor({ row: 0, col: ci });
+                        selMoving.current = { row: lastRow, col: ci };
+                        setSelection({ r1: 0, c1: ci, r2: lastRow, c2: ci });
+                      }
                       gridRef.current?.focus();
                     }}
                     onContextMenu={(e) => {

@@ -38,6 +38,7 @@ export interface CellFormat {
   fs?: number;   // font size in px
   numFmt?: "pct" | "cur"; // percent (%) or currency ($)
   numDecimals?: number;   // fixed decimal places (0-9)
+  border?: "thin" | "thick"; // cell border overlay
 }
 
 export interface Sheet {

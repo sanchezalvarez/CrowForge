@@ -1311,6 +1311,23 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
     applyFormat({ wrap: cur.wrap === false ? undefined : false });
   }
 
+  function copyAsMarkdown() {
+    if (!activeSheet || !selection) return;
+    const { r1, c1, r2, c2 } = selection;
+    // Header row: column names for selected range
+    const headers = activeSheet.columns.slice(c1, c2 + 1).map((c) => c.name.replace(/\|/g, "\\|"));
+    const separator = headers.map(() => "---");
+    const rows = activeSheet.rows.slice(r1, r2 + 1).map((row) =>
+      row.slice(c1, c2 + 1).map((v) => (v ?? "").replace(/\|/g, "\\|"))
+    );
+    const md = [
+      "| " + headers.join(" | ") + " |",
+      "| " + separator.join(" | ") + " |",
+      ...rows.map((row) => "| " + row.join(" | ") + " |"),
+    ].join("\n");
+    navigator.clipboard.writeText(md).catch(() => {});
+  }
+
   // Color picker state
   const [colorPickerOpen, setColorPickerOpen] = useState<'tc' | 'bg' | null>(null);
 
@@ -1538,6 +1555,7 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
               onOpenMultiSort={() => setMultiSortOpen(true)}
               onOpenCondFormat={() => setCondFormatOpen(true)}
               hasCondRules={(activeSheet.sizes?.condRules?.length ?? 0) > 0}
+              copyAsMarkdown={copyAsMarkdown}
             />
 
             <FormulaBar
@@ -1637,6 +1655,7 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
               fillDragExecute={fillDragExecute}
               toggleFreezeCol={toggleFreezeCol}
               toggleFreezeRow={toggleFreezeRow}
+              copyAsMarkdown={copyAsMarkdown}
             />
             {findOpen && (
               <FindBar

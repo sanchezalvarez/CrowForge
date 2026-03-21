@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState, useRef, useEffect } from "react";
 import { flushSync } from "react-dom";
 import axios from "axios";
 import { Table2, Plus, Filter, Trash2, AlertCircle } from "lucide-react";
@@ -9,6 +9,7 @@ import {
   DEFAULT_COL_WIDTH, DEFAULT_ROW_HEIGHT, MIN_COL_WIDTH,
   ROW_RENDER_LIMIT, REF_COLORS,
   parseFormulaRefGroups, resolveRange, resolveCellRef, idxToCol,
+  ctrlArrowMove,
 } from "../../lib/cellUtils";
 
 const API_BASE = "http://127.0.0.1:8000";
@@ -96,6 +97,22 @@ export interface SheetGridProps {
   findCurrentKey: string | null;
   onFindOpen: () => void;
   onUnhideRows: (rows: number[]) => void;
+  pasteValuesOnly: () => void;
+  autoFitAllCols: () => void;
+  fillDragExecute: (origin: SelectionRect, fillRect: SelectionRect) => void;
+  toggleFreezeCol: () => void;
+}
+
+// ---- Number format helper ----
+function applyNumFmt(cell: string, fmt: import("../../lib/cellUtils").CellFormat): string {
+  if (!fmt.numFmt && fmt.numDecimals === undefined) return cell;
+  const num = parseFloat(cell);
+  if (isNaN(num)) return cell;
+  const decimals = fmt.numDecimals ?? (fmt.numFmt === "cur" ? 2 : 0);
+  const fixed = num.toFixed(Math.max(0, Math.min(9, decimals)));
+  if (fmt.numFmt === "pct") return fixed + "%";
+  if (fmt.numFmt === "cur") return "$ " + fixed;
+  return fixed;
 }
 
 // ---- Memoized row component ----
@@ -134,6 +151,10 @@ interface SheetRowProps {
   hiddenCols: Set<number>;
   findMatches: Set<string>;
   findCurrentKey: string | null;
+  fillHandleCell: { row: number; col: number } | null;
+  onFillHandleMouseDown: (e: React.MouseEvent) => void;
+  fillPreviewCells: Set<string>;
+  freezeFirstCol: boolean;
 }
 
 const SheetRow = React.memo(function SheetRow({
@@ -150,6 +171,7 @@ const SheetRow = React.memo(function SheetRow({
   formulaRefMap, aiTargetRect,
   cellInputRef,
   hiddenCols, findMatches, findCurrentKey,
+  fillHandleCell, onFillHandleMouseDown, fillPreviewCells, freezeFirstCol,
 }: SheetRowProps) {
   return (
     <tr key={ri}>
@@ -188,9 +210,15 @@ const SheetRow = React.memo(function SheetRow({
         const isFindMatch = findMatches.has(`${ri},${ci}`);
         const isFindCurrent = findCurrentKey === `${ri},${ci}`;
 
+        const isFillHandle = fillHandleCell?.row === ri && fillHandleCell?.col === ci;
+        const isFillPreview = fillPreviewCells.has(`${ri},${ci}`);
+        const isFreezeCol = freezeFirstCol && ci === 0;
+
         return (
           <td
             key={ci}
+            data-ri={ri}
+            data-ci={ci}
             className={cn(
               "border p-0 relative",
               "overflow-hidden",
@@ -203,15 +231,18 @@ const SheetRow = React.memo(function SheetRow({
               isAiTarget && "bg-purple-500/10",
               isFindMatch && !isFindCurrent && "bg-yellow-400/20",
               isFindCurrent && "bg-yellow-400/50 ring-1 ring-yellow-500/60 ring-inset",
+              isFillPreview && "bg-primary/20 ring-1 ring-primary/50 ring-inset",
+              isFreezeCol && "sticky z-[8] bg-background",
             )}
             style={(() => {
               const fmt: CellFormat = activeSheet.formats?.[`${ri},${ci}`] ?? {};
-              const baseStyle = {
+              const baseStyle: React.CSSProperties = {
                 width: colWidths[ci] ?? DEFAULT_COL_WIDTH,
                 minWidth: MIN_COL_WIDTH,
                 ...(isFormulaRef && !isEditing
                   ? { backgroundColor: refColor!.bg, borderColor: refColor!.border }
                   : fmt.bg ? { backgroundColor: fmt.bg } : {}),
+                ...(isFreezeCol ? { left: 41 } : {}),
               };
               if (isAiTarget) {
                 return { ...baseStyle, outline: "2px dashed rgba(168,85,247,0.4)", outlineOffset: "-2px" };
@@ -322,9 +353,15 @@ const SheetRow = React.memo(function SheetRow({
                     <AlertCircle className="h-2.5 w-2.5 shrink-0" />{cell}
                   </span>
                 ) : (
-                  <span>{cell || <span className="text-muted-foreground/30">&nbsp;</span>}</span>
+                  <span>{applyNumFmt(cell, activeSheet.formats?.[`${ri},${ci}`] ?? {}) || <span className="text-muted-foreground/30">&nbsp;</span>}</span>
                 )}
               </div>
+            )}
+            {isFillHandle && (
+              <div
+                className="absolute bottom-0 right-0 w-[7px] h-[7px] bg-primary border border-background z-20 cursor-crosshair translate-x-[3px] translate-y-[3px]"
+                onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); onFillHandleMouseDown(e); }}
+              />
             )}
           </td>
         );
@@ -361,6 +398,7 @@ export function SheetGrid({
   addingColumn, setAddingColumn, newColName, setNewColName, setNewColType,
   colNameRef, submitNewColumn, setResizing, setColWidths, cellInputRef, gridRef,
   fillDown, fillRight, hiddenCols, onUnhideCol, findMatches, findCurrentKey, onFindOpen, onUnhideRows,
+  pasteValuesOnly, autoFitAllCols, fillDragExecute, toggleFreezeCol,
 }: SheetGridProps) {
   // Compute formula ref highlights once per render (only when editing a formula)
   const formulaRefMap = useMemo(() => {
@@ -396,10 +434,69 @@ export function SheetGrid({
     }
   }, [aiOpOpen, aiOpSourceStr, aiOpTargetStr, aiOpMode]);
 
+  // Fill handle drag state
+  const [fillDragOrigin, setFillDragOrigin] = useState<SelectionRect | null>(null);
+  const [fillDragTarget, setFillDragTarget] = useState<{ row: number; col: number } | null>(null);
+  const fillDragActiveRef = useRef(false);
+
+  const fillPreviewRect = useMemo((): SelectionRect | null => {
+    if (!fillDragOrigin || !fillDragTarget) return null;
+    const { r1, c1, r2, c2 } = fillDragOrigin;
+    const { row, col } = fillDragTarget;
+    const dRow = row > r2 ? row - r2 : row < r1 ? r1 - row : 0;
+    const dCol = col > c2 ? col - c2 : col < c1 ? c1 - col : 0;
+    if (dRow === 0 && dCol === 0) return null;
+    if (dRow >= dCol) {
+      if (row > r2) return { r1: r2 + 1, c1, r2: row, c2 };
+      return { r1: row, c1, r2: r1 - 1, c2 };
+    } else {
+      if (col > c2) return { r1, c1: c2 + 1, r2, c2: col };
+      return { r1, c1: col, r2, c2: c1 - 1 };
+    }
+  }, [fillDragOrigin, fillDragTarget]);
+
+  const fillPreviewCells = useMemo(() => {
+    const s = new Set<string>();
+    if (!fillPreviewRect) return s;
+    for (let r = fillPreviewRect.r1; r <= fillPreviewRect.r2; r++)
+      for (let c = fillPreviewRect.c1; c <= fillPreviewRect.c2; c++)
+        s.add(`${r},${c}`);
+    return s;
+  }, [fillPreviewRect]);
+
+  // Global mouseup for fill drag — fires regardless of where mouse is released
+  useEffect(() => {
+    const onUp = () => {
+      if (!fillDragActiveRef.current) return;
+      fillDragActiveRef.current = false;
+      if (fillDragOrigin && fillPreviewRect) {
+        fillDragExecute(fillDragOrigin, fillPreviewRect);
+      }
+      setFillDragOrigin(null);
+      setFillDragTarget(null);
+    };
+    document.addEventListener("mouseup", onUp);
+    return () => document.removeEventListener("mouseup", onUp);
+  }, [fillDragOrigin, fillPreviewRect, fillDragExecute]);
+
   if (!activeSheet) return null;
 
   const maxRow = (activeSheet.rows.length ?? 1) - 1;
   const maxCol = (activeSheet.columns.length ?? 1) - 1;
+
+  const selectionAggregates = useMemo(() => {
+    if (!selection) return null;
+    const nums: number[] = [];
+    for (let r = selection.r1; r <= selection.r2; r++) {
+      for (let c = selection.c1; c <= selection.c2; c++) {
+        const v = parseFloat(activeSheet.rows[r]?.[c] ?? "");
+        if (!isNaN(v)) nums.push(v);
+      }
+    }
+    if (nums.length < 2) return null;
+    const sum = nums.reduce((a, b) => a + b, 0);
+    return { sum, avg: sum / nums.length, count: nums.length };
+  }, [selection, activeSheet.rows]);
 
   return (
     <>
@@ -409,6 +506,17 @@ export function SheetGrid({
         className="flex-1 overflow-auto"
         tabIndex={-1}
         onScroll={handleGridScroll}
+        onMouseMove={(e) => {
+          // During fill drag, use the element under the pointer to track target cell
+          if (!fillDragActiveRef.current) return;
+          const el = document.elementFromPoint(e.clientX, e.clientY);
+          const td = el?.closest("td[data-ri]") as HTMLTableCellElement | null;
+          if (td) {
+            const ri = parseInt(td.dataset.ri ?? "", 10);
+            const ci = parseInt(td.dataset.ci ?? "", 10);
+            if (!isNaN(ri) && !isNaN(ci)) setFillDragTarget({ row: ri, col: ci });
+          }
+        }}
         onPaste={(e) => {
           if (editingCell) return;
           e.preventDefault();
@@ -448,12 +556,18 @@ export function SheetGrid({
             return;
           }
 
-          // Ctrl+A: Select All
+          // Ctrl+A: Select All (second press deselects)
           if (isCtrl && e.key === "a" && maxRow >= 0 && maxCol >= 0) {
             e.preventDefault();
-            setSelAnchor({ row: 0, col: 0 });
-            selMoving.current = { row: maxRow, col: maxCol };
-            setSelection({ r1: 0, c1: 0, r2: maxRow, c2: maxCol });
+            const isAllSelected = selection?.r1 === 0 && selection?.c1 === 0 && selection?.r2 === maxRow && selection?.c2 === maxCol;
+            if (isAllSelected) {
+              setSelection(null);
+              setSelAnchor(null);
+            } else {
+              setSelAnchor({ row: 0, col: 0 });
+              selMoving.current = { row: maxRow, col: maxCol };
+              setSelection({ r1: 0, c1: 0, r2: maxRow, c2: maxCol });
+            }
             return;
           }
 
@@ -484,10 +598,10 @@ export function SheetGrid({
             let nr = anchor.row;
             let nc = anchor.col;
 
-            if (e.key === "ArrowUp") nr = isCtrl ? 0 : Math.max(0, nr - 1);
-            else if (e.key === "ArrowDown") nr = isCtrl ? maxRow : Math.min(maxRow, nr + 1);
-            else if (e.key === "ArrowLeft") nc = isCtrl ? 0 : Math.max(0, nc - 1);
-            else if (e.key === "ArrowRight") nc = isCtrl ? maxCol : Math.min(maxCol, nc + 1);
+            if (e.key === "ArrowUp") nr = isCtrl ? ctrlArrowMove(activeSheet.rows.map(r => r[nc]), nr, maxRow, -1) : Math.max(0, nr - 1);
+            else if (e.key === "ArrowDown") nr = isCtrl ? ctrlArrowMove(activeSheet.rows.map(r => r[nc]), nr, maxRow, 1) : Math.min(maxRow, nr + 1);
+            else if (e.key === "ArrowLeft") nc = isCtrl ? ctrlArrowMove(activeSheet.rows[nr], nc, maxCol, -1) : Math.max(0, nc - 1);
+            else if (e.key === "ArrowRight") nc = isCtrl ? ctrlArrowMove(activeSheet.rows[nr], nc, maxCol, 1) : Math.min(maxCol, nc + 1);
             else if (e.key === "Enter") nr = Math.min(maxRow, nr + 1);
             else if (e.key === "Tab") {
               if (e.shiftKey) { nc--; if (nc < 0) { nc = maxCol; nr = Math.max(0, nr - 1); } }
@@ -496,10 +610,10 @@ export function SheetGrid({
 
             if (e.shiftKey && isArrow) {
               const mov = selMoving.current ?? { ...anchor };
-              if (e.key === "ArrowUp") mov.row = isCtrl ? 0 : Math.max(0, mov.row - 1);
-              else if (e.key === "ArrowDown") mov.row = isCtrl ? maxRow : Math.min(maxRow, mov.row + 1);
-              else if (e.key === "ArrowLeft") mov.col = isCtrl ? 0 : Math.max(0, mov.col - 1);
-              else if (e.key === "ArrowRight") mov.col = isCtrl ? maxCol : Math.min(maxCol, mov.col + 1);
+              if (e.key === "ArrowUp") mov.row = isCtrl ? ctrlArrowMove(activeSheet.rows.map(r => r[mov.col]), mov.row, maxRow, -1) : Math.max(0, mov.row - 1);
+              else if (e.key === "ArrowDown") mov.row = isCtrl ? ctrlArrowMove(activeSheet.rows.map(r => r[mov.col]), mov.row, maxRow, 1) : Math.min(maxRow, mov.row + 1);
+              else if (e.key === "ArrowLeft") mov.col = isCtrl ? ctrlArrowMove(activeSheet.rows[mov.row], mov.col, maxCol, -1) : Math.max(0, mov.col - 1);
+              else if (e.key === "ArrowRight") mov.col = isCtrl ? ctrlArrowMove(activeSheet.rows[mov.row], mov.col, maxCol, 1) : Math.min(maxCol, mov.col + 1);
               selMoving.current = { ...mov };
               setSelection(makeRect(anchor, mov));
             } else {
@@ -546,6 +660,11 @@ export function SheetGrid({
           if (isCtrl && e.key === "f") {
             e.preventDefault();
             onFindOpen();
+            return;
+          }
+          if (isCtrl && e.shiftKey && e.key === "V") {
+            e.preventDefault();
+            pasteValuesOnly();
             return;
           }
           // Start editing on printable character
@@ -773,6 +892,16 @@ export function SheetGrid({
                   hiddenCols={hiddenCols}
                   findMatches={findMatches}
                   findCurrentKey={findCurrentKey}
+                  fillHandleCell={selection && selection.r1 === selection.r2 ? { row: selection.r2, col: selection.c2 } : selection ? { row: selection.r2, col: selection.c2 } : null}
+                  onFillHandleMouseDown={(e) => {
+                    e.preventDefault();
+                    if (!selection) return;
+                    fillDragActiveRef.current = true;
+                    setFillDragOrigin(selection);
+                    setFillDragTarget({ row: selection.r2, col: selection.c2 });
+                  }}
+                  fillPreviewCells={fillPreviewCells}
+                  freezeFirstCol={!!(activeSheet.sizes?.freezeFirstCol)}
                 />
                 </React.Fragment>
                 );
@@ -813,9 +942,37 @@ export function SheetGrid({
             Cell {idxToCol(selection.c1)}{selection.r1 + 1}
           </span>
         )}
-        {filters.size > 0 && (
-          <span className="ml-auto">Filtered: {filteredRowIndices.length}/{activeSheet.rows.length}</span>
+        {selectionAggregates && (
+          <>
+            <span className="text-muted-foreground/50">|</span>
+            <span>SUM: <span className="text-foreground">{selectionAggregates.sum.toLocaleString(undefined, { maximumFractionDigits: 6 })}</span></span>
+            <span>AVG: <span className="text-foreground">{selectionAggregates.avg.toLocaleString(undefined, { maximumFractionDigits: 4 })}</span></span>
+            <span>COUNT: <span className="text-foreground">{selectionAggregates.count}</span></span>
+          </>
         )}
+        <div className="flex-1" />
+        {filters.size > 0 && (
+          <span>Filtered: {filteredRowIndices.length}/{activeSheet.rows.length}</span>
+        )}
+        <button
+          className={cn(
+            "text-[11px] transition-colors px-1",
+            activeSheet.sizes?.freezeFirstCol
+              ? "text-primary font-medium hover:text-primary/70"
+              : "text-muted-foreground/60 hover:text-foreground"
+          )}
+          onClick={toggleFreezeCol}
+          title="Freeze / unfreeze first column"
+        >
+          ⬛ Freeze col
+        </button>
+        <button
+          className="text-[11px] text-muted-foreground/60 hover:text-foreground transition-colors px-1"
+          onClick={autoFitAllCols}
+          title="Auto-fit all columns"
+        >
+          ↔ Auto-fit
+        </button>
       </div>
     </>
   );

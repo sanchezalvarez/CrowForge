@@ -10,269 +10,75 @@ Built with **Tauri v2** · **React 19 / TypeScript** · **Python FastAPI** · **
 
 ---
 
+## 📺 Demo
+
+<video src="https://github.com/your-username/CrowForge/assets/teaser_v1.mp4" width="100%" controls autoplay loop muted>
+  Your browser does not support the video tag.
+</video>
+
+---
+
+## 📸 Screenshots
+
+### AI Agent & Documents
+<img src="public/cw_screen01.jpg" width="100%" alt="Documents — AI suggestions panel"/>
+<br/>
+<img src="public/cw_screen02.jpg" width="100%" alt="Documents — rich text editor with outline"/>
+
+### Chat & AI Sheets
+<img src="public/cw_screen03.jpg" width="100%" alt="Chat — document context mode"/>
+<br/>
+<img src="public/cw_screen04.jpg" width="100%" alt="Sheets — spreadsheet with AI fill"/>
+
+### Model Gallery & Benchmarking
+<img src="public/cw_screen05.jpg" width="100%" alt="Benchmark — multi-model comparison"/>
+<br/>
+<img src="public/cw_screen06.jpg" width="100%" alt="Settings — free GGUF model gallery"/>
+
+---
+
 ## What's new in v0.2
 
-### AI Agent
-- New **Agent** sidebar section — a ReAct-style AI agent that can autonomously read and write your sheets and documents
-- Agent tools: `list_sheets`, `read_sheet`, `write_to_sheet`, `add_sheet_row`, `add_sheet_column`, `create_sheet`, `list_documents`, `read_document`, `search_documents`, `create_document`, `update_document`
-- Write actions shown as a preview diff before being applied — approve or discard per-tool
-- Agent sessions are fully isolated: failures never affect Chat, Documents, or Sheets
-
-### Documents
-- **Image support** — insert images from disk directly into any document
-- **Document search** — search across all documents by title or content
-
-### Sheets
-- **Delete rows and columns** from the context menu
-- **Sort by column** (ascending and descending)
-- **AI row generation** — describe a set of rows and the AI generates them for you
-- Cell formats, sizes, and alignments now persist correctly across sort, insert, delete, duplicate, and move operations
-
-### Settings & Data
-- **Data deletion** — clear all chat history, all documents, all sheets, or reset everything from Settings
-- **Backend restart** — restart the Python backend in-app without relaunching the window
-
-### Stability
-- Formula engine no longer crashes on invalid cell references (returns `#REF` instead)
-- Agent modules are lazy-loaded — import errors never block app startup
-- Streaming context refactored for more reliable SSE delivery
+- **AI Agent** — ReAct-style agent that can autonomously read/write sheets and documents.
+- **Image Support** — Insert images from disk directly into your documents.
+- **Document Search** — Full-text search across your local knowledge base.
+- **AI Row Generation** — Generate entire sets of sheet rows from a simple description.
+- **Data Privacy** — One-click data deletion and backend management.
 
 ---
 
-## Screenshots
+## Core Features
 
-<table>
-  <tr>
-    <td><img src="public/cw_screen01.jpg" width="420" alt="Documents — AI suggestions panel"/></td>
-    <td><img src="public/cw_screen02.jpg" width="420" alt="Documents — rich text editor with outline"/></td>
-  </tr>
-  <tr>
-    <td><img src="public/cw_screen03.jpg" width="420" alt="Chat — document context mode"/></td>
-    <td><img src="public/cw_screen04.jpg" width="420" alt="Sheets — spreadsheet with AI fill"/></td>
-  </tr>
-  <tr>
-    <td><img src="public/cw_screen05.jpg" width="420" alt="Benchmark — multi-model comparison"/></td>
-    <td><img src="public/cw_screen06.jpg" width="420" alt="Settings — free GGUF model gallery"/></td>
-  </tr>
-</table>
+### 💬 Chat
+- Multi-session history with persistent local storage.
+- Context modes: General, Writing, Coding, Analysis, Brainstorm.
+- Document-aware Q&A: Attach your docs as context.
+- Attach files (PDF, TXT, DOCX) directly to messages.
 
----
+### 📄 Documents
+- Rich text editor with advanced AI writing tools (Rewrite, Summarise, Expand).
+- AI Suggestions: Generate paragraphs, headings, and quotes in one click.
+- Export to **PDF**, **DOCX**, or **Markdown**.
 
-## Features
+### 📊 Sheets
+- Powerful local spreadsheet with unlimited rows/columns.
+- **AI Fill & Generate**: Describe what you want, and the AI builds the data.
+- Built-in templates for CRM, Task Lists, Budgets, and more.
+- Export to **XLSX** or **CSV**.
 
-### Chat
-- Multi-session conversation history with persistent storage
-- Context modes: General, Writing, Coding, Analysis, Brainstorm
-- Connect a document as active context — the AI can answer questions about it
-- Attach files (PDF, TXT, DOCX) to any message
-- Markdown rendering for AI responses with one-click code copy
-- Customisable user avatar (emoji animals)
-
-### Documents
-- Rich text editor (TipTap) with heading styles, bold, italic, underline, strikethrough, lists, blockquotes, code blocks
-- Text alignment, highlight, text colour, and font family controls
-- Document outline panel (auto-generated from headings)
-- **AI writing tools** — select any text and choose: Rewrite, Summarise, Expand, or Fix Grammar
-- **AI Suggestions** — generate a full set of content suggestions (paragraphs, headings, quotes, lists) and insert them individually or all at once
-- Connect the document to Chat for Q&A and deeper AI assistance
-- Export to **PDF**, **DOCX**, or **Markdown**
-- Import existing documents
-
-### Sheets
-- Spreadsheet with unlimited rows and columns
-- Formula bar with SUM, AVG, COUNT, MIN, MAX, and custom `=formula` expressions
-- Column types: text, number, date, boolean
-- Cell formatting: bold, italic, font size, text align, background colour, borders
-- **AI Fill** — describe what to put in a cell range and the AI fills it
-- **AI Generate** — generate a full sheet from a prompt
-- Quick-start templates: Grid, CRM, Task List, Budget, Weekly Planner, Inventory
-- Export to **XLSX** or **CSV**
-- Import from XLSX or CSV
-
-### Benchmark
-- Send the same prompt to multiple engines and models simultaneously
-- Results table: model name, status, latency, token count, and output preview
-- Fastest and most verbose model highlighted automatically
-- Expand any result to see the full output
-- Past benchmark sessions saved and reloadable
-- Cancel a running benchmark at any time
-
-### Settings & Model Management
-- **AI Configuration** — switch between Mock, HTTP (OpenAI-compatible), and Local GGUF engines
-- **Model Gallery** — browse and download free GGUF models by category (chat, coding, reasoning, math, multilingual, fast). Includes Llama 3.x, Gemma 2, Phi-3.5, Qwen2.5, Mistral, and more
-- Real-time download progress; cancel in-flight downloads; delete installed models
-- Local models auto-unload after 10 minutes of inactivity
-- **Tuning panel** — adjust temperature and max tokens per-session
-- **Debug panel** — raw request/response log for troubleshooting
-- **Appearance** — light / dark / system theme, accent colour, font size
-- First-run onboarding wizard
+### 📈 Benchmark
+- Compare multiple models side-by-side with the same prompt.
+- Real-time latency, token count, and output comparison.
+- Save and reload past benchmark sessions.
 
 ---
 
-## Prerequisites
+## 🛠 Technical Information
 
-| Tool | Version |
-|------|---------|
-| Node.js | 18+ |
-| Python | 3.10+ |
-| Rust + Cargo | 1.70+ (Tauri desktop build only) |
+For detailed instructions on how to set up and build the project, or to understand its internal architecture, please refer to the following documents:
 
----
-
-## Setup
-
-```bash
-# 1. Frontend dependencies
-npm install
-
-# 2. Backend dependencies
-pip install -r requirements.txt
-
-# 3. (Optional) Local GGUF inference
-pip install llama-cpp-python
-```
-
-### Environment
-
-Create a `.env` file in the project root. The app defaults to mock mode — no model required:
-
-```env
-# ── Mock mode (default, no model required) ─────────────────────────
-ENABLE_LLM=false
-
-# ── OpenAI-compatible API ───────────────────────────────────────────
-ENABLE_LLM=true
-LLM_ENGINE=http
-LLM_BASE_URL=https://api.openai.com/v1
-LLM_API_KEY=sk-...
-LLM_MODEL=gpt-4o-mini
-
-# ── Local GGUF model ────────────────────────────────────────────────
-ENABLE_LLM=true
-LLM_ENGINE=local
-LLM_MODEL_PATH=C:/models/my-model.gguf
-LLM_CTX_SIZE=2048
-LLM_MAX_TOKENS=1024
-LLM_TEMPERATURE=0.7
-
-# ── Optional tuning ─────────────────────────────────────────────────
-MODEL_IDLE_TIMEOUT=600       # seconds before local model auto-unloads (default 600)
-LLM_GENERATION_TIMEOUT=120   # max seconds per generation (default 120)
-```
-
-> All of the above can also be configured through the **Settings** page inside the app — no file editing required.
-
----
-
-## Running in Development
-
-```bash
-# Terminal 1 — FastAPI backend (port 8000)
-python -m backend.app
-
-# Terminal 2 — Tauri + Vite (port 1420)
-npm run tauri dev
-```
-
-**Browser-only mode** (no Tauri shell):
-
-```bash
-python -m backend.app   # Terminal 1
-npm run dev             # Terminal 2 → http://localhost:1420
-```
-
----
-
-## Production Build
-
-### Automated (recommended)
-
-```powershell
-.\build.ps1
-```
-
-This script runs all three steps in order and stops on any error.
-
-### Manual steps
-
-#### 1. Bundle the Python backend
-
-```bash
-python -m PyInstaller crowforge-backend.spec --noconfirm
-```
-
-#### 2. Copy the sidecar binary
-
-```bash
-copy dist\crowforge-backend.exe src-tauri\bin\crowforge-backend-x86_64-pc-windows-msvc.exe
-```
-
-#### 3. Build the Tauri installer
-
-```bash
-npm run tauri build
-```
-
-Output: `src-tauri/target/release/bundle/` — MSI and NSIS installers.
-
-> The PyInstaller spec (`crowforge-backend.spec`) bundles all required DLLs automatically — llama-cpp, numpy, Pillow, pdfplumber, psutil and all other backend dependencies are collected and embedded in the executable. No separate DLL installation is needed on the target machine.
-
----
-
-## Project Structure
-
-```
-backend/
-  app.py              FastAPI routes and AI orchestration
-  ai_engine.py        AI engine implementations (Mock, HTTP, Local GGUF)
-  ai/
-    engine_manager.py Runtime engine registry and hot-swap
-    agent_loop.py     ReAct agent loop (reasoning + tool calling)
-    agent_tools.py    Tool handlers bound to sheet/document repos
-    tool_registry.py  Tool registration and dispatch
-  storage.py          SQLite data layer (raw SQL, no ORM)
-  models.py           Pydantic request/response models
-  formula.py          Spreadsheet formula evaluator
-  schema.sql          Database schema
-
-src/
-  App.tsx             App shell, sidebar navigation, shared state
-  pages/
-    ChatPage.tsx      Conversational AI with session history
-    DocumentsPage.tsx Rich text editor with AI writing tools
-    SheetsPage.tsx    Spreadsheet with AI fill and export
-    BenchmarkPage.tsx Multi-model comparison tool
-    SettingsPage.tsx  AI config and model gallery
-    OnboardingPage.tsx First-run setup wizard
-  components/
-    AIControlPanel.tsx Right-side engine/model/tuning panel
-    SplashScreen.tsx  Loading screen during backend startup
-    ui/               shadcn/ui primitives
-  hooks/
-    useSSE.ts         EventSource wrapper for SSE token streaming
-    useToast.ts       Toast notification hook
-  lib/
-    fileService.ts    Client-side export (PDF, DOCX, XLSX, CSV)
-
-src-tauri/
-  src/lib.rs          Tauri setup and sidecar spawn
-```
-
----
-
-## Architecture
-
-```
-Tauri (Rust shell)
-  └── spawns Python sidecar on startup
-        ├── Frontend  React 19 / Vite — port 1420
-        │     └── axios (REST) + EventSource (SSE streaming)
-        └── Backend   FastAPI / uvicorn — port 8000
-              ├── SQLite  crowforge.db  (raw sqlite3, no ORM)
-              └── AI engines: Mock · HTTP/OpenAI-compatible · Local GGUF
-```
-
-All frontend ↔ backend communication is HTTP/SSE — no Tauri IPC is used for app logic.
+- 📥 **[Installation and Setup Guide](docs/INSTALLATION.md)** — Prerequisites, environment config, and build steps.
+- 🏗️ **[Architecture and Structure](docs/ARCHITECTURE.md)** — Project layout and technical stack overview.
 
 ---
 

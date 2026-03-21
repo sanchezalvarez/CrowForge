@@ -1014,12 +1014,14 @@ def _eval_any(
 
         if name == 'INDEX':
             # INDEX(array_range, row_num, [col_num])
-            # row_num and col_num are 1-based; 0 means entire row/col (returns first match)
+            # row_num and col_num are 1-based; 0 defaults to first row/col
             if len(raw_args) < 2:
                 raise FormulaSyntaxError("INDEX: requires at least 2 arguments")
             cells = _range_cells(raw_args[0].strip())
-            row_num = int(_anum(1)) - 1  # 0-based
-            col_num = int(_anum(2, 1.0)) - 1  # 0-based
+            row_num_raw = int(_anum(1))
+            col_num_raw = int(_anum(2, 1.0))
+            row_num = max(0, row_num_raw - 1)  # 1-based → 0-based, 0 → 0
+            col_num = max(0, col_num_raw - 1)
 
             rows_map2: dict[int, list[int]] = {}
             for rr, cc in cells:

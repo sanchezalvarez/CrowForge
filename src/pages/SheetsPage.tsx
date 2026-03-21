@@ -28,8 +28,11 @@ import { SheetToolbar } from "../components/sheets/SheetToolbar";
 import { FormulaBar } from "../components/sheets/FormulaBar";
 import { SheetGrid } from "../components/sheets/SheetGrid";
 import { FindBar } from "../components/sheets/FindBar";
+import { MultiSortDialog, type SortLevel } from "../components/sheets/MultiSortDialog";
+import { CondFormatDialog } from "../components/sheets/CondFormatDialog";
 import type { TuningParams } from "../components/AIControlPanel";
 import { SheetSidebar } from "../components/sheets/SheetSidebar";
+import type { ConditionalRule } from "../lib/cellUtils";
 
 const API_BASE = "http://127.0.0.1:8000";
 
@@ -684,6 +687,27 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
     hidden.delete(ci);
     await saveSizes(activeSheet.sizes?.hiddenRows ?? [], [...hidden].sort((a, b) => a - b));
   }, [activeSheet, saveSizes]);
+
+  // Multi-level sort dialog
+  const [multiSortOpen, setMultiSortOpen] = useState(false);
+  const applyMultiSort = useCallback(async (levels: SortLevel[]) => {
+    if (!activeSheet) return;
+    try {
+      const res = await axios.put(`${API_BASE}/sheets/${activeSheet.id}/columns/sort-multi`, { levels });
+      updateSheet(res.data);
+    } catch { toast("Sort failed.", "error"); }
+  }, [activeSheet]);
+
+  // Conditional formatting dialog
+  const [condFormatOpen, setCondFormatOpen] = useState(false);
+  const saveCondRules = useCallback(async (rules: ConditionalRule[]) => {
+    if (!activeSheet) return;
+    const sizes = { ...activeSheet.sizes, condRules: rules };
+    try {
+      const res = await axios.put(`${API_BASE}/sheets/${activeSheet.id}/sizes`, sizes);
+      updateSheet(res.data);
+    } catch { toast("Failed to save rules.", "error"); }
+  }, [activeSheet]);
 
   // Find (Ctrl+F)
   const [findOpen, setFindOpen] = useState(false);
@@ -1497,6 +1521,9 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
               aiFillProgress={aiFillProgress}
               setAiFillProgress={setAiFillProgress}
               autoFitAllCols={autoFitAllCols}
+              onOpenMultiSort={() => setMultiSortOpen(true)}
+              onOpenCondFormat={() => setCondFormatOpen(true)}
+              hasCondRules={(activeSheet.sizes?.condRules?.length ?? 0) > 0}
             />
 
             <FormulaBar
@@ -1609,6 +1636,21 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
                 onReplace={replaceOne}
                 onReplaceAll={replaceAll}
                 replaceCount={replaceCount}
+              />
+            )}
+            {multiSortOpen && (
+              <MultiSortDialog
+                sheet={activeSheet}
+                onApply={applyMultiSort}
+                onClose={() => setMultiSortOpen(false)}
+              />
+            )}
+            {condFormatOpen && (
+              <CondFormatDialog
+                sheet={activeSheet}
+                rules={activeSheet.sizes?.condRules ?? []}
+                onSave={saveCondRules}
+                onClose={() => setCondFormatOpen(false)}
               />
             )}
           </>

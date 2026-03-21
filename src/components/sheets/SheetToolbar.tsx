@@ -2,7 +2,7 @@ import {
   Plus, Undo2, Redo2, Bold, Italic, Type, Paintbrush, WrapText,
   AlignLeft, AlignCenter, AlignRight, AlignVerticalJustifyStart,
   AlignVerticalJustifyCenter, AlignVerticalJustifyEnd,
-  Filter, Download, ChevronDown, Sparkles, Square, Loader2, X,
+  Filter, Download, ChevronDown, Sparkles, Square, Loader2, X, ArrowUpDown, Palette,
 } from "lucide-react";
 import { Button } from "../ui/button";
 import { idxToCol, ROW_AI_LIMIT, type CellFormat, type Sheet } from "../../lib/cellUtils";
@@ -66,6 +66,9 @@ export interface SheetToolbarProps {
   aiFillProgress: string | null;
   setAiFillProgress: (v: string | null) => void;
   autoFitAllCols: () => void;
+  onOpenMultiSort: () => void;
+  onOpenCondFormat: () => void;
+  hasCondRules: boolean;
 }
 
 export function SheetToolbar({
@@ -82,7 +85,7 @@ export function SheetToolbar({
   setGenRowsOpen, setGenRowsError, setGenRowsProgress, activeEngine,
   aiFillCol, setAiFillCol, aiFillInstructionRef, aiFillInstruction,
   setAiFillInstruction, startAiFill, aiFillProgress, setAiFillProgress,
-  autoFitAllCols,
+  autoFitAllCols, onOpenMultiSort, onOpenCondFormat, hasCondRules,
 }: SheetToolbarProps) {
   return (
     <>
@@ -205,6 +208,17 @@ export function SheetToolbar({
         )}
         <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={autoFitAllCols} title="Auto-fit all columns to their content">
           ↔
+        </Button>
+        <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={onOpenMultiSort} title="Multi-level sort">
+          <ArrowUpDown className="h-3 w-3" /> Sort
+        </Button>
+        <Button
+          variant={hasCondRules ? "default" : "outline"}
+          size="sm" className="h-7 text-xs gap-1"
+          onClick={onOpenCondFormat}
+          title="Conditional formatting"
+        >
+          <Palette className="h-3 w-3" /> Cond.
         </Button>
         {/* Export dropdown — active sheet only */}
         <div className="relative" onClick={(e) => e.stopPropagation()}>

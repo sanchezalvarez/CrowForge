@@ -9,7 +9,7 @@ import {
   DEFAULT_COL_WIDTH, DEFAULT_ROW_HEIGHT, MIN_COL_WIDTH,
   ROW_RENDER_LIMIT, REF_COLORS,
   parseFormulaRefGroups, resolveRange, resolveCellRef, idxToCol,
-  ctrlArrowMove,
+  ctrlArrowMove, matchCondRule,
 } from "../../lib/cellUtils";
 
 const API_BASE = "http://127.0.0.1:8000";
@@ -322,7 +322,15 @@ const SheetRow = React.memo(function SheetRow({
                   const a = activeSheet.alignments?.[`${ri},${ci}`];
                   const [h, v] = a ? a.split(",") : ["left", "top"];
                   const fmt: CellFormat = activeSheet.formats?.[`${ri},${ci}`] ?? {};
-                  const noWrap = fmt.wrap === false;
+                  // Apply conditional formatting rules (later rules override earlier)
+                  const condRules = activeSheet.sizes?.condRules ?? [];
+                  const condFmt: Partial<CellFormat> = {};
+                  for (const rule of condRules) {
+                    if (rule.col !== null && rule.col !== ci) continue;
+                    if (matchCondRule(rule, cell)) Object.assign(condFmt, rule.format);
+                  }
+                  const ef = { ...fmt, ...condFmt };
+                  const noWrap = ef.wrap === false;
                   const manualH = ri in rowHeights;
                   return {
                     ...(manualH ? { height: rowHeights[ri], overflow: "hidden" as const } : { minHeight: DEFAULT_ROW_HEIGHT }),
@@ -333,11 +341,11 @@ const SheetRow = React.memo(function SheetRow({
                     textAlign: (h || "left") as "left" | "center" | "right",
                     justifyContent: h === "center" ? "center" : h === "right" ? "flex-end" : "flex-start",
                     alignItems: v === "middle" ? "center" : v === "bottom" ? "flex-end" : "flex-start",
-                    fontWeight: fmt.b ? 700 : undefined,
-                    fontStyle: fmt.i ? ("italic" as const) : undefined,
-                    color: fmt.tc || undefined,
-                    backgroundColor: fmt.bg || undefined,
-                    fontSize: fmt.fs ? `${fmt.fs}px` : undefined,
+                    fontWeight: ef.b ? 700 : undefined,
+                    fontStyle: ef.i ? ("italic" as const) : undefined,
+                    color: ef.tc || undefined,
+                    backgroundColor: ef.bg || undefined,
+                    fontSize: ef.fs ? `${ef.fs}px` : undefined,
                   };
                 })()}
               >

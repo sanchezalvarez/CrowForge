@@ -103,12 +103,15 @@ interface SheetRowProps {
   setCellError: (v: string | null) => void;
   colWidths: Record<number, number>;
   rowHeights: Record<number, number>;
+  maxRow: number;
   isCellSelected: (ri: number, ci: number) => boolean;
   handleCellMouseDown: (ri: number, ci: number, e: React.MouseEvent) => void;
   handleCellMouseEnter: (ri: number, ci: number) => void;
   startEditing: (ri: number, ci: number, val: string) => void;
   commitEdit: () => Promise<void> | void;
   cancelEdit: () => void;
+  setSelAnchor: (v: { row: number; col: number } | null) => void;
+  setSelection: (v: { r1: number; c1: number; r2: number; c2: number } | null) => void;
   setResizing: (v: { type: "col" | "row"; index: number; startPos: number; startSize: number } | null) => void;
   setRowMenu: (v: { rowIndex: number; x: number; y: number } | null) => void;
   setCellMenu: (v: { row: number; col: number; x: number; y: number } | null) => void;
@@ -126,9 +129,10 @@ const SheetRow = React.memo(function SheetRow({
   ri, row, activeSheet,
   editingCell, editValue, editValueRef, setEditValue,
   cellError, setCellError,
-  colWidths, rowHeights,
+  colWidths, rowHeights, maxRow,
   isCellSelected, handleCellMouseDown, handleCellMouseEnter,
   startEditing, commitEdit, cancelEdit,
+  setSelAnchor, setSelection,
   setResizing, setRowMenu, setCellMenu,
   updateSheet, deleteRow,
   aiFillCol, aiFilledRows, aiFillErrors,
@@ -235,6 +239,11 @@ const SheetRow = React.memo(function SheetRow({
                     if (e.key === "Enter") {
                       e.preventDefault();
                       commitEdit();
+                      const nextRow = ri + 1;
+                      if (nextRow <= maxRow) {
+                        setSelAnchor({ row: nextRow, col: ci });
+                        setSelection({ r1: nextRow, c1: ci, r2: nextRow, c2: ci });
+                      }
                     } else if (e.key === "Escape") {
                       e.preventDefault();
                       setCellError(null);
@@ -390,6 +399,7 @@ export function SheetGrid({
         }}
         onKeyDown={(e) => {
           if (editingCell) return;
+          const isCtrl = e.ctrlKey || e.metaKey;
 
           if (e.key === "F2" && selection) {
             e.preventDefault();
@@ -398,40 +408,69 @@ export function SheetGrid({
             return;
           }
 
-          if ((e.ctrlKey || e.metaKey) && e.key === "b") {
+          if (isCtrl && e.key === "b") {
             e.preventDefault();
             toggleBold();
             return;
           }
-          if ((e.ctrlKey || e.metaKey) && e.key === "i") {
+          if (isCtrl && e.key === "i") {
             e.preventDefault();
             toggleItalic();
             return;
           }
 
-          if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) {
+          if (isCtrl && e.key === "z" && !e.shiftKey) {
             e.preventDefault();
             if (!aiFilling) undoSheet();
             return;
           }
-          if ((e.ctrlKey || e.metaKey) && (e.key === "y" || (e.key === "z" && e.shiftKey))) {
+          if (isCtrl && (e.key === "y" || (e.key === "z" && e.shiftKey))) {
             e.preventDefault();
             if (!aiFilling) redoSheet();
             return;
           }
 
+          // Ctrl+A: Select All
+          if (isCtrl && e.key === "a" && maxRow >= 0 && maxCol >= 0) {
+            e.preventDefault();
+            setSelAnchor({ row: 0, col: 0 });
+            selMoving.current = { row: maxRow, col: maxCol };
+            setSelection({ r1: 0, c1: 0, r2: maxRow, c2: maxCol });
+            return;
+          }
+
+          // Ctrl+Home: go to first cell
+          if (isCtrl && e.key === "Home") {
+            e.preventDefault();
+            setSelAnchor({ row: 0, col: 0 });
+            selMoving.current = { row: 0, col: 0 };
+            setSelection({ r1: 0, c1: 0, r2: 0, c2: 0 });
+            gridRef.current?.scrollTo({ top: 0, left: 0, behavior: "instant" as ScrollBehavior });
+            return;
+          }
+
+          // Ctrl+End: go to last cell
+          if (isCtrl && e.key === "End" && maxRow >= 0 && maxCol >= 0) {
+            e.preventDefault();
+            setSelAnchor({ row: maxRow, col: maxCol });
+            selMoving.current = { row: maxRow, col: maxCol };
+            setSelection({ r1: maxRow, c1: maxCol, r2: maxRow, c2: maxCol });
+            return;
+          }
+
           const isArrow = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key);
-          const isNav = isArrow || e.key === "Enter" || e.key === "Tab";
+          const isNav = isArrow || e.key === "Enter" || (e.key === "Tab" && !isCtrl);
           if (isNav && maxRow >= 0 && maxCol >= 0) {
             e.preventDefault();
             const anchor = selAnchor ?? { row: 0, col: 0 };
             let nr = anchor.row;
             let nc = anchor.col;
 
-            if (e.key === "ArrowUp") nr = Math.max(0, nr - 1);
-            else if (e.key === "ArrowDown" || e.key === "Enter") nr = Math.min(maxRow, nr + 1);
-            else if (e.key === "ArrowLeft") nc = Math.max(0, nc - 1);
-            else if (e.key === "ArrowRight") nc = Math.min(maxCol, nc + 1);
+            if (e.key === "ArrowUp") nr = isCtrl ? 0 : Math.max(0, nr - 1);
+            else if (e.key === "ArrowDown") nr = isCtrl ? maxRow : Math.min(maxRow, nr + 1);
+            else if (e.key === "ArrowLeft") nc = isCtrl ? 0 : Math.max(0, nc - 1);
+            else if (e.key === "ArrowRight") nc = isCtrl ? maxCol : Math.min(maxCol, nc + 1);
+            else if (e.key === "Enter") nr = Math.min(maxRow, nr + 1);
             else if (e.key === "Tab") {
               if (e.shiftKey) { nc--; if (nc < 0) { nc = maxCol; nr = Math.max(0, nr - 1); } }
               else { nc++; if (nc > maxCol) { nc = 0; nr = Math.min(maxRow, nr + 1); } }
@@ -439,10 +478,10 @@ export function SheetGrid({
 
             if (e.shiftKey && isArrow) {
               const mov = selMoving.current ?? { ...anchor };
-              if (e.key === "ArrowUp") mov.row = Math.max(0, mov.row - 1);
-              else if (e.key === "ArrowDown") mov.row = Math.min(maxRow, mov.row + 1);
-              else if (e.key === "ArrowLeft") mov.col = Math.max(0, mov.col - 1);
-              else if (e.key === "ArrowRight") mov.col = Math.min(maxCol, mov.col + 1);
+              if (e.key === "ArrowUp") mov.row = isCtrl ? 0 : Math.max(0, mov.row - 1);
+              else if (e.key === "ArrowDown") mov.row = isCtrl ? maxRow : Math.min(maxRow, mov.row + 1);
+              else if (e.key === "ArrowLeft") mov.col = isCtrl ? 0 : Math.max(0, mov.col - 1);
+              else if (e.key === "ArrowRight") mov.col = isCtrl ? maxCol : Math.min(maxCol, mov.col + 1);
               selMoving.current = { ...mov };
               setSelection(makeRect(anchor, mov));
             } else {
@@ -461,15 +500,15 @@ export function SheetGrid({
             e.preventDefault();
             clearSelectedCells();
           }
-          if ((e.ctrlKey || e.metaKey) && e.key === "c" && selection) {
+          if (isCtrl && e.key === "c" && selection) {
             e.preventDefault();
             copySelection();
           }
-          if ((e.ctrlKey || e.metaKey) && e.key === "x" && selection) {
+          if (isCtrl && e.key === "x" && selection) {
             e.preventDefault();
             cutSelection();
           }
-          if ((e.ctrlKey || e.metaKey) && e.key === "v") {
+          if (isCtrl && e.key === "v") {
             e.preventDefault();
             navigator.clipboard.readText().then((text) => {
               if (text) pasteAtSelection(text);
@@ -643,12 +682,15 @@ export function SheetGrid({
                   setCellError={setCellError}
                   colWidths={colWidths}
                   rowHeights={rowHeights}
+                  maxRow={maxRow}
                   isCellSelected={isCellSelected}
                   handleCellMouseDown={handleCellMouseDown}
                   handleCellMouseEnter={handleCellMouseEnter}
                   startEditing={startEditing}
                   commitEdit={commitEdit}
                   cancelEdit={cancelEdit}
+                  setSelAnchor={setSelAnchor}
+                  setSelection={setSelection}
                   setResizing={setResizing}
                   setRowMenu={setRowMenu}
                   setCellMenu={setCellMenu}

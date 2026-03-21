@@ -1,17 +1,31 @@
 """Formula engine for Excel Lite sheets.
 
 Supports: =, +, -, *, /, parentheses, cell refs (A1), ranges (A1:B3),
-SUM(range), AVERAGE(range), AVG(range), COUNT(range), MIN(range), MAX(range).
+arithmetic comparison operators (>, <, >=, <=, =, <>),
+and a wide set of functions:
+  Aggregates: SUM, AVERAGE/AVG, COUNT, COUNTA, MIN, MAX
+  Logic:      IF, IFERROR, AND, OR, NOT, TRUE, FALSE
+  Text:       UPPER, LOWER, TRIM, LEN, LEFT, RIGHT, MID,
+              CONCAT, CONCATENATE, TEXT, REPT, SUBSTITUTE
+  Math:       ABS, ROUND, ROUNDUP, ROUNDDOWN, MOD, INT,
+              SQRT, POWER, EXP, LN, LOG, CEILING, FLOOR
+  Date:       TODAY, NOW, YEAR, MONTH, DAY
 
 Error codes written to cells:
   #ERROR  — syntax error or unsupported formula
   #DIV/0  — division by zero
   #REF    — invalid or out-of-bounds cell reference
   #CYCLE  — circular dependency detected
+  #VALUE! — wrong type for operation
+  #NUM!   — numeric domain error
 """
 
 import re
+import math as _math
+import datetime as _dt
 from collections import deque
+
+_MISSING = object()  # sentinel for optional arguments
 
 
 # ── Error types ───────────────────────────────────────────────────
@@ -37,6 +51,12 @@ class InvalidRefError(FormulaError):
 class CycleError(FormulaError):
     code = "#CYCLE"
 
+class ValueError_(FormulaError):
+    code = "#VALUE!"
+
+class NumError(FormulaError):
+    code = "#NUM!"
+
 
 # ── Helpers ───────────────────────────────────────────────────────
 
@@ -48,7 +68,69 @@ _FUNC_RE = re.compile(
 _BARE_REF_RE = re.compile(r'[A-Za-z]{1,3}\d{1,7}')
 
 # Validation: everything allowed after stripping functions and refs
-_VALID_ARITH_RE = re.compile(r'^[\d\.\+\-\*/\(\)\s]*$')
+# Includes comparison operators for IF conditions
+_VALID_ARITH_RE = re.compile(r'^[\d\.\+\-\*/\(\)\s<>=!&|]*$')
+
+# All function names recognised by the engine
+_ALL_KNOWN_FUNCS = frozenset({
+    'SUM', 'AVERAGE', 'AVG', 'COUNT', 'COUNTA', 'MIN', 'MAX',
+    'IF', 'IFERROR', 'AND', 'OR', 'NOT', 'TRUE', 'FALSE',
+    'UPPER', 'LOWER', 'TRIM', 'LEN', 'LEFT', 'RIGHT', 'MID',
+    'CONCAT', 'CONCATENATE', 'TEXT', 'REPT', 'SUBSTITUTE',
+    'ABS', 'ROUND', 'ROUNDUP', 'ROUNDDOWN', 'MOD', 'INT',
+    'SQRT', 'POWER', 'EXP', 'LN', 'LOG', 'CEILING', 'FLOOR',
+    'TODAY', 'NOW', 'YEAR', 'MONTH', 'DAY',
+})
+
+
+def _split_func_args(args_str: str) -> list[str]:
+    """Split comma-separated function arguments respecting nested parentheses and strings."""
+    if not args_str.strip():
+        return []
+    parts: list[str] = []
+    depth = 0
+    in_str = False
+    buf: list[str] = []
+    for ch in args_str:
+        if ch == '"' and not in_str:
+            in_str = True
+            buf.append(ch)
+        elif ch == '"' and in_str:
+            in_str = False
+            buf.append(ch)
+        elif in_str:
+            buf.append(ch)
+        elif ch == ',' and depth == 0:
+            parts.append(''.join(buf).strip())
+            buf = []
+        else:
+            if ch == '(':
+                depth += 1
+            elif ch == ')':
+                depth -= 1
+            buf.append(ch)
+    parts.append(''.join(buf).strip())
+    return [p for p in parts if p]
+
+
+def _to_num(val: 'str | float', context: str = '') -> float:
+    """Coerce a formula result to float. Raises ValueError_ (#VALUE!) on failure."""
+    if isinstance(val, (int, float)):
+        return float(val)
+    s = str(val).strip()
+    try:
+        return float(s)
+    except (ValueError, TypeError):
+        raise ValueError_(f"Expected number{': ' + context if context else ''}")
+
+
+def _to_str(val: 'str | float') -> str:
+    """Convert any formula result to a display string."""
+    if isinstance(val, float):
+        if val == int(val) and abs(val) < 1e15:
+            return str(int(val))
+        return f"{val:.10g}"
+    return str(val)
 
 
 def col_to_index(col_str: str) -> int:
@@ -118,8 +200,10 @@ def expand_range(range_str: str) -> list[tuple[int, int]]:
     ]
 
 
-def format_result(value: float) -> str:
-    """Format a numeric result for cell display."""
+def format_result(value: 'float | str') -> str:
+    """Format a formula result for cell display."""
+    if isinstance(value, str):
+        return value
     if value == int(value) and abs(value) < 1e15:
         return str(int(value))
     return f"{value:.10g}"
@@ -260,7 +344,17 @@ def validate_formula(formula: str) -> str | None:
     if not body:
         return "#ERROR"
 
-    # Check function calls — must be FUNC(REF:REF)
+    # If the body uses any extended function, delegate full validation to the evaluator.
+    # This avoids false rejections from the arithmetic-only checker below.
+    _RANGE_FUNCS = frozenset({'SUM', 'AVERAGE', 'AVG', 'COUNT', 'MIN', 'MAX'})
+    for fm in re.finditer(r'([A-Za-z_][A-Za-z0-9_]*)\s*\(', body):
+        fn = fm.group(1).upper()
+        if fn not in _RANGE_FUNCS:
+            if fn in _ALL_KNOWN_FUNCS:
+                return None  # extended function — trust the evaluator
+            return "#ERROR"  # unknown function
+
+    # Check range function calls — must be FUNC(REF:REF)
     _has_bad_ref = False
 
     def _check_func(m):
@@ -276,11 +370,6 @@ def validate_formula(formula: str) -> str | None:
     reduced = _FUNC_RE.sub(_check_func, body)
     if _has_bad_ref:
         return "#REF"
-
-    # If a function call wasn't matched (e.g. bad syntax like SUM(A1)),
-    # detect leftover alpha-paren patterns that aren't cell refs
-    if re.search(r'[A-Za-z]+\(', reduced):
-        return "#ERROR"
 
     # Check bare cell references
     _has_bad_bare_ref = False
@@ -399,76 +488,365 @@ class _Parser:
             left = left + right if op == '+' else left - right
         return left
 
+    def _comparison(self) -> float:
+        left = self._expr()
+        ch = self._peek()
+        if ch in ('>', '<', '=', '!'):
+            op = self._eat()
+            if self._peek() == '=':
+                op += self._eat()
+            elif op == '<' and self._peek() == '>':
+                op += self._eat()
+            right = self._expr()
+            if op == '>':   return 1.0 if left > right else 0.0
+            if op == '<':   return 1.0 if left < right else 0.0
+            if op == '>=':  return 1.0 if left >= right else 0.0
+            if op == '<=':  return 1.0 if left <= right else 0.0
+            if op in ('=', '=='): return 1.0 if left == right else 0.0
+            if op in ('<>', '!='): return 1.0 if left != right else 0.0
+        return left
+
     def parse(self) -> float:
         if not self.text:
             raise FormulaSyntaxError("Empty expression")
-        result = self._expr()
+        result = self._comparison()
         if self.pos != len(self.text):
             raise FormulaSyntaxError(f"Unexpected '{self.text[self.pos]}' at pos {self.pos}")
         return result
 
 
+# ── Extended recursive evaluator ──────────────────────────────────
+
+_TOP_FUNC_RE = re.compile(r'^([A-Za-z_][A-Za-z0-9_]*)\s*\((.*)\)$', re.DOTALL)
+_INNER_FUNC_RE = re.compile(r'([A-Za-z_][A-Za-z0-9_]*)\s*\(([^()]*)\)')
+
+
+def _eval_any(
+    expr: str,
+    resolve_num,   # (r, c) -> float
+    resolve_raw,   # (r, c) -> str
+    has_content,   # (r, c) -> bool
+    *,
+    num_rows: int = 0,
+    num_cols: int = 0,
+) -> 'str | float':
+    """Evaluate any formula sub-expression, returning str or float.
+
+    Handles: string literals, numbers, cell refs, all known functions,
+    arithmetic with comparison operators.
+    """
+    expr = expr.strip()
+    if not expr:
+        return 0.0
+
+    # --- String literal "..." ---
+    if expr.startswith('"') and expr.endswith('"') and len(expr) >= 2:
+        return expr[1:-1].replace('""', '"')
+
+    # --- Cell reference A1 ---
+    m = _CELL_REF_RE.match(expr)
+    if m and m.end() == len(expr):
+        r, c = parse_cell_ref(expr)
+        if num_rows and r >= num_rows:
+            raise InvalidRefError(f"Row out of bounds: {expr}")
+        if num_cols and c >= num_cols:
+            raise InvalidRefError(f"Column out of bounds: {expr}")
+        raw = resolve_raw(r, c)
+        try:
+            return float(raw) if raw.strip() else 0.0
+        except ValueError:
+            return raw
+
+    # --- Number literal ---
+    try:
+        return float(expr)
+    except ValueError:
+        pass
+
+    # --- Function call: NAME(...) ---
+    fn_m = _TOP_FUNC_RE.match(expr)
+    if fn_m:
+        name = fn_m.group(1).upper()
+        args_str = fn_m.group(2).strip()
+        raw_args = _split_func_args(args_str)
+
+        def _arg(i, default=_MISSING):
+            if i < len(raw_args):
+                return _eval_any(raw_args[i], resolve_num, resolve_raw, has_content,
+                                 num_rows=num_rows, num_cols=num_cols)
+            if default is not _MISSING:
+                return default
+            raise FormulaSyntaxError(f"{name}: missing argument {i + 1}")
+
+        def _anum(i, default=_MISSING):
+            v = _arg(i) if default is _MISSING else _arg(i, default)
+            return _to_num(v, name)
+
+        def _astr(i, default=_MISSING):
+            v = _arg(i) if default is _MISSING else _arg(i, default)
+            return _to_str(v)
+
+        def _range_cells(ref: str) -> list[tuple[int, int]]:
+            if ':' not in ref:
+                ref = f"{ref.strip()}:{ref.strip()}"
+            cells = expand_range(ref)
+            for rr, cc in cells:
+                if num_rows and rr >= num_rows:
+                    raise InvalidRefError(f"Out of bounds: {ref}")
+                if num_cols and cc >= num_cols:
+                    raise InvalidRefError(f"Out of bounds: {ref}")
+            return cells
+
+        # Aggregate functions (require a range arg)
+        if name in ('SUM', 'AVERAGE', 'AVG', 'COUNT', 'COUNTA', 'MIN', 'MAX'):
+            if not raw_args:
+                raise FormulaSyntaxError(f"{name}: requires a range")
+            cells = _range_cells(raw_args[0])
+            if name == 'SUM':
+                return sum(resolve_num(r, c) for r, c in cells)
+            if name in ('AVERAGE', 'AVG'):
+                vals = [resolve_num(r, c) for r, c in cells]
+                return sum(vals) / len(vals) if vals else 0.0
+            if name == 'COUNT':
+                return float(sum(1 for r, c in cells
+                                 if has_content(r, c) and _is_numeric(resolve_raw(r, c))))
+            if name == 'COUNTA':
+                return float(sum(1 for r, c in cells if has_content(r, c) and resolve_raw(r, c).strip()))
+            if name == 'MIN':
+                vals = [resolve_num(r, c) for r, c in cells]
+                return min(vals) if vals else 0.0
+            if name == 'MAX':
+                vals = [resolve_num(r, c) for r, c in cells]
+                return max(vals) if vals else 0.0
+
+        # Logic
+        if name == 'IF':
+            if len(raw_args) < 2:
+                raise FormulaSyntaxError("IF: requires at least 2 arguments")
+            cond = _to_num(_arg(0), 'IF')
+            return _arg(1) if cond != 0 else _arg(2, 0.0)
+
+        if name == 'IFERROR':
+            try:
+                return _arg(0)
+            except Exception:
+                return _arg(1, '')
+
+        if name == 'AND':
+            return 1.0 if all(_to_num(_arg(i), 'AND') != 0 for i in range(len(raw_args))) else 0.0
+
+        if name == 'OR':
+            return 1.0 if any(_to_num(_arg(i), 'OR') != 0 for i in range(len(raw_args))) else 0.0
+
+        if name == 'NOT':
+            return 0.0 if _anum(0) != 0 else 1.0
+
+        if name == 'TRUE':
+            return 1.0
+
+        if name == 'FALSE':
+            return 0.0
+
+        # Text
+        if name == 'UPPER':
+            return _astr(0).upper()
+
+        if name == 'LOWER':
+            return _astr(0).lower()
+
+        if name == 'TRIM':
+            return ' '.join(_astr(0).split())
+
+        if name == 'LEN':
+            return float(len(_astr(0)))
+
+        if name in ('CONCAT', 'CONCATENATE'):
+            return ''.join(_astr(i) for i in range(len(raw_args)))
+
+        if name == 'LEFT':
+            s = _astr(0)
+            n = max(0, int(_anum(1, 1.0)))
+            return s[:n]
+
+        if name == 'RIGHT':
+            s = _astr(0)
+            n = max(0, int(_anum(1, 1.0)))
+            return s[-n:] if n > 0 else ''
+
+        if name == 'MID':
+            s = _astr(0)
+            start = max(0, int(_anum(1)) - 1)  # Excel is 1-based
+            length = max(0, int(_anum(2)))
+            return s[start:start + length]
+
+        if name == 'TEXT':
+            return _to_str(_anum(0))
+
+        if name == 'REPT':
+            return _astr(0) * max(0, int(_anum(1)))
+
+        if name == 'SUBSTITUTE':
+            s = _astr(0)
+            old = _astr(1)
+            new = _astr(2)
+            return s.replace(old, new) if old else s
+
+        # Math
+        if name == 'ABS':
+            return abs(_anum(0))
+
+        if name == 'ROUND':
+            return float(round(_anum(0), int(_anum(1, 0.0))))
+
+        if name == 'ROUNDUP':
+            d = int(_anum(1, 0.0))
+            v = _anum(0)
+            factor = 10 ** d
+            return float(_math.ceil(v * factor) / factor)
+
+        if name == 'ROUNDDOWN':
+            d = int(_anum(1, 0.0))
+            v = _anum(0)
+            factor = 10 ** d
+            return float(_math.floor(v * factor) / factor)
+
+        if name == 'MOD':
+            b = _anum(1)
+            if b == 0:
+                raise DivisionByZeroError("MOD by zero")
+            return float(_anum(0) % b)
+
+        if name == 'INT':
+            return float(_math.floor(_anum(0)))
+
+        if name == 'SQRT':
+            v = _anum(0)
+            if v < 0:
+                raise NumError("SQRT of negative number")
+            return _math.sqrt(v)
+
+        if name == 'POWER':
+            return float(_anum(0) ** _anum(1))
+
+        if name == 'EXP':
+            return _math.exp(_anum(0))
+
+        if name == 'LN':
+            v = _anum(0)
+            if v <= 0:
+                raise NumError("LN of non-positive")
+            return _math.log(v)
+
+        if name == 'LOG':
+            v = _anum(0)
+            base = _anum(1, 10.0)
+            if v <= 0 or base <= 0 or base == 1:
+                raise NumError("LOG domain error")
+            return _math.log(v, base)
+
+        if name == 'CEILING':
+            sig = _anum(1, 1.0)
+            if sig == 0:
+                return 0.0
+            return float(_math.ceil(_anum(0) / sig) * sig)
+
+        if name == 'FLOOR':
+            sig = _anum(1, 1.0)
+            if sig == 0:
+                return 0.0
+            return float(_math.floor(_anum(0) / sig) * sig)
+
+        # Date
+        if name == 'TODAY':
+            return _dt.date.today().isoformat()
+
+        if name == 'NOW':
+            return _dt.datetime.now().strftime('%Y-%m-%d %H:%M')
+
+        if name == 'YEAR':
+            try:
+                return float(_dt.datetime.fromisoformat(_astr(0)).year)
+            except (ValueError, TypeError):
+                raise ValueError_("#VALUE!")
+
+        if name == 'MONTH':
+            try:
+                return float(_dt.datetime.fromisoformat(_astr(0)).month)
+            except (ValueError, TypeError):
+                raise ValueError_("#VALUE!")
+
+        if name == 'DAY':
+            try:
+                return float(_dt.datetime.fromisoformat(_astr(0)).day)
+            except (ValueError, TypeError):
+                raise ValueError_("#VALUE!")
+
+        raise FormulaSyntaxError(f"Unknown function: {name}")
+
+    # --- Arithmetic expression (may contain cell refs and function calls) ---
+    # Iteratively substitute innermost function calls until none remain
+    _iter_limit = 50
+    working = expr
+    for _ in range(_iter_limit):
+        inner = _INNER_FUNC_RE.search(working)
+        if not inner:
+            break
+        fn_name = inner.group(1).upper()
+        if fn_name not in _ALL_KNOWN_FUNCS:
+            break
+        sub_result = _eval_any(inner.group(0), resolve_num, resolve_raw, has_content,
+                                num_rows=num_rows, num_cols=num_cols)
+        if isinstance(sub_result, str):
+            raise ValueError_("String value used in arithmetic")
+        working = working[:inner.start()] + str(sub_result) + working[inner.end():]
+
+    # Substitute bare cell refs
+    def _ref_sub(m):
+        r, c = parse_cell_ref(m.group(0))
+        if num_rows and r >= num_rows:
+            raise InvalidRefError(f"Row out of bounds: {m.group(0)}")
+        if num_cols and c >= num_cols:
+            raise InvalidRefError(f"Column out of bounds: {m.group(0)}")
+        return str(resolve_num(r, c))
+
+    working = _BARE_REF_RE.sub(_ref_sub, working)
+
+    if re.search(r'[A-Za-z]+\(', working):
+        raise FormulaSyntaxError(f"Unsupported function in: {expr!r}")
+
+    if not _VALID_ARITH_RE.match(working):
+        raise FormulaSyntaxError(f"Invalid expression: {working!r}")
+
+    return _Parser(working).parse()
+
+
+def _is_numeric(s: str) -> bool:
+    try:
+        float(s)
+        return True
+    except (ValueError, TypeError):
+        return False
+
+
 # ── Formula evaluation ────────────────────────────────────────────
 
-def evaluate(formula: str, resolve_cell, has_content, *, num_rows: int = 0, num_cols: int = 0) -> float:
+def evaluate(formula: str, resolve_cell, has_content, *, num_rows: int = 0, num_cols: int = 0,
+             resolve_raw=None) -> 'str | float':
     """Evaluate a formula string (starting with =).
 
     resolve_cell(row, col) -> float
     has_content(row, col)  -> bool
+    resolve_raw(row, col)  -> str   (optional; used for text functions)
     num_rows / num_cols    — sheet dimensions for bounds checking (0 = skip check)
     """
     expr = formula.lstrip('=').strip()
     if not expr:
         raise FormulaSyntaxError("Empty formula")
 
-    def _bounds_check(r: int, c: int, ref_text: str):
-        if num_rows and r >= num_rows:
-            raise InvalidRefError(f"Row out of bounds: {ref_text}")
-        if num_cols and c >= num_cols:
-            raise InvalidRefError(f"Column out of bounds: {ref_text}")
+    _raw = resolve_raw if resolve_raw is not None else (lambda r, c: str(resolve_cell(r, c)))
 
-    def _func_sub(m):
-        name = m.group(1).upper()
-        range_str = f"{m.group(2)}:{m.group(3)}"
-        cells = expand_range(range_str)
-        for r, c in cells:
-            _bounds_check(r, c, range_str)
-        if name == 'SUM':
-            return str(sum(resolve_cell(r, c) for r, c in cells))
-        if name in ('AVG', 'AVERAGE'):
-            vals = [resolve_cell(r, c) for r, c in cells]
-            if not vals:
-                return '0'
-            return str(sum(vals) / len(vals))
-        if name == 'COUNT':
-            return str(sum(1 for r, c in cells if has_content(r, c)))
-        if name == 'MIN':
-            vals = [resolve_cell(r, c) for r, c in cells]
-            if not vals:
-                return '0'
-            return str(min(vals))
-        if name == 'MAX':
-            vals = [resolve_cell(r, c) for r, c in cells]
-            if not vals:
-                return '0'
-            return str(max(vals))
-        raise FormulaSyntaxError(f"Unknown function: {name}")
-
-    expr = _FUNC_RE.sub(_func_sub, expr)
-
-    # Detect leftover function-like patterns not matched by _FUNC_RE
-    if re.search(r'[A-Za-z]+\(', expr):
-        raise FormulaSyntaxError("Unsupported or malformed function")
-
-    def _ref_sub(m):
-        ref = m.group(0)
-        r, c = parse_cell_ref(ref)
-        _bounds_check(r, c, ref)
-        return str(resolve_cell(r, c))
-
-    expr = _BARE_REF_RE.sub(_ref_sub, expr)
-
-    return _Parser(expr).parse()
+    return _eval_any(expr, resolve_cell, _raw, has_content,
+                     num_rows=num_rows, num_cols=num_cols)
 
 
 # ── Sheet recalculation ───────────────────────────────────────────
@@ -506,6 +884,7 @@ def recalculate(rows: list[list[str]], formulas: dict[str, str],
 
     eval_set = set(eval_order)
     cache: dict[str, float] = {}
+    str_cache: dict[str, str] = {}   # for formula cells that returned a string
     errors: dict[str, str] = {}  # key -> error code
 
     def _has_content(r: int, c: int) -> bool:
@@ -513,6 +892,12 @@ def recalculate(rows: list[list[str]], formulas: dict[str, str],
         if key in formulas:
             return True
         return 0 <= r < num_rows and 0 <= c < len(rows[r]) and bool(rows[r][c].strip())
+
+    def _raw(r: int, c: int) -> str:
+        """Return the current displayed/raw value of a cell as a string."""
+        if 0 <= r < num_rows and 0 <= c < len(rows[r]):
+            return rows[r][c]
+        return ''
 
     def _resolve(r: int, c: int, visiting: frozenset, depth: int = 0) -> float:
         if depth > DependencyGraph.MAX_DEPTH:
@@ -534,9 +919,13 @@ def recalculate(rows: list[list[str]], formulas: dict[str, str],
                 _has_content,
                 num_rows=num_rows,
                 num_cols=num_cols,
+                resolve_raw=_raw,
             )
-            cache[key] = val
-            return val
+            if isinstance(val, str):
+                str_cache[key] = val
+                return 0.0  # string result: treat as 0 for numeric dependents
+            cache[key] = float(val)
+            return float(val)
 
         if key in formulas:
             # Formula NOT being recalculated — read its current computed value
@@ -573,8 +962,11 @@ def recalculate(rows: list[list[str]], formulas: dict[str, str],
                 rows[r][c] = syntax_err
                 errors[key] = syntax_err
                 continue
-            val = _resolve(r, c, frozenset())
-            rows[r][c] = format_result(val)
+            _resolve(r, c, frozenset())
+            if key in str_cache:
+                rows[r][c] = str_cache[key]
+            elif key in cache:
+                rows[r][c] = format_result(cache[key])
         except FormulaError as e:
             rows[r][c] = e.code
             errors[key] = e.code

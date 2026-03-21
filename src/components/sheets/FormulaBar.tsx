@@ -1,4 +1,4 @@
-import { Sparkles } from "lucide-react";
+import { Sparkles, Wand2 } from "lucide-react";
 import { idxToCol, type Sheet } from "../../lib/cellUtils";
 
 export interface FormulaBarProps {
@@ -16,6 +16,7 @@ export interface FormulaBarProps {
   setAiOpMode: (m: "row-wise" | "aggregate" | "matrix") => void;
   setAiOpSourceStr: (v: string) => void;
   setAiOpOpen: (v: boolean) => void;
+  onOpenFormulaWizard: () => void;
 }
 
 export function FormulaBar({
@@ -33,6 +34,7 @@ export function FormulaBar({
   setAiOpMode,
   setAiOpSourceStr,
   setAiOpOpen,
+  onOpenFormulaWizard,
 }: FormulaBarProps) {
   if (activeSheet.columns.length === 0) return null;
 
@@ -76,6 +78,15 @@ export function FormulaBar({
           {fn}
         </button>
       ))}
+      <button
+        className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 hover:bg-primary/20 text-primary font-medium shrink-0 transition-colors flex items-center gap-1"
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={onOpenFormulaWizard}
+        title="AI Formula Assistant — describe formula in natural language"
+      >
+        <Wand2 className="h-2.5 w-2.5" />
+        Formula
+      </button>
       <button
         className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 hover:bg-primary/20 text-primary font-medium shrink-0 transition-colors flex items-center gap-1"
         onMouseDown={(e) => e.preventDefault()}

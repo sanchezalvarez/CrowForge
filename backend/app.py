@@ -2137,6 +2137,106 @@ async def ai_generate_rows(sheet_id: str, request: Request, instruction: str, co
     return EventSourceResponse(event_generator())
 
 
+@app.post("/ai/ask/stream")
+async def ai_ask_stream(body: dict, request: Request):
+    """Generic streaming Q&A with optional context (e.g. sheet data as CSV)."""
+    user_message = body.get("message", "").strip()
+    context = body.get("context", "").strip()
+    history = body.get("history", [])  # [{"role": "user"|"assistant", "content": "..."}]
+    system_override = body.get("system", "").strip()
+    temperature = float(body.get("temperature", 0.7))
+    max_tokens = int(body.get("max_tokens", 1024))
+
+    if not user_message:
+        raise HTTPException(status_code=400, detail="message is required")
+
+    system_prompt = system_override or (
+        "You are a helpful data analyst assistant. "
+        "Answer concisely and clearly. When working with spreadsheet data use the context provided. "
+        "Format numbers readably. Respond in the same language as the user."
+    )
+
+    parts: list[str] = []
+    if context:
+        parts.append(f"Data context:\n{context}")
+    for msg in history:
+        role = msg.get("role", "user")
+        content = msg.get("content", "")
+        prefix = "User" if role == "user" else "Assistant"
+        parts.append(f"{prefix}: {content}")
+    parts.append(f"User: {user_message}")
+    user_prompt = "\n\n".join(parts)
+
+    async def event_generator():
+        try:
+            async with asyncio.timeout(GENERATION_TIMEOUT):
+                async for chunk in engine_manager.get_active().generate_stream(
+                    system_prompt, user_prompt,
+                    temperature=temperature, max_tokens=max_tokens,
+                    json_mode=False,
+                ):
+                    if await request.is_disconnected():
+                        return
+                    yield {"data": chunk}
+            yield {"data": "[DONE]"}
+        except asyncio.TimeoutError:
+            yield {"data": "[ERROR] Generation timed out"}
+        except Exception as e:
+            yield {"data": f"[ERROR] {e}"}
+
+    return EventSourceResponse(event_generator())
+
+
+@app.post("/ai/formula-assist")
+async def formula_assist(body: dict):
+    """Generate a spreadsheet formula from a natural-language description."""
+    description = body.get("description", "").strip()
+    columns = body.get("columns", [])   # [{"name": "...", "type": "..."}]
+    sample_row = body.get("sample_row", [])
+    current_cell = body.get("current_cell", "")
+
+    if not description:
+        raise HTTPException(status_code=400, detail="description is required")
+
+    cols_info = ", ".join(
+        f"{chr(65 + i)} ({c.get('name', '')}: {c.get('type', 'text')})"
+        for i, c in enumerate(columns)
+    ) or "unknown"
+
+    sample_info = ""
+    if sample_row:
+        sample_info = f"\nSample row 1 values: {', '.join(str(v) for v in sample_row[:10])}"
+
+    system_prompt = (
+        "You are a spreadsheet formula expert. "
+        "Generate a single spreadsheet formula based on the user's description. "
+        "Return ONLY the formula starting with =, nothing else. "
+        "No explanation, no markdown, no code blocks — just the raw formula."
+    )
+    user_prompt = (
+        f"Columns: {cols_info}{sample_info}\n"
+        f"Current cell: {current_cell or 'unknown'}\n"
+        f"Generate a formula that: {description}\n"
+        "Return only the formula."
+    )
+
+    full_response = ""
+    try:
+        async for chunk in engine_manager.get_active().generate_stream(
+            system_prompt, user_prompt,
+            temperature=0.1, max_tokens=256,
+            json_mode=False,
+        ):
+            full_response += chunk
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"AI generation failed: {e}")
+
+    formula = full_response.strip()
+    if formula and not formula.startswith("="):
+        formula = "=" + formula
+    return {"formula": formula}
+
+
 @app.get("/system/specs")
 async def system_specs():
     """Return basic hardware info for display in settings."""

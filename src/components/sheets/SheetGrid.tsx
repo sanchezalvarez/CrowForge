@@ -88,6 +88,14 @@ export interface SheetGridProps {
   setColWidths: (v: Record<number, number>) => void;
   cellInputRef: React.RefObject<HTMLInputElement | null>;
   gridRef: React.RefObject<HTMLDivElement | null>;
+  fillDown: () => void;
+  fillRight: () => void;
+  hiddenCols: Set<number>;
+  onUnhideCol: (ci: number) => void;
+  findMatches: Set<string>;
+  findCurrentKey: string | null;
+  onFindOpen: () => void;
+  onUnhideRows: (rows: number[]) => void;
 }
 
 // ---- Memoized row component ----
@@ -123,6 +131,9 @@ interface SheetRowProps {
   formulaRefMap: Map<string, number>;
   aiTargetRect: SelectionRect | null;
   cellInputRef: React.RefObject<HTMLInputElement | null>;
+  hiddenCols: Set<number>;
+  findMatches: Set<string>;
+  findCurrentKey: string | null;
 }
 
 const SheetRow = React.memo(function SheetRow({
@@ -138,6 +149,7 @@ const SheetRow = React.memo(function SheetRow({
   aiFillCol, aiFilledRows, aiFillErrors,
   formulaRefMap, aiTargetRect,
   cellInputRef,
+  hiddenCols, findMatches, findCurrentKey,
 }: SheetRowProps) {
   return (
     <tr key={ri}>
@@ -161,6 +173,7 @@ const SheetRow = React.memo(function SheetRow({
         />
       </td>
       {row.map((cell, ci) => {
+        if (hiddenCols.has(ci)) return null;
         const isEditing = editingCell?.row === ri && editingCell?.col === ci;
         const colType = activeSheet.columns[ci]?.type ?? "text";
         const justFilled = ci === aiFillCol && aiFilledRows.has(ri);
@@ -172,6 +185,8 @@ const SheetRow = React.memo(function SheetRow({
         const isErrorValue = hasFormula && typeof cell === "string" && cell.startsWith("#");
         const refColor = isFormulaRef ? REF_COLORS[refColorIdx] : null;
         const isAiTarget = aiTargetRect && ri >= aiTargetRect.r1 && ri <= aiTargetRect.r2 && ci >= aiTargetRect.c1 && ci <= aiTargetRect.c2;
+        const isFindMatch = findMatches.has(`${ri},${ci}`);
+        const isFindCurrent = findCurrentKey === `${ri},${ci}`;
 
         return (
           <td
@@ -185,7 +200,9 @@ const SheetRow = React.memo(function SheetRow({
               selected && !isFormulaRef && "bg-primary/10",
               justFilled && "bg-green-500/10",
               fillError && "bg-destructive/10",
-              isAiTarget && "bg-purple-500/10"
+              isAiTarget && "bg-purple-500/10",
+              isFindMatch && !isFindCurrent && "bg-yellow-400/20",
+              isFindCurrent && "bg-yellow-400/50 ring-1 ring-yellow-500/60 ring-inset",
             )}
             style={(() => {
               const fmt: CellFormat = activeSheet.formats?.[`${ri},${ci}`] ?? {};
@@ -343,6 +360,7 @@ export function SheetGrid({
   renamingCol, setRenamingCol, renameValue, setRenameValue, renameRef, colRenameCommit,
   addingColumn, setAddingColumn, newColName, setNewColName, setNewColType,
   colNameRef, submitNewColumn, setResizing, setColWidths, cellInputRef, gridRef,
+  fillDown, fillRight, hiddenCols, onUnhideCol, findMatches, findCurrentKey, onFindOpen, onUnhideRows,
 }: SheetGridProps) {
   // Compute formula ref highlights once per render (only when editing a formula)
   const formulaRefMap = useMemo(() => {
@@ -515,6 +533,21 @@ export function SheetGrid({
             }).catch(() => {});
             return;
           }
+          if (isCtrl && e.key === "d" && selection) {
+            e.preventDefault();
+            fillDown();
+            return;
+          }
+          if (isCtrl && e.key === "r" && selection) {
+            e.preventDefault();
+            fillRight();
+            return;
+          }
+          if (isCtrl && e.key === "f") {
+            e.preventDefault();
+            onFindOpen();
+            return;
+          }
           // Start editing on printable character
           if (selection && !e.ctrlKey && !e.metaKey && !e.altKey && e.key.length === 1) {
             flushSync(() => {
@@ -558,7 +591,23 @@ export function SheetGrid({
             <thead className="sticky top-0 z-20">
               <tr>
                 <th className="sticky left-0 z-30 border border-border bg-muted px-2 py-1.5 text-left text-xs font-medium text-muted-foreground w-10">#</th>
-                {activeSheet.columns.map((col, ci) => (
+                {activeSheet.columns.map((col, ci) => {
+                  if (hiddenCols.has(ci)) {
+                    return (
+                      <th
+                        key={ci}
+                        className="border border-border bg-muted/70 cursor-pointer w-2 min-w-0 p-0 text-center"
+                        style={{ width: 8, minWidth: 8 }}
+                        title={`Unhide column ${col.name}`}
+                        onClick={() => onUnhideCol(ci)}
+                      >
+                        <div className="h-full w-full flex items-center justify-center">
+                          <div className="h-3 w-0.5 bg-muted-foreground/40 rounded-full" />
+                        </div>
+                      </th>
+                    );
+                  }
+                  return (
                   <th
                     key={ci}
                     className="group border border-border bg-muted px-2 py-1.5 text-left text-xs font-medium text-muted-foreground cursor-context-menu relative"
@@ -634,7 +683,8 @@ export function SheetGrid({
                       }}
                     />
                   </th>
-                ))}
+                  );
+                })}
                 <th className="border border-border bg-muted px-1 py-1 min-w-[120px]">
                   {addingColumn ? (
                     <div className="flex items-center gap-1">
@@ -668,7 +718,25 @@ export function SheetGrid({
               {filteredRowIndices.length > ROW_RENDER_LIMIT && scrollRowStart > 0 && (
                 <tr><td colSpan={activeSheet.columns.length + 2} style={{ height: filteredRowIndices.slice(0, scrollRowStart).reduce((sum, ri) => sum + (rowHeights[ri] ?? DEFAULT_ROW_HEIGHT) + 1, 0), padding: 0, border: "none" }} /></tr>
               )}
-              {visibleRowIndices.map((ri) => (
+              {visibleRowIndices.map((ri, vIdx) => {
+                const prevRi = vIdx > 0 ? visibleRowIndices[vIdx - 1] : (scrollRowStart > 0 ? filteredRowIndices[scrollRowStart - 1] : -1);
+                const showHiddenRowIndicator = prevRi >= 0 && ri - prevRi > 1;
+                return (
+                <React.Fragment key={ri}>
+                  {showHiddenRowIndicator && (
+                    <tr>
+                      <td
+                        colSpan={activeSheet.columns.length + 2}
+                        className="h-1 p-0 bg-yellow-400/20 border-y border-yellow-400/40 cursor-pointer text-center text-[9px] text-yellow-600/70 hover:bg-yellow-400/30"
+                        title="Hidden rows — click to show"
+                        onClick={() => {
+                          const rows: number[] = [];
+                          for (let r = prevRi + 1; r < ri; r++) rows.push(r);
+                          onUnhideRows(rows);
+                        }}
+                      />
+                    </tr>
+                  )}
                 <SheetRow
                   key={ri}
                   ri={ri}
@@ -702,8 +770,13 @@ export function SheetGrid({
                   formulaRefMap={formulaRefMap}
                   aiTargetRect={aiTargetRect}
                   cellInputRef={cellInputRef}
+                  hiddenCols={hiddenCols}
+                  findMatches={findMatches}
+                  findCurrentKey={findCurrentKey}
                 />
-              ))}
+                </React.Fragment>
+                );
+              })}
               {/* Virtual scroll spacer bottom */}
               {filteredRowIndices.length > ROW_RENDER_LIMIT && (scrollRowStart + ROW_RENDER_LIMIT) < filteredRowIndices.length && (
                 <tr><td colSpan={activeSheet.columns.length + 2} style={{ height: filteredRowIndices.slice(scrollRowStart + ROW_RENDER_LIMIT).reduce((sum, ri) => sum + (rowHeights[ri] ?? DEFAULT_ROW_HEIGHT) + 1, 0), padding: 0, border: "none" }} /></tr>

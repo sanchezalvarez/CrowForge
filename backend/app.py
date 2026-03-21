@@ -1361,7 +1361,12 @@ async def update_sheet_alignments(sheet_id: str, body: dict):
 
 @app.put("/sheets/{sheet_id}/sizes")
 async def update_sheet_sizes(sheet_id: str, body: dict):
-    sizes = {"colWidths": body.get("colWidths", {}), "rowHeights": body.get("rowHeights", {})}
+    sizes = {
+        "colWidths": body.get("colWidths", {}),
+        "rowHeights": body.get("rowHeights", {}),
+        "hiddenRows": body.get("hiddenRows", []),
+        "hiddenCols": body.get("hiddenCols", []),
+    }
     sheet = sheet_repo.update_sizes(sheet_id, sizes)
     if not sheet:
         raise HTTPException(status_code=404, detail="Sheet not found")

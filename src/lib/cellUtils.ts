@@ -8,6 +8,8 @@ export interface SheetColumn {
 export interface SheetSizes {
   colWidths?: Record<number, number>;
   rowHeights?: Record<number, number>;
+  hiddenRows?: number[];
+  hiddenCols?: number[];
 }
 
 export interface CellFormat {

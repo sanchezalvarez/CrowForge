@@ -32,6 +32,7 @@ export interface SheetContextMenusProps {
   filters: Map<number, { operator: string; value: string }>;
   removeFilter: (idx: number) => void;
   colDelete: (idx: number) => void;
+  colHide: (idx: number) => void;
   colToolClean: (idx: number) => void;
   colToolNormalize: (idx: number) => void;
   colToolCategorize: (idx: number) => void;
@@ -69,6 +70,7 @@ export interface SheetContextMenusProps {
   rowInsertBelow: (idx: number) => void;
   rowDuplicate: (idx: number) => void;
   rowDelete: (idx: number) => void;
+  hideRow: (idx: number) => void;
   rowHeights: Record<number, number>;
   setRowHeights: React.Dispatch<React.SetStateAction<Record<number, number>>>;
   setSheets: React.Dispatch<React.SetStateAction<Sheet[]>>;
@@ -83,12 +85,12 @@ export interface SheetContextMenusProps {
 export function SheetContextMenus({
   sheetMenu, setSheetMenu, sheetRenameStart, duplicateSheet, deleteSheet,
   colMenu, colRenameStart, colInsertAt, colMoveLeft, colMoveRight,
-  colSort, openFilterEditor, filters, removeFilter, colDelete,
+  colSort, openFilterEditor, filters, removeFilter, colDelete, colHide,
   colToolClean, colToolNormalize, colToolCategorize, aiDisabled, aiFilling, activeSheet,
   filterEditCol, setFilterEditCol, filterOp, setFilterOp, filterVal, setFilterVal, applyFilter,
   cellMenu, setCellMenu, explainFormula, setAiOpSourceStr, setAiOpTargetStr, setAiOpMode, setAiOpOpen,
   formulaExplanation, setFormulaExplanation, gridRef,
-  rowMenu, setRowMenu, rowInsertAbove, rowInsertBelow, rowDuplicate, rowDelete,
+  rowMenu, setRowMenu, rowInsertAbove, rowInsertBelow, rowDuplicate, rowDelete, hideRow,
   rowHeights, setRowHeights, setSheets, activeSheetId,
   pendingDelete, setPendingDelete, confirmDelete,
 }: SheetContextMenusProps) {
@@ -237,6 +239,13 @@ export function SheetContextMenus({
             </>
           )}
           <div className="border-t border-border my-1" />
+          <button
+            className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2"
+            onClick={() => colHide(colMenu.colIndex)}
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Hide column
+          </button>
           <button
             className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2 text-destructive"
             onClick={() => colDelete(colMenu.colIndex)}
@@ -404,6 +413,13 @@ export function SheetContextMenus({
             </button>
           )}
           <div className="border-t border-border my-1" />
+          <button
+            className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2"
+            onClick={() => hideRow(rowMenu.rowIndex)}
+          >
+            <ArrowUp className="h-3.5 w-3.5" />
+            Hide row
+          </button>
           <button
             className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2 text-destructive"
             onClick={() => rowDelete(rowMenu.rowIndex)}

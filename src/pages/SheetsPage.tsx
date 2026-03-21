@@ -30,6 +30,8 @@ import { SheetGrid } from "../components/sheets/SheetGrid";
 import { FindBar } from "../components/sheets/FindBar";
 import { MultiSortDialog, type SortLevel } from "../components/sheets/MultiSortDialog";
 import { CondFormatDialog } from "../components/sheets/CondFormatDialog";
+import { SheetChatPanel } from "../components/sheets/SheetChatPanel";
+import { FormulaWizard } from "../components/sheets/FormulaWizard";
 import type { TuningParams } from "../components/AIControlPanel";
 import { SheetSidebar } from "../components/sheets/SheetSidebar";
 import type { ConditionalRule } from "../lib/cellUtils";
@@ -708,6 +710,12 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
 
   // Conditional formatting dialog
   const [condFormatOpen, setCondFormatOpen] = useState(false);
+
+  // Sheet Chat panel
+  const [sheetChatOpen, setSheetChatOpen] = useState(false);
+
+  // Formula Wizard dialog
+  const [formulaWizardOpen, setFormulaWizardOpen] = useState(false);
   const saveCondRules = useCallback(async (rules: ConditionalRule[]) => {
     if (!activeSheet) return;
     const sizes = { ...activeSheet.sizes, condRules: rules };
@@ -1476,7 +1484,8 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
       />
 
       {/* Main area */}
-      <div className="flex-1 flex flex-col min-w-0 relative">
+      <div className="flex-1 flex min-w-0 relative overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {activeSheet ? (
           <>
             {/* Title bar */}
@@ -1564,6 +1573,8 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
               onOpenCondFormat={() => setCondFormatOpen(true)}
               hasCondRules={(activeSheet.sizes?.condRules?.length ?? 0) > 0}
               copyAsMarkdown={copyAsMarkdown}
+              onOpenSheetChat={() => setSheetChatOpen((o) => !o)}
+              sheetChatOpen={sheetChatOpen}
             />
 
             <FormulaBar
@@ -1581,6 +1592,7 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
               setAiOpMode={setAiOpMode}
               setAiOpSourceStr={setAiOpSourceStr}
               setAiOpOpen={setAiOpOpen}
+              onOpenFormulaWizard={() => setFormulaWizardOpen(true)}
             />
 
             <SheetGrid
@@ -1696,6 +1708,18 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
                 onClose={() => setCondFormatOpen(false)}
               />
             )}
+            {formulaWizardOpen && (
+              <FormulaWizard
+                sheet={activeSheet}
+                selection={selection}
+                onInsert={(formula) => {
+                  if (selection) {
+                    startEditing(selection.r1, selection.c1, formula);
+                  }
+                }}
+                onClose={() => setFormulaWizardOpen(false)}
+              />
+            )}
           </>
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground">
@@ -1714,6 +1738,16 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
             </div>
           </div>
         )}
+      </div>
+
+      {/* Sheet Chat panel — right side drawer */}
+      {sheetChatOpen && activeSheet && (
+        <SheetChatPanel
+          sheet={activeSheet}
+          selection={selection}
+          onClose={() => setSheetChatOpen(false)}
+        />
+      )}
       </div>
 
       <SheetContextMenus

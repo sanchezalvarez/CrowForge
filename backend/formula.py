@@ -4,7 +4,9 @@ Supports: =, +, -, *, /, parentheses, cell refs (A1), ranges (A1:B3),
 arithmetic comparison operators (>, <, >=, <=, =, <>),
 and a wide set of functions:
   Aggregates: SUM, AVERAGE/AVG, COUNT, COUNTA, MIN, MAX
-  Logic:      IF, IFERROR, AND, OR, NOT, TRUE, FALSE
+  Conditional: SUMIF, SUMIFS, COUNTIF, COUNTIFS, AVERAGEIF
+  Logic:      IF, IFS, IFERROR, AND, OR, NOT, TRUE, FALSE
+  Lookup:     VLOOKUP, HLOOKUP, INDEX, MATCH
   Text:       UPPER, LOWER, TRIM, LEN, LEFT, RIGHT, MID,
               CONCAT, CONCATENATE, TEXT, REPT, SUBSTITUTE
   Math:       ABS, ROUND, ROUNDUP, ROUNDDOWN, MOD, INT,
@@ -74,7 +76,9 @@ _VALID_ARITH_RE = re.compile(r'^[\d\.\+\-\*/\(\)\s<>=!&|]*$')
 # All function names recognised by the engine
 _ALL_KNOWN_FUNCS = frozenset({
     'SUM', 'AVERAGE', 'AVG', 'COUNT', 'COUNTA', 'MIN', 'MAX',
-    'IF', 'IFERROR', 'AND', 'OR', 'NOT', 'TRUE', 'FALSE',
+    'SUMIF', 'SUMIFS', 'COUNTIF', 'COUNTIFS', 'AVERAGEIF',
+    'IF', 'IFS', 'IFERROR', 'AND', 'OR', 'NOT', 'TRUE', 'FALSE',
+    'VLOOKUP', 'HLOOKUP', 'INDEX', 'MATCH',
     'UPPER', 'LOWER', 'TRIM', 'LEN', 'LEFT', 'RIGHT', 'MID',
     'CONCAT', 'CONCATENATE', 'TEXT', 'REPT', 'SUBSTITUTE',
     'ABS', 'ROUND', 'ROUNDUP', 'ROUNDDOWN', 'MOD', 'INT',
@@ -131,6 +135,61 @@ def _to_str(val: 'str | float') -> str:
             return str(int(val))
         return f"{val:.10g}"
     return str(val)
+
+
+def _matches_criteria(cell_val: str, criteria: 'str | float') -> bool:
+    """Check if cell_val matches an Excel-style criteria string.
+
+    Supports: exact match, operator prefixes (>, <, >=, <=, =, <>, !=),
+    and wildcard patterns (* and ?) for string matching.
+    """
+    import fnmatch as _fnmatch
+
+    # Numeric criteria passed directly as float/int — exact equality check
+    if isinstance(criteria, (int, float)):
+        try:
+            return float(cell_val) == float(criteria)
+        except (ValueError, TypeError):
+            return False
+
+    crit = str(criteria).strip()
+
+    # Operator-prefixed criteria: ">10", "<=foo", "<>x"
+    for op in ('>=', '<=', '<>', '!=', '>', '<', '='):
+        if crit.startswith(op):
+            rhs = crit[len(op):].strip().strip('"')
+            try:
+                lhs_n = float(cell_val) if cell_val.strip() else None
+                rhs_n = float(rhs)
+                if lhs_n is None:
+                    return False
+                if op in ('=', '=='):   return lhs_n == rhs_n
+                if op == '>':           return lhs_n > rhs_n
+                if op == '<':           return lhs_n < rhs_n
+                if op == '>=':          return lhs_n >= rhs_n
+                if op == '<=':          return lhs_n <= rhs_n
+                if op in ('<>', '!='):  return lhs_n != rhs_n
+            except (ValueError, TypeError):
+                cl, rl = cell_val.strip().lower(), rhs.lower()
+                if op in ('=', '=='):   return cl == rl
+                if op in ('<>', '!='):  return cl != rl
+                if op == '>':           return cl > rl
+                if op == '<':           return cl < rl
+                if op == '>=':          return cl >= rl
+                if op == '<=':          return cl <= rl
+            return False
+
+    # Wildcard patterns: * matches any sequence, ? matches one char
+    if '*' in crit or '?' in crit:
+        return _fnmatch.fnmatch(cell_val.strip().lower(), crit.lower())
+
+    # Plain exact match (case-insensitive string, or numeric equality)
+    if cell_val.strip().lower() == crit.lower():
+        return True
+    try:
+        return float(cell_val) == float(crit)
+    except (ValueError, TypeError):
+        return False
 
 
 def col_to_index(col_str: str) -> int:
@@ -780,6 +839,303 @@ def _eval_any(
                 return float(_dt.datetime.fromisoformat(_astr(0)).day)
             except (ValueError, TypeError):
                 raise ValueError_("#VALUE!")
+
+        # ── Lookup / Reference ─────────────────────────────────────────────
+
+        if name == 'VLOOKUP':
+            # VLOOKUP(lookup_value, table_range, col_index, [range_lookup])
+            # range_lookup: 0/FALSE = exact match (default), 1/TRUE = approximate (sorted)
+            if len(raw_args) < 3:
+                raise FormulaSyntaxError("VLOOKUP: requires at least 3 arguments")
+            lookup_val = _arg(0)
+            table_ref = raw_args[1].strip()
+            col_idx = int(_anum(2)) - 1  # 1-based → 0-based
+            range_lookup = int(_anum(3, 1.0))  # 1 = approximate, 0 = exact
+
+            cells = _range_cells(table_ref)
+            # Group cells by row (preserving order)
+            rows_map: dict[int, list[int]] = {}
+            for rr, cc in cells:
+                rows_map.setdefault(rr, []).append(cc)
+            sorted_rows = sorted(rows_map)
+
+            lookup_str = _to_str(lookup_val).lower()
+            try:
+                lookup_num: float | None = float(lookup_val) if not isinstance(lookup_val, str) else float(str(lookup_val))
+            except (ValueError, TypeError):
+                lookup_num = None
+
+            found_row: int | None = None
+            if range_lookup == 0:  # exact match
+                for rr in sorted_rows:
+                    first_col = sorted(rows_map[rr])[0]
+                    cv = resolve_raw(rr, first_col)
+                    if cv.strip().lower() == lookup_str:
+                        found_row = rr
+                        break
+                    if lookup_num is not None and _is_numeric(cv) and float(cv) == lookup_num:
+                        found_row = rr
+                        break
+            else:  # approximate: last row where first col <= lookup_val
+                for rr in sorted_rows:
+                    first_col = sorted(rows_map[rr])[0]
+                    cv = resolve_raw(rr, first_col)
+                    try:
+                        if lookup_num is not None and float(cv) <= lookup_num:
+                            found_row = rr
+                        elif lookup_num is None and cv.strip().lower() <= lookup_str:
+                            found_row = rr
+                    except (ValueError, TypeError):
+                        if cv.strip().lower() <= lookup_str:
+                            found_row = rr
+
+            if found_row is None:
+                raise InvalidRefError("VLOOKUP: value not found (#N/A)")
+            sorted_cols = sorted(rows_map[found_row])
+            if col_idx >= len(sorted_cols):
+                raise InvalidRefError("VLOOKUP: col_index out of range")
+            raw = resolve_raw(found_row, sorted_cols[col_idx])
+            try:
+                return float(raw) if raw.strip() else 0.0
+            except ValueError:
+                return raw
+
+        if name == 'HLOOKUP':
+            # HLOOKUP(lookup_value, table_range, row_index, [range_lookup])
+            if len(raw_args) < 3:
+                raise FormulaSyntaxError("HLOOKUP: requires at least 3 arguments")
+            lookup_val = _arg(0)
+            table_ref = raw_args[1].strip()
+            row_idx = int(_anum(2)) - 1  # 1-based → 0-based
+            range_lookup = int(_anum(3, 1.0))
+
+            cells = _range_cells(table_ref)
+            cols_map: dict[int, list[int]] = {}
+            for rr, cc in cells:
+                cols_map.setdefault(cc, []).append(rr)
+            sorted_cols = sorted(cols_map)
+
+            lookup_str = _to_str(lookup_val).lower()
+            try:
+                lookup_num = float(lookup_val) if not isinstance(lookup_val, str) else float(str(lookup_val))
+            except (ValueError, TypeError):
+                lookup_num = None
+
+            found_col: int | None = None
+            if range_lookup == 0:
+                for cc in sorted_cols:
+                    first_row = sorted(cols_map[cc])[0]
+                    cv = resolve_raw(first_row, cc)
+                    if cv.strip().lower() == lookup_str:
+                        found_col = cc
+                        break
+                    if lookup_num is not None and _is_numeric(cv) and float(cv) == lookup_num:
+                        found_col = cc
+                        break
+            else:
+                for cc in sorted_cols:
+                    first_row = sorted(cols_map[cc])[0]
+                    cv = resolve_raw(first_row, cc)
+                    try:
+                        if lookup_num is not None and float(cv) <= lookup_num:
+                            found_col = cc
+                        elif lookup_num is None and cv.strip().lower() <= lookup_str:
+                            found_col = cc
+                    except (ValueError, TypeError):
+                        if cv.strip().lower() <= lookup_str:
+                            found_col = cc
+
+            if found_col is None:
+                raise InvalidRefError("HLOOKUP: value not found (#N/A)")
+            sorted_rows_in_col = sorted(cols_map[found_col])
+            if row_idx >= len(sorted_rows_in_col):
+                raise InvalidRefError("HLOOKUP: row_index out of range")
+            raw = resolve_raw(sorted_rows_in_col[row_idx], found_col)
+            try:
+                return float(raw) if raw.strip() else 0.0
+            except ValueError:
+                return raw
+
+        if name == 'MATCH':
+            # MATCH(lookup_value, lookup_range, [match_type])
+            # match_type: 0=exact, 1=ascending approx (default), -1=descending approx
+            # Returns 1-based position
+            if len(raw_args) < 2:
+                raise FormulaSyntaxError("MATCH: requires at least 2 arguments")
+            lookup_val = _arg(0)
+            cells = _range_cells(raw_args[1].strip())
+            match_type = int(_anum(2, 1.0))
+
+            lookup_str = _to_str(lookup_val).lower()
+            try:
+                lookup_num = float(lookup_val) if not isinstance(lookup_val, str) else float(str(lookup_val))
+            except (ValueError, TypeError):
+                lookup_num = None
+
+            def _cell_matches_exact(cv: str) -> bool:
+                if cv.strip().lower() == lookup_str:
+                    return True
+                if lookup_num is not None and _is_numeric(cv) and float(cv) == lookup_num:
+                    return True
+                return False
+
+            if match_type == 0:  # exact
+                for i, (rr, cc) in enumerate(cells):
+                    if _cell_matches_exact(resolve_raw(rr, cc)):
+                        return float(i + 1)
+                raise InvalidRefError("MATCH: value not found (#N/A)")
+            elif match_type == 1:  # largest value <= lookup_val (ascending sorted)
+                result: float | None = None
+                for i, (rr, cc) in enumerate(cells):
+                    cv = resolve_raw(rr, cc)
+                    try:
+                        if lookup_num is not None and float(cv) <= lookup_num:
+                            result = float(i + 1)
+                        elif lookup_num is None and cv.strip().lower() <= lookup_str:
+                            result = float(i + 1)
+                    except (ValueError, TypeError):
+                        if cv.strip().lower() <= lookup_str:
+                            result = float(i + 1)
+                if result is None:
+                    raise InvalidRefError("MATCH: value not found (#N/A)")
+                return result
+            else:  # match_type == -1: smallest value >= lookup_val (descending sorted)
+                for i, (rr, cc) in enumerate(cells):
+                    cv = resolve_raw(rr, cc)
+                    try:
+                        if lookup_num is not None and float(cv) >= lookup_num:
+                            return float(i + 1)
+                        elif lookup_num is None and cv.strip().lower() >= lookup_str:
+                            return float(i + 1)
+                    except (ValueError, TypeError):
+                        if cv.strip().lower() >= lookup_str:
+                            return float(i + 1)
+                raise InvalidRefError("MATCH: value not found (#N/A)")
+
+        if name == 'INDEX':
+            # INDEX(array_range, row_num, [col_num])
+            # row_num and col_num are 1-based; 0 means entire row/col (returns first match)
+            if len(raw_args) < 2:
+                raise FormulaSyntaxError("INDEX: requires at least 2 arguments")
+            cells = _range_cells(raw_args[0].strip())
+            row_num = int(_anum(1)) - 1  # 0-based
+            col_num = int(_anum(2, 1.0)) - 1  # 0-based
+
+            rows_map2: dict[int, list[int]] = {}
+            for rr, cc in cells:
+                rows_map2.setdefault(rr, []).append(cc)
+            sorted_rows2 = sorted(rows_map2)
+
+            if row_num < 0 or row_num >= len(sorted_rows2):
+                raise InvalidRefError("INDEX: row_num out of range")
+            rr = sorted_rows2[row_num]
+            sorted_cols2 = sorted(rows_map2[rr])
+            if col_num < 0 or col_num >= len(sorted_cols2):
+                raise InvalidRefError("INDEX: col_num out of range")
+            raw = resolve_raw(rr, sorted_cols2[col_num])
+            try:
+                return float(raw) if raw.strip() else 0.0
+            except ValueError:
+                return raw
+
+        # ── Conditional aggregates ─────────────────────────────────────────
+
+        if name == 'SUMIF':
+            # SUMIF(range, criteria, [sum_range])
+            if len(raw_args) < 2:
+                raise FormulaSyntaxError("SUMIF: requires at least 2 arguments")
+            crit_cells = _range_cells(raw_args[0].strip())
+            criteria = _arg(1)
+            sum_cells = _range_cells(raw_args[2].strip()) if len(raw_args) > 2 else crit_cells
+            total = 0.0
+            for i, (rr, cc) in enumerate(crit_cells):
+                if _matches_criteria(resolve_raw(rr, cc), criteria):
+                    if i < len(sum_cells):
+                        sr, sc = sum_cells[i]
+                        total += resolve_num(sr, sc)
+            return total
+
+        if name == 'SUMIFS':
+            # SUMIFS(sum_range, criteria_range1, criteria1, [criteria_range2, criteria2, ...])
+            if len(raw_args) < 3 or len(raw_args) % 2 == 0:
+                raise FormulaSyntaxError("SUMIFS: requires sum_range + pairs of (range, criteria)")
+            sum_cells = _range_cells(raw_args[0].strip())
+            criterion_pairs: list[tuple[list, object]] = []
+            i = 1
+            while i + 1 < len(raw_args):
+                cr_cells = _range_cells(raw_args[i].strip())
+                cr_val = _arg(i + 1)
+                criterion_pairs.append((cr_cells, cr_val))
+                i += 2
+            total = 0.0
+            for idx, (sr, sc) in enumerate(sum_cells):
+                if all(
+                    idx < len(cr_cells) and _matches_criteria(resolve_raw(cr_cells[idx][0], cr_cells[idx][1]), cr_val)
+                    for cr_cells, cr_val in criterion_pairs
+                ):
+                    total += resolve_num(sr, sc)
+            return total
+
+        if name == 'COUNTIF':
+            # COUNTIF(range, criteria)
+            if len(raw_args) < 2:
+                raise FormulaSyntaxError("COUNTIF: requires 2 arguments")
+            crit_cells = _range_cells(raw_args[0].strip())
+            criteria = _arg(1)
+            return float(sum(
+                1 for rr, cc in crit_cells
+                if _matches_criteria(resolve_raw(rr, cc), criteria)
+            ))
+
+        if name == 'COUNTIFS':
+            # COUNTIFS(range1, criteria1, [range2, criteria2, ...])
+            if len(raw_args) < 2 or len(raw_args) % 2 != 0:
+                raise FormulaSyntaxError("COUNTIFS: requires pairs of (range, criteria)")
+            criterion_pairs2: list[tuple[list, object]] = []
+            i = 0
+            while i + 1 < len(raw_args):
+                cr_cells = _range_cells(raw_args[i].strip())
+                cr_val = _arg(i + 1)
+                criterion_pairs2.append((cr_cells, cr_val))
+                i += 2
+            if not criterion_pairs2:
+                return 0.0
+            ref_len = len(criterion_pairs2[0][0])
+            return float(sum(
+                1 for idx in range(ref_len)
+                if all(
+                    idx < len(cr_cells) and _matches_criteria(resolve_raw(cr_cells[idx][0], cr_cells[idx][1]), cr_val)
+                    for cr_cells, cr_val in criterion_pairs2
+                )
+            ))
+
+        if name == 'AVERAGEIF':
+            # AVERAGEIF(range, criteria, [average_range])
+            if len(raw_args) < 2:
+                raise FormulaSyntaxError("AVERAGEIF: requires at least 2 arguments")
+            crit_cells = _range_cells(raw_args[0].strip())
+            criteria = _arg(1)
+            avg_cells = _range_cells(raw_args[2].strip()) if len(raw_args) > 2 else crit_cells
+            vals = [
+                resolve_num(avg_cells[i][0], avg_cells[i][1])
+                for i, (rr, cc) in enumerate(crit_cells)
+                if _matches_criteria(resolve_raw(rr, cc), criteria) and i < len(avg_cells)
+            ]
+            if not vals:
+                raise DivisionByZeroError("AVERAGEIF: no matching cells")
+            return sum(vals) / len(vals)
+
+        # ── Multi-condition logic ──────────────────────────────────────────
+
+        if name == 'IFS':
+            # IFS(condition1, value1, condition2, value2, ...)
+            if len(raw_args) < 2 or len(raw_args) % 2 != 0:
+                raise FormulaSyntaxError("IFS: requires pairs of (condition, value)")
+            for i in range(0, len(raw_args), 2):
+                cond = _to_num(_arg(i), 'IFS')
+                if cond != 0:
+                    return _arg(i + 1)
+            raise InvalidRefError("IFS: no condition matched (#N/A)")
 
         raise FormulaSyntaxError(f"Unknown function: {name}")
 

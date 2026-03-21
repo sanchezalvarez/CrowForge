@@ -10,6 +10,7 @@ export interface SheetSizes {
   rowHeights?: Record<number, number>;
   hiddenRows?: number[];
   hiddenCols?: number[];
+  freezeFirstCol?: boolean;
 }
 
 export interface CellFormat {
@@ -125,6 +126,52 @@ export function resolveRange(ref: string): { r1: number; c1: number; r2: number;
     };
   }
   return null;
+}
+
+/**
+ * Given a 1-D slice of source cell values, return `count` new values
+ * by extending any detected arithmetic sequence or cycling the values.
+ */
+export function inferFillSeries(values: string[], count: number): string[] {
+  if (values.length === 0 || count === 0) return [];
+  // Arithmetic number series
+  const nums = values.map((v) => parseFloat(v.replace(/[$%,\s]/g, "")));
+  if (nums.every((n) => !isNaN(n)) && values[0] !== "") {
+    const step = values.length > 1
+      ? (nums[nums.length - 1] - nums[0]) / (values.length - 1)
+      : 0;
+    const last = nums[nums.length - 1];
+    return Array.from({ length: count }, (_, i) => {
+      const n = last + step * (i + 1);
+      return Number.isInteger(n) || step === 0 ? String(Math.round(n * 1e10) / 1e10) : String(n);
+    });
+  }
+  // Fallback: cycle
+  return Array.from({ length: count }, (_, i) => values[i % values.length]);
+}
+
+/**
+ * Ctrl+Arrow helper: jump to the last non-empty cell in a direction.
+ * Excel semantics: if current cell is non-empty, jump to the end of the
+ * current block; if empty, jump to the next non-empty cell.
+ */
+export function ctrlArrowMove(
+  cells: (string | undefined)[],
+  pos: number,
+  max: number,
+  dir: 1 | -1,
+): number {
+  if (cells[pos]) {
+    // Currently non-empty: find end of block
+    let p = pos;
+    while (p + dir >= 0 && p + dir <= max && cells[p + dir]) p += dir;
+    return p === pos ? (dir > 0 ? max : 0) : p;
+  } else {
+    // Currently empty: jump to next non-empty
+    let p = pos + dir;
+    while (p >= 0 && p <= max && !cells[p]) p += dir;
+    return p < 0 ? 0 : p > max ? max : p;
+  }
 }
 
 export const idxToCol = (i: number): string => {

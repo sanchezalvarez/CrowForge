@@ -19,7 +19,7 @@ import {
   type Sheet, type CellFormat,
   DEFAULT_COL_WIDTH, DEFAULT_ROW_HEIGHT, MIN_COL_WIDTH, MIN_ROW_HEIGHT,
   ROW_WARN_THRESHOLD, ROW_AI_LIMIT, ROW_RENDER_LIMIT,
-  idxToCol,
+  idxToCol, inferFillSeries,
 } from "../lib/cellUtils";
 import type { SheetTemplate } from "../lib/sheetTemplates";
 import { SheetDialogs } from "../components/sheets/SheetDialogs";
@@ -467,6 +467,93 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
     const sizes = { ...activeSheet.sizes, colWidths: newWidths, rowHeights };
     axios.put(`${API_BASE}/sheets/${activeSheet.id}/sizes`, sizes).catch(() => {});
   }, [activeSheet, rowHeights]);
+
+  const toggleFreezeCol = useCallback(() => {
+    if (!activeSheet) return;
+    const sizes = { ...activeSheet.sizes, freezeFirstCol: !activeSheet.sizes?.freezeFirstCol };
+    axios.put(`${API_BASE}/sheets/${activeSheet.id}/sizes`, sizes)
+      .then((res) => updateSheet(res.data))
+      .catch(() => {});
+  }, [activeSheet]);
+
+  type SelectionRect2 = { r1: number; c1: number; r2: number; c2: number };
+
+  const fillDragExecute = useCallback(async (origin: SelectionRect2, fillRect: SelectionRect2) => {
+    if (!activeSheet) return;
+    const { r1: or1, c1: oc1, r2: or2, c2: oc2 } = origin;
+    const { r1: fr1, c1: fc1, r2: fr2, c2: fc2 } = fillRect;
+
+    // Determine direction
+    const fillDown = fr2 > or2;
+    const fillUp = fr1 < or1;
+    const fillRight = !fillDown && !fillUp && fc2 > oc2;
+    void fc1; // fill-left not yet implemented
+
+    // Build the data array to paste
+    const data: string[][] = [];
+
+    if (fillDown || fillUp) {
+      const count = fillDown ? fr2 - or2 : or1 - fr1;
+      for (let ci = oc1; ci <= oc2; ci++) {
+        // Source column values (top to bottom)
+        const srcVals = [];
+        const srcForms = [];
+        for (let ri = or1; ri <= or2; ri++) {
+          srcForms.push(activeSheet.formulas?.[`${ri},${ci}`]);
+          srcVals.push(activeSheet.rows[ri]?.[ci] ?? "");
+        }
+        const hasFormulas = srcForms.some(Boolean);
+        const filled = hasFormulas ? srcVals : inferFillSeries(srcVals, count);
+        for (let i = 0; i < count; i++) {
+          if (!data[i]) data[i] = Array(oc2 - oc1 + 1).fill("");
+          data[i][ci - oc1] = hasFormulas
+            ? (srcForms[i % srcForms.length] ?? srcVals[i % srcVals.length])
+            : filled[i];
+        }
+      }
+      const startRow = fillDown ? or2 + 1 : fr1;
+      try {
+        const res = await axios.put(`${API_BASE}/sheets/${activeSheet.id}/paste`, {
+          start_row: startRow,
+          start_col: oc1,
+          data,
+          source_row: or1,
+          source_col: oc1,
+        });
+        updateSheet(res.data);
+      } catch { /* ignore */ }
+    } else if (fillRight) {
+      const count = fc2 - oc2;
+      for (let ri = or1; ri <= or2; ri++) {
+        const srcVals = [];
+        const srcForms = [];
+        for (let ci = oc1; ci <= oc2; ci++) {
+          srcForms.push(activeSheet.formulas?.[`${ri},${ci}`]);
+          srcVals.push(activeSheet.rows[ri]?.[ci] ?? "");
+        }
+        const hasFormulas = srcForms.some(Boolean);
+        const filled = hasFormulas ? srcVals : inferFillSeries(srcVals, count);
+        const dataRow: string[] = Array(count).fill("");
+        for (let i = 0; i < count; i++) {
+          dataRow[i] = hasFormulas
+            ? (srcForms[i % srcForms.length] ?? srcVals[i % srcVals.length])
+            : filled[i];
+        }
+        if (!data[ri - or1]) data[ri - or1] = dataRow;
+        else data[ri - or1] = dataRow;
+      }
+      try {
+        const res = await axios.put(`${API_BASE}/sheets/${activeSheet.id}/paste`, {
+          start_row: or1,
+          start_col: oc2 + 1,
+          data,
+          source_row: or1,
+          source_col: oc1,
+        });
+        updateSheet(res.data);
+      } catch { /* ignore */ }
+    }
+  }, [activeSheet]);
 
   const cutSelection = useCallback(async () => {
     if (!selection || !activeSheet) return;
@@ -1505,6 +1592,8 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
               onFindOpen={() => setFindOpen(true)}
               pasteValuesOnly={pasteValuesOnly}
               autoFitAllCols={autoFitAllCols}
+              fillDragExecute={fillDragExecute}
+              toggleFreezeCol={toggleFreezeCol}
             />
             {findOpen && (
               <FindBar

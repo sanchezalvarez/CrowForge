@@ -2144,8 +2144,11 @@ async def ai_ask_stream(body: dict, request: Request):
     context = body.get("context", "").strip()
     history = body.get("history", [])  # [{"role": "user"|"assistant", "content": "..."}]
     system_override = body.get("system", "").strip()
-    temperature = float(body.get("temperature", 0.7))
-    max_tokens = int(body.get("max_tokens", 1024))
+    try:
+        temperature = float(body.get("temperature", 0.7))
+        max_tokens = int(body.get("max_tokens", 1024))
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="Invalid temperature or max_tokens")
 
     if not user_message:
         raise HTTPException(status_code=400, detail="message is required")
@@ -2222,12 +2225,15 @@ async def formula_assist(body: dict):
 
     full_response = ""
     try:
-        async for chunk in engine_manager.get_active().generate_stream(
-            system_prompt, user_prompt,
-            temperature=0.1, max_tokens=256,
-            json_mode=False,
-        ):
-            full_response += chunk
+        async with asyncio.timeout(GENERATION_TIMEOUT):
+            async for chunk in engine_manager.get_active().generate_stream(
+                system_prompt, user_prompt,
+                temperature=0.1, max_tokens=256,
+                json_mode=False,
+            ):
+                full_response += chunk
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=504, detail="Formula generation timed out")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"AI generation failed: {e}")
 

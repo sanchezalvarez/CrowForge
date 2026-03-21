@@ -195,6 +195,35 @@ TOOL_DEFINITIONS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "index_knowledge_base",
+            "description": "Index a directory of documents to make them searchable by the agent. Supports PDF, DOCX, TXT, MD.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "The full path to the directory to index."},
+                },
+                "required": ["path"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "query_knowledge_base",
+            "description": "Search for relevant information within the previously indexed knowledge base.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "The search query."},
+                    "top_k": {"type": "integer", "description": "Number of results to return. Default: 5."},
+                },
+                "required": ["query"],
+            },
+        },
+    },
 ]
 
 

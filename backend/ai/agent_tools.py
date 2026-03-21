@@ -4,6 +4,7 @@ import json
 from typing import Optional
 from backend.ai.tool_registry import ToolRegistry
 from backend.ai.web_tools import search_web, get_page_content
+from backend.ai.rag_engine import RAGEngine
 from backend.ai.plugin_loader import GlobalPluginRegistry
 
 
@@ -200,6 +201,16 @@ def build_tool_registry(
         content = get_page_content(url)
         return {"url": url, "content": content}
 
+    async def index_knowledge_base_handler(path: str):
+        engine = RAGEngine()
+        result = engine.index_directory(path)
+        return result
+
+    async def query_knowledge_base_handler(query: str, top_k: int = 5):
+        engine = RAGEngine()
+        results = engine.query(query, top_k=top_k)
+        return results
+
     registry.register("list_sheets", list_sheets)
     registry.register("read_sheet", read_sheet)
     registry.register("write_to_sheet", write_to_sheet)
@@ -213,6 +224,8 @@ def build_tool_registry(
     registry.register("update_document", update_document)
     registry.register("web_search", web_search_handler)
     registry.register("read_web_page", read_web_page_handler)
+    registry.register("index_knowledge_base", index_knowledge_base_handler)
+    registry.register("query_knowledge_base", query_knowledge_base_handler)
 
     # Load dynamic tools from plugins
     GlobalPluginRegistry().apply_to(registry)

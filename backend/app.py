@@ -327,18 +327,25 @@ async def get_state():
 
 @app.get("/dashboard")
 async def get_dashboard_data():
-    """Return recent documents and sheets for the dashboard."""
-    recent_docs = document_repo.get_all()
-    # Sort by updated_at if it exists, otherwise use creation order (reverse)
-    # Since we don't have a dedicated get_recent, we'll sort in-memory for now
-    recent_docs.sort(key=lambda d: d.id, reverse=True)
-    
-    recent_sheets = sheet_repo.get_all()
-    recent_sheets.sort(key=lambda s: s.id, reverse=True)
-    
+    """Return recent items, counts, and AI engine status for the dashboard."""
+    all_docs = document_repo.get_all()
+    all_sheets = sheet_repo.get_all()
+    all_chats = chat_session_repo.get_all()
+
+    all_docs.sort(key=lambda d: d.updated_at or d.created_at or "", reverse=True)
+    all_sheets.sort(key=lambda s: s.updated_at or s.created_at or "", reverse=True)
+    all_chats.sort(key=lambda c: c.created_at or "", reverse=True)
+
     return {
-        "recent_documents": [d.model_dump() for d in recent_docs[:5]],
-        "recent_sheets": [s.model_dump() for s in recent_sheets[:5]],
+        "recent_documents": [d.model_dump() for d in all_docs[:5]],
+        "recent_sheets": [{"id": s.id, "title": s.title, "updated_at": s.updated_at, "columns": len(s.columns), "rows": len(s.rows)} for s in all_sheets[:5]],
+        "recent_chats": [{"id": c.id, "title": c.title, "mode": c.mode, "created_at": c.created_at} for c in all_chats[:5]],
+        "counts": {
+            "documents": len(all_docs),
+            "sheets": len(all_sheets),
+            "chats": len(all_chats),
+        },
+        "ai_engine": engine_manager.active_name,
     }
 
 @app.post("/state")

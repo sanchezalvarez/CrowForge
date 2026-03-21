@@ -87,6 +87,7 @@ interface ChatPageProps {
   onDisconnectDoc?: () => void;
   onConnectDoc?: (ctx: DocumentContext) => void;
   tuningParams?: TuningParams;
+  initialSessionId?: string | null;
 }
 
 function useIsDark() {
@@ -226,12 +227,17 @@ function ToolCallBubble({ events }: { events: AgentEvent[] }) {
   );
 }
 
-export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tuningParams }: ChatPageProps) {
+export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tuningParams, initialSessionId }: ChatPageProps) {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
-  const [activeSessionId, setActiveSessionId] = useState<number | null>(null);
+  const [activeSessionId, setActiveSessionId] = useState<number | null>(initialSessionId ? parseInt(initialSessionId) : null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [activeMode, setActiveMode] = useState("general");
+
+  // Sync with prop changes
+  useEffect(() => {
+    if (initialSessionId) setActiveSessionId(parseInt(initialSessionId));
+  }, [initialSessionId]);
   const [attachedFile, setAttachedFile] = useState<AttachedFile | null>(null);
   const [uploadingFile, setUploadingFile] = useState(false);
   const [editingTitle, setEditingTitle] = useState(false);

@@ -23,11 +23,12 @@ const API_BASE = "http://127.0.0.1:8000";
 interface DocumentsPageProps {
   onContextChange?: (ctx: DocumentContext | null) => void;
   tuningParams?: TuningParams;
+  initialDocId?: string | null;
 }
 
-export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPageProps) {
+export function DocumentsPage({ onContextChange, tuningParams, initialDocId }: DocumentsPageProps) {
   const [documents, setDocuments] = useState<EditorDocument[]>([]);
-  const [activeDocId, setActiveDocId] = useState<string | null>(null);
+  const [activeDocId, setActiveDocId] = useState<string | null>(initialDocId ?? null);
   const [activeEngine, setActiveEngine] = useState<string>("mock");
   const [docMenu, setDocMenu] = useState<{ docId: string; x: number; y: number } | null>(null);
   const [renamingDoc, setRenamingDoc] = useState<string | null>(null);
@@ -43,6 +44,11 @@ export function DocumentsPage({ onContextChange, tuningParams }: DocumentsPagePr
 
   // ── Data loading ───────────────────────────────────────────────────────
   useEffect(() => { loadDocuments(); fetchActiveEngine(); }, []);
+
+  // Sync with prop changes
+  useEffect(() => {
+    if (initialDocId) setActiveDocId(initialDocId);
+  }, [initialDocId]);
 
   useEffect(() => {
     function onDataDeleted(e: Event) {

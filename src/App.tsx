@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import crowforgeLogo from "./assets/crowforge_ico.png";
 import { cn } from "./lib/utils";
+import DashboardPage from "./pages/DashboardPage";
 import { BenchmarkPage } from "./pages/BenchmarkPage";
 import { ChatPage } from "./pages/ChatPage";
 import { DocumentsPage } from "./pages/DocumentsPage";
@@ -26,6 +27,7 @@ import { OnboardingPage } from "./pages/OnboardingPage";
 import { Toaster } from "./components/ui/toaster";
 import { AIControlPanel, TuningParams } from "./components/AIControlPanel";
 import { ChatStreamProvider } from "./contexts/ChatStreamContext";
+import { Home } from "lucide-react";
 
 const API_BASE = "http://127.0.0.1:8000";
 
@@ -60,7 +62,7 @@ class PageErrorBoundary extends Component<{ children: ReactNode; page: string },
 }
 
 type AppStatus = "loading" | "onboarding" | "ready" | "failed";
-type AppPage = "chat" | "agent" | "documents" | "sheets" | "calculator" | "benchmark" | "settings";
+type AppPage = "home" | "chat" | "agent" | "documents" | "sheets" | "calculator" | "benchmark" | "settings";
 
 export interface DocumentContext {
   title: string;
@@ -71,9 +73,25 @@ export interface DocumentContext {
 
 export default function App() {
   const [appStatus, setAppStatus] = useState<AppStatus>("loading");
-  const [currentPage, setCurrentPage] = useState<AppPage>("chat");
+  const [currentPage, setCurrentPage] = useState<AppPage>("home");
   const [docContext, setDocContext] = useState<DocumentContext | null>(null);
   const [docContextLocked, setDocContextLocked] = useState(false);
+
+  // Persistence of active IDs to allow Dashboard -> Page navigation
+  const [activeChatId, setActiveChatId] = useState<string | null>(null);
+  const [activeDocId, setActiveDocId] = useState<string | null>(null);
+  const [activeSheetId, setActiveSheetId] = useState<string | null>(null);
+
+  const handleNavigate = (page: AppPage, id?: string) => {
+    if (id) {
+      if (page === "chat") setActiveChatId(id);
+      if (page === "documents") setActiveDocId(id);
+      if (page === "sheets") setActiveSheetId(id);
+    }
+    setCurrentPage(page);
+  };
+  
+  // ... rest of state ...
 
   useEffect(() => { setDocContextLocked(false); }, [docContext]);
 
@@ -224,6 +242,7 @@ export default function App() {
   }, []);
 
   const navItems: { page: AppPage; label: string; icon: typeof MessageSquare }[] = [
+    { page: "home", label: "Home", icon: Home },
     { page: "chat", label: "Chat", icon: MessageSquare },
     { page: "agent", label: "Agent", icon: Bot },
     { page: "documents", label: "Documents", icon: FileText },
@@ -276,19 +295,29 @@ export default function App() {
       <div className="flex flex-1 min-w-0 flex-col lg:flex-row overflow-hidden">
         <main className="flex-1 min-w-0 overflow-y-auto">
           <PageErrorBoundary page={currentPage}>
-          {currentPage === "chat" ? (
+          {currentPage === "home" ? (
+            <DashboardPage onNavigate={handleNavigate} />
+          ) : currentPage === "chat" ? (
             <ChatPage
               documentContext={docContextLocked ? null : docContext}
               onDisconnectDoc={() => setDocContextLocked(true)}
               onConnectDoc={(ctx) => { setDocContext(ctx); setDocContextLocked(false); }}
               tuningParams={tuningParams}
+              initialSessionId={activeChatId}
             />
           ) : currentPage === "agent" ? (
             <AgentPage tuningParams={tuningParams} />
           ) : currentPage === "documents" ? (
-            <DocumentsPage onContextChange={setDocContext} tuningParams={tuningParams} />
+            <DocumentsPage
+              onContextChange={setDocContext}
+              tuningParams={tuningParams}
+              initialDocId={activeDocId}
+            />
           ) : currentPage === "sheets" ? (
-            <SheetsPage tuningParams={tuningParams} />
+            <SheetsPage
+              tuningParams={tuningParams}
+              initialSheetId={activeSheetId}
+            />
           ) : currentPage === "calculator" ? (
             <CalculatorPage />
           ) : currentPage === "benchmark" ? (

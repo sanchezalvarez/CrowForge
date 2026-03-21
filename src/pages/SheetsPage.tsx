@@ -38,13 +38,19 @@ const API_BASE = "http://127.0.0.1:8000";
 
 interface SheetsPageProps {
   tuningParams?: TuningParams;
+  initialSheetId?: string | null;
 }
 
-export function SheetsPage({ tuningParams }: SheetsPageProps) {
+export function SheetsPage({ tuningParams, initialSheetId }: SheetsPageProps) {
   const [sheets, setSheets] = useState<Sheet[]>([]);
-  const [activeSheetId, setActiveSheetId] = useState<string | null>(null);
+  const [activeSheetId, setActiveSheetId] = useState<string | null>(initialSheetId ?? null);
   const activeSheet = sheets.find((s) => s.id === activeSheetId) ?? null;
   const [dismissedWarning, setDismissedWarning] = useState<string | null>(null);
+
+  // Sync with prop changes
+  useEffect(() => {
+    if (initialSheetId) setActiveSheetId(initialSheetId);
+  }, [initialSheetId]);
 
   // Virtual scroll for large tables
   const gridRef = useRef<HTMLDivElement>(null);

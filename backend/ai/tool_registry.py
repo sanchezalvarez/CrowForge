@@ -203,13 +203,21 @@ class ToolRegistry:
 
     def __init__(self):
         self._handlers: dict[str, Callable[..., Awaitable[Any]]] = {}
+        self._dynamic_definitions: list[dict] = []
 
     @property
     def schemas(self) -> list[dict]:
-        return [t for t in TOOL_DEFINITIONS if t["function"]["name"] in self._handlers]
+        static = [t for t in TOOL_DEFINITIONS if t["function"]["name"] in self._handlers]
+        # Only include dynamic definitions if we have a handler for them
+        dynamic = [t for t in self._dynamic_definitions if t["function"]["name"] in self._handlers]
+        return static + dynamic
 
     def register(self, name: str, handler: Callable[..., Awaitable[Any]]):
         self._handlers[name] = handler
+
+    def add_dynamic_definition(self, definition: dict):
+        """Add a tool definition from a plugin."""
+        self._dynamic_definitions.append(definition)
 
     async def call(self, name: str, args: dict) -> str:
         handler = self._handlers.get(name)

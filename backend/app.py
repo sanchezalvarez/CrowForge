@@ -1,7 +1,5 @@
 import sys
 import asyncio
-if sys.platform == "win32":
-    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 import os
 import json
 import httpx
@@ -38,6 +36,7 @@ from backend.models import PromptTemplate, BenchmarkRun, BenchmarkRequest, ChatS
 from backend.storage import DatabaseManager, AppRepository, PromptTemplateRepository, BenchmarkRepository, ChatSessionRepository, ChatMessageRepository, DocumentRepository, SheetRepository
 from backend.ai_engine import MockAIEngine, HTTPAIEngine, LocalLLAMAEngine, AILogger
 from backend.ai.engine_manager import AIEngineManager
+from backend.ai.plugin_loader import load_plugins
 
 # Timeout for a full generation pass (seconds). If the active engine
 # produces no output within this window, we abort and fall back to mock.
@@ -47,6 +46,13 @@ MODEL_IDLE_TIMEOUT = float(os.getenv("MODEL_IDLE_TIMEOUT", "600"))  # 10 minutes
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Load plugins from the plugins/ directory
+    try:
+        load_plugins()
+        print("[LIFESPAN] Plugins loaded.")
+    except Exception as e:
+        print(f"[LIFESPAN] Failed to load plugins: {e}")
+
     # Restore full AI config from DB settings (overrides env-var defaults)
     global LLM_MODELS_DIR
     saved_dir = app_repo.get_setting("ai_models_dir")
@@ -317,6 +323,22 @@ async def set_tuning(data: dict):
 async def get_state():
     return {
         "onboarding_completed": app_repo.get_setting("onboarding_completed") == "true"
+    }
+
+@app.get("/dashboard")
+async def get_dashboard_data():
+    """Return recent documents and sheets for the dashboard."""
+    recent_docs = document_repo.get_all()
+    # Sort by updated_at if it exists, otherwise use creation order (reverse)
+    # Since we don't have a dedicated get_recent, we'll sort in-memory for now
+    recent_docs.sort(key=lambda d: d.id, reverse=True)
+    
+    recent_sheets = sheet_repo.get_all()
+    recent_sheets.sort(key=lambda s: s.id, reverse=True)
+    
+    return {
+        "recent_documents": [d.model_dump() for d in recent_docs[:5]],
+        "recent_sheets": [s.model_dump() for s in recent_sheets[:5]],
     }
 
 @app.post("/state")
@@ -2161,7 +2183,4 @@ async def system_specs():
 
 if __name__ == "__main__":
     import uvicorn
-    if sys.platform == "win32":
-        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-    print(f"[STARTUP] Event loop policy: {asyncio.get_event_loop_policy().__class__.__name__}")
     uvicorn.run(app, host="127.0.0.1", port=8000, timeout_keep_alive=5, loop="asyncio")

@@ -96,6 +96,20 @@ export interface SheetGridProps {
   findCurrentKey: string | null;
   onFindOpen: () => void;
   onUnhideRows: (rows: number[]) => void;
+  pasteValuesOnly: () => void;
+  autoFitAllCols: () => void;
+}
+
+// ---- Number format helper ----
+function applyNumFmt(cell: string, fmt: import("../../lib/cellUtils").CellFormat): string {
+  if (!fmt.numFmt && fmt.numDecimals === undefined) return cell;
+  const num = parseFloat(cell);
+  if (isNaN(num)) return cell;
+  const decimals = fmt.numDecimals ?? (fmt.numFmt === "cur" ? 2 : 0);
+  const fixed = num.toFixed(Math.max(0, Math.min(9, decimals)));
+  if (fmt.numFmt === "pct") return fixed + "%";
+  if (fmt.numFmt === "cur") return "$ " + fixed;
+  return fixed;
 }
 
 // ---- Memoized row component ----
@@ -322,7 +336,7 @@ const SheetRow = React.memo(function SheetRow({
                     <AlertCircle className="h-2.5 w-2.5 shrink-0" />{cell}
                   </span>
                 ) : (
-                  <span>{cell || <span className="text-muted-foreground/30">&nbsp;</span>}</span>
+                  <span>{applyNumFmt(cell, activeSheet.formats?.[`${ri},${ci}`] ?? {}) || <span className="text-muted-foreground/30">&nbsp;</span>}</span>
                 )}
               </div>
             )}
@@ -361,6 +375,7 @@ export function SheetGrid({
   addingColumn, setAddingColumn, newColName, setNewColName, setNewColType,
   colNameRef, submitNewColumn, setResizing, setColWidths, cellInputRef, gridRef,
   fillDown, fillRight, hiddenCols, onUnhideCol, findMatches, findCurrentKey, onFindOpen, onUnhideRows,
+  pasteValuesOnly, autoFitAllCols,
 }: SheetGridProps) {
   // Compute formula ref highlights once per render (only when editing a formula)
   const formulaRefMap = useMemo(() => {
@@ -400,6 +415,20 @@ export function SheetGrid({
 
   const maxRow = (activeSheet.rows.length ?? 1) - 1;
   const maxCol = (activeSheet.columns.length ?? 1) - 1;
+
+  const selectionAggregates = useMemo(() => {
+    if (!selection) return null;
+    const nums: number[] = [];
+    for (let r = selection.r1; r <= selection.r2; r++) {
+      for (let c = selection.c1; c <= selection.c2; c++) {
+        const v = parseFloat(activeSheet.rows[r]?.[c] ?? "");
+        if (!isNaN(v)) nums.push(v);
+      }
+    }
+    if (nums.length < 2) return null;
+    const sum = nums.reduce((a, b) => a + b, 0);
+    return { sum, avg: sum / nums.length, count: nums.length };
+  }, [selection, activeSheet.rows]);
 
   return (
     <>
@@ -546,6 +575,11 @@ export function SheetGrid({
           if (isCtrl && e.key === "f") {
             e.preventDefault();
             onFindOpen();
+            return;
+          }
+          if (isCtrl && e.shiftKey && e.key === "V") {
+            e.preventDefault();
+            pasteValuesOnly();
             return;
           }
           // Start editing on printable character
@@ -813,9 +847,25 @@ export function SheetGrid({
             Cell {idxToCol(selection.c1)}{selection.r1 + 1}
           </span>
         )}
-        {filters.size > 0 && (
-          <span className="ml-auto">Filtered: {filteredRowIndices.length}/{activeSheet.rows.length}</span>
+        {selectionAggregates && (
+          <>
+            <span className="text-muted-foreground/50">|</span>
+            <span>SUM: <span className="text-foreground">{selectionAggregates.sum.toLocaleString(undefined, { maximumFractionDigits: 6 })}</span></span>
+            <span>AVG: <span className="text-foreground">{selectionAggregates.avg.toLocaleString(undefined, { maximumFractionDigits: 4 })}</span></span>
+            <span>COUNT: <span className="text-foreground">{selectionAggregates.count}</span></span>
+          </>
         )}
+        <div className="flex-1" />
+        {filters.size > 0 && (
+          <span>Filtered: {filteredRowIndices.length}/{activeSheet.rows.length}</span>
+        )}
+        <button
+          className="text-[11px] text-muted-foreground/60 hover:text-foreground transition-colors px-1"
+          onClick={autoFitAllCols}
+          title="Auto-fit all columns"
+        >
+          ↔ Auto-fit
+        </button>
       </div>
     </>
   );

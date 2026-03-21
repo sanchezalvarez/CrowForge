@@ -19,6 +19,8 @@ export interface CellFormat {
   bg?: string;   // background color hex
   wrap?: boolean; // false = nowrap (default true = wrap)
   fs?: number;   // font size in px
+  numFmt?: "pct" | "cur"; // percent (%) or currency ($)
+  numDecimals?: number;   // fixed decimal places (0-9)
 }
 
 export interface Sheet {

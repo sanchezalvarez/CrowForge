@@ -65,6 +65,7 @@ export interface SheetToolbarProps {
   startAiFill: () => void;
   aiFillProgress: string | null;
   setAiFillProgress: (v: string | null) => void;
+  autoFitAllCols: () => void;
 }
 
 export function SheetToolbar({
@@ -81,6 +82,7 @@ export function SheetToolbar({
   setGenRowsOpen, setGenRowsError, setGenRowsProgress, activeEngine,
   aiFillCol, setAiFillCol, aiFillInstructionRef, aiFillInstruction,
   setAiFillInstruction, startAiFill, aiFillProgress, setAiFillProgress,
+  autoFitAllCols,
 }: SheetToolbarProps) {
   return (
     <>
@@ -152,6 +154,29 @@ export function SheetToolbar({
               <WrapText className="h-3.5 w-3.5" />
             </Button>
             <div className="w-px h-5 bg-border mx-0.5" />
+            <Button
+              variant={getSelectionFormat().numFmt === "pct" ? "default" : "outline"}
+              size="sm" className="h-7 w-7 p-0 font-medium text-xs"
+              onClick={() => applyFormat({ numFmt: getSelectionFormat().numFmt === "pct" ? undefined : "pct" })}
+              title="Format as percent"
+            >%</Button>
+            <Button
+              variant={getSelectionFormat().numFmt === "cur" ? "default" : "outline"}
+              size="sm" className="h-7 w-7 p-0 font-medium text-xs"
+              onClick={() => applyFormat({ numFmt: getSelectionFormat().numFmt === "cur" ? undefined : "cur" })}
+              title="Format as currency ($)"
+            >$</Button>
+            <Button
+              variant="outline" size="sm" className="h-7 w-7 p-0 text-xs font-mono"
+              onClick={() => applyFormat({ numDecimals: Math.max(0, (getSelectionFormat().numDecimals ?? 2) - 1) })}
+              title="Decrease decimal places"
+            >.0</Button>
+            <Button
+              variant="outline" size="sm" className="h-7 w-7 p-0 text-xs font-mono"
+              onClick={() => applyFormat({ numDecimals: Math.min(9, (getSelectionFormat().numDecimals ?? 2) + 1) })}
+              title="Increase decimal places"
+            >.00</Button>
+            <div className="w-px h-5 bg-border mx-0.5" />
             {([['left', AlignLeft], ['center', AlignCenter], ['right', AlignRight]] as const).map(([val, Icon]) => (
               <Button key={val} variant={getSelectionAlignment().h === val ? "default" : "outline"} size="sm" className="h-7 w-7 p-0" onClick={() => applyAlignment('h', val)} title={`Align ${val}`}>
                 <Icon className="h-3.5 w-3.5" />
@@ -178,6 +203,9 @@ export function SheetToolbar({
             Clear filters
           </Button>
         )}
+        <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={autoFitAllCols} title="Auto-fit all columns to their content">
+          ↔
+        </Button>
         {/* Export dropdown — active sheet only */}
         <div className="relative" onClick={(e) => e.stopPropagation()}>
           <Button

@@ -400,23 +400,73 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
 
   // Track copy origin for relative formula adjustment
   const copyOrigin = useRef<{ r1: number; c1: number } | null>(null);
+  const copyValues = useRef<string[][] | null>(null);
 
   const copySelection = useCallback(() => {
     if (!selection || !activeSheet) return;
     copyOrigin.current = { r1: selection.r1, c1: selection.c1 };
     const rows: string[] = [];
+    const valueRows: string[][] = [];
     for (let ri = selection.r1; ri <= selection.r2; ri++) {
       const cols: string[] = [];
+      const valueCols: string[] = [];
       for (let ci = selection.c1; ci <= selection.c2; ci++) {
         // Copy formula text if cell has one, otherwise the displayed value
         const formulaKey = `${ri},${ci}`;
         const formula = activeSheet.formulas?.[formulaKey];
-        cols.push(formula ?? (activeSheet.rows[ri]?.[ci] ?? ""));
+        const displayVal = activeSheet.rows[ri]?.[ci] ?? "";
+        cols.push(formula ?? displayVal);
+        valueCols.push(displayVal);
       }
       rows.push(cols.join("\t"));
+      valueRows.push(valueCols);
     }
     navigator.clipboard.writeText(rows.join("\n"));
+    copyValues.current = valueRows;
   }, [selection, activeSheet]);
+
+  const pasteValuesOnly = useCallback(async () => {
+    if (!activeSheet || !selection || !copyValues.current) return;
+    const startRow = selection.r1;
+    const startCol = selection.c1;
+    try {
+      const res = await axios.put(`${API_BASE}/sheets/${activeSheet.id}/paste`, {
+        start_row: startRow,
+        start_col: startCol,
+        data: copyValues.current,
+        // no source_row/source_col — skip formula adjustment
+      });
+      updateSheet(res.data);
+      setSelection({
+        r1: startRow, c1: startCol,
+        r2: startRow + copyValues.current.length - 1,
+        c2: startCol + (Math.max(...copyValues.current.map((r) => r.length)) - 1),
+      });
+    } catch { /* ignore */ }
+  }, [selection, activeSheet]);
+
+  const autoFitAllCols = useCallback(() => {
+    if (!activeSheet) return;
+    const canvas = document.createElement("canvas");
+    const ctx2d = canvas.getContext("2d");
+    if (!ctx2d) return;
+    ctx2d.font = "14px sans-serif";
+    const newWidths: Record<number, number> = {};
+    for (let ci = 0; ci < activeSheet.columns.length; ci++) {
+      let maxW = ctx2d.measureText(activeSheet.columns[ci].name).width + 32;
+      for (const row of activeSheet.rows) {
+        const val = row[ci] ?? "";
+        if (val) {
+          const w = ctx2d.measureText(val).width + 24;
+          if (w > maxW) maxW = w;
+        }
+      }
+      newWidths[ci] = Math.max(MIN_COL_WIDTH, Math.min(500, Math.ceil(maxW)));
+    }
+    setColWidths(newWidths);
+    const sizes = { ...activeSheet.sizes, colWidths: newWidths, rowHeights };
+    axios.put(`${API_BASE}/sheets/${activeSheet.id}/sizes`, sizes).catch(() => {});
+  }, [activeSheet, rowHeights]);
 
   const cutSelection = useCallback(async () => {
     if (!selection || !activeSheet) return;
@@ -598,6 +648,51 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
     if (findResults.length === 0) return;
     setFindIndex((i) => (i - 1 + findResults.length) % findResults.length);
   }, [findResults.length]);
+
+  const [replaceQuery, setReplaceQuery] = useState("");
+  const [replaceCount, setReplaceCount] = useState<number | null>(null);
+
+  const replaceOne = useCallback(async () => {
+    if (!activeSheet || findResults.length === 0 || !findQuery.trim()) return;
+    const idx = Math.min(findIndex, findResults.length - 1);
+    const { r, c } = findResults[idx];
+    const formula = activeSheet.formulas?.[`${r},${c}`];
+    const source = formula ?? (activeSheet.rows[r]?.[c] ?? "");
+    const newVal = source.replaceAll(findQuery, replaceQuery);
+    try {
+      const res = await axios.put(`${API_BASE}/sheets/${activeSheet.id}/cell`, {
+        row_index: r, col_index: c, value: newVal,
+      });
+      updateSheet(res.data);
+    } catch { /* ignore */ }
+    findNext();
+  }, [activeSheet, findResults, findIndex, findQuery, replaceQuery, findNext]);
+
+  const replaceAll = useCallback(async () => {
+    if (!activeSheet || findResults.length === 0 || !findQuery.trim()) return;
+    let updatedSheet = activeSheet;
+    let count = 0;
+    for (const { r, c } of findResults) {
+      const formula = updatedSheet.formulas?.[`${r},${c}`];
+      const source = formula ?? (updatedSheet.rows[r]?.[c] ?? "");
+      const newVal = source.replaceAll(findQuery, replaceQuery);
+      if (newVal !== source) {
+        try {
+          const res = await axios.put(`${API_BASE}/sheets/${updatedSheet.id}/cell`, {
+            row_index: r, col_index: c, value: newVal,
+          });
+          updatedSheet = res.data;
+          count++;
+        } catch { /* ignore */ }
+      }
+    }
+    updateSheet(updatedSheet);
+    setReplaceCount(count);
+    setTimeout(() => setReplaceCount(null), 3000);
+  }, [activeSheet, findResults, findQuery, replaceQuery]);
+
+  // Reset replaceCount on query change
+  useEffect(() => { setReplaceCount(null); }, [findQuery, replaceQuery]);
 
   // Row context menu operations
   async function rowInsertAbove(ri: number) {
@@ -1314,6 +1409,7 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
               startAiFill={startAiFill}
               aiFillProgress={aiFillProgress}
               setAiFillProgress={setAiFillProgress}
+              autoFitAllCols={autoFitAllCols}
             />
 
             <FormulaBar
@@ -1407,16 +1503,23 @@ export function SheetsPage({ tuningParams }: SheetsPageProps) {
               findMatches={findMatches}
               findCurrentKey={findCurrentKey}
               onFindOpen={() => setFindOpen(true)}
+              pasteValuesOnly={pasteValuesOnly}
+              autoFitAllCols={autoFitAllCols}
             />
             {findOpen && (
               <FindBar
                 query={findQuery}
                 onQueryChange={setFindQuery}
-                onClose={() => { setFindOpen(false); setFindQuery(""); }}
+                onClose={() => { setFindOpen(false); setFindQuery(""); setReplaceQuery(""); }}
                 onNext={findNext}
                 onPrev={findPrev}
                 resultCount={findResults.length}
                 currentIndex={Math.min(findIndex, Math.max(0, findResults.length - 1))}
+                replaceQuery={replaceQuery}
+                onReplaceQueryChange={setReplaceQuery}
+                onReplace={replaceOne}
+                onReplaceAll={replaceAll}
+                replaceCount={replaceCount}
               />
             )}
           </>

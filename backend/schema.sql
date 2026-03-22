@@ -79,3 +79,12 @@ CREATE TABLE IF NOT EXISTS canvases (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
+
+-- React Flow canvases (nodes/edges JSON for @xyflow/react)
+CREATE TABLE IF NOT EXISTS rf_canvases (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL DEFAULT 'Untitled',
+    data TEXT NOT NULL DEFAULT '{"nodes":[],"edges":[]}',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);

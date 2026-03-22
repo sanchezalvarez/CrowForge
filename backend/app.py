@@ -162,6 +162,16 @@ except Exception as _agent_import_err:
     build_tool_registry = None  # type: ignore
     run_agent_loop = None  # type: ignore
 
+# RAG engine — same lazy pattern
+_rag_available = False
+try:
+    from backend.ai.rag_engine import RAGEngine as _RAGEngine
+    _rag_engine = _RAGEngine()
+    _rag_available = True
+except Exception as _rag_import_err:
+    print(f"[STARTUP] RAG engine unavailable: {_rag_import_err}")
+    _rag_engine = None  # type: ignore
+
 # ── AI Engine Manager (runtime-switchable) ───────────────────────────
 engine_manager = AIEngineManager()
 engine_manager.register("mock", MockAIEngine())
@@ -347,6 +357,31 @@ async def get_dashboard_data():
         },
         "ai_engine": engine_manager.active_name,
     }
+
+@app.get("/rag/status")
+async def rag_status():
+    """Return current RAG index status."""
+    if not _rag_available or _rag_engine is None:
+        return {"indexed": False, "chunks": 0, "path": None, "available": False}
+    return {
+        "available": True,
+        "indexed": _rag_engine.chunk_count > 0,
+        "chunks": _rag_engine.chunk_count,
+        "path": _rag_engine.indexed_path,
+    }
+
+@app.post("/rag/index")
+async def rag_index(data: dict):
+    """Index a directory for RAG search."""
+    if not _rag_available or _rag_engine is None:
+        raise HTTPException(status_code=503, detail="RAG engine unavailable (missing dependencies)")
+    path = data.get("path", "").strip()
+    if not path:
+        raise HTTPException(status_code=400, detail="path is required")
+    result = _rag_engine.index_directory(path)
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result
 
 @app.post("/state")
 async def save_state(data: dict):

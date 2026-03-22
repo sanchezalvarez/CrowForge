@@ -8,6 +8,7 @@ import {
   PlusCircle, Send, Trash2, Bot, Loader2, Square, Pencil,
   Wrench, ChevronDown, ChevronRight, Check, Copy,
   Table2, FileText, Settings2, XCircle, Play, AlertTriangle,
+  BookOpen, Globe, FolderOpen,
 } from "lucide-react";
 import type { AgentEvent } from "../hooks/useFetchSSE";
 import type { AgentScope } from "../contexts/ChatStreamContext";
@@ -19,6 +20,7 @@ import { Card } from "../components/ui/card";
 import { cn } from "../lib/utils";
 import { toast } from "../hooks/useToast";
 import type { TuningParams } from "../components/AIControlPanel";
+import { open as tauriOpenDialog } from "@tauri-apps/plugin-dialog";
 const API_BASE = "http://127.0.0.1:8000";
 
 // ── Accent color utilities ─────────────────────────────────────────
@@ -453,6 +455,15 @@ export function AgentPage({ tuningParams }: AgentPageProps) {
   const sidebarResizeStart = useRef(0);
   const sidebarWidthStart = useRef(220);
   const [showContextPanel, setShowContextPanel] = useState(false);
+  const [showKbPanel, setShowKbPanel] = useState(false);
+  const kbPanelRef = useRef<HTMLDivElement>(null);
+
+  // Knowledge Base state
+  interface KbStatus { indexed: boolean; chunks: number; path: string | null; available: boolean }
+  const [kbStatus, setKbStatus] = useState<KbStatus>({ indexed: false, chunks: 0, path: null, available: true });
+  const [kbPath, setKbPath] = useState("");
+  const [kbIndexing, setKbIndexing] = useState(false);
+  const [kbError, setKbError] = useState<string | null>(null);
 
   // Scope state
   const [allSheets, setAllSheets] = useState<ScopeItem[]>([]);
@@ -583,6 +594,23 @@ export function AgentPage({ tuningParams }: AgentPageProps) {
     return () => document.removeEventListener("mousedown", onClickOutside);
   }, [showContextPanel]);
 
+  // Close KB panel on outside click
+  useEffect(() => {
+    if (!showKbPanel) return;
+    function onClickOutside(e: MouseEvent) {
+      if (kbPanelRef.current && !kbPanelRef.current.contains(e.target as Node)) {
+        setShowKbPanel(false);
+      }
+    }
+    document.addEventListener("mousedown", onClickOutside);
+    return () => document.removeEventListener("mousedown", onClickOutside);
+  }, [showKbPanel]);
+
+  // Fetch KB status on mount
+  useEffect(() => {
+    axios.get(`${API_BASE}/rag/status`).then(r => setKbStatus(r.data)).catch(() => {});
+  }, []);
+
   // Sidebar resize
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
@@ -710,6 +738,33 @@ export function AgentPage({ tuningParams }: AgentPageProps) {
 
   const scopeCount = selectedSheetIds.size + selectedDocumentIds.size;
   const totalCount = allSheets.length + allDocuments.length;
+
+  async function browseFolder() {
+    try {
+      const selected = await tauriOpenDialog({ directory: true, multiple: false });
+      if (selected && typeof selected === "string") setKbPath(selected);
+    } catch {
+      // Not in Tauri context or dialog cancelled — ignore
+    }
+  }
+
+  async function indexKnowledgeBase() {
+    const path = kbPath.trim();
+    if (!path) return;
+    setKbIndexing(true);
+    setKbError(null);
+    try {
+      const res = await axios.post(`${API_BASE}/rag/index`, { path });
+      const updated = await axios.get(`${API_BASE}/rag/status`);
+      setKbStatus(updated.data);
+      toast(`Indexed ${res.data.indexed_chunks} chunks from ${path}`, "success");
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? "Indexing failed";
+      setKbError(msg);
+    } finally {
+      setKbIndexing(false);
+    }
+  }
 
   return (
     <div className="flex h-full">
@@ -868,6 +923,89 @@ export function AgentPage({ tuningParams }: AgentPageProps) {
                   </div>
                 )}
               </div>
+
+              {/* Knowledge Base button + panel */}
+              <div className="relative" ref={kbPanelRef}>
+                <button
+                  onClick={() => setShowKbPanel(!showKbPanel)}
+                  className={cn(
+                    "flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md border transition-colors",
+                    showKbPanel
+                      ? "bg-violet-500/15 border-violet-500/40 text-violet-600 dark:text-violet-400"
+                      : "border-border text-muted-foreground hover:text-foreground hover:border-violet-500/30",
+                  )}
+                  title="Knowledge Base — index a folder for RAG search"
+                >
+                  <BookOpen className="h-3.5 w-3.5" />
+                  KB
+                  {kbStatus.indexed && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-violet-500/20 text-violet-600 dark:text-violet-400">
+                      {kbStatus.chunks}
+                    </span>
+                  )}
+                </button>
+
+                {showKbPanel && (
+                  <div className="absolute top-full mt-1 right-0 z-50 bg-background border rounded-lg shadow-lg p-4 w-[320px]">
+                    <p className="text-xs font-semibold mb-2 flex items-center gap-1.5">
+                      <BookOpen className="h-3.5 w-3.5 text-violet-500" />
+                      Knowledge Base (RAG)
+                    </p>
+                    {kbStatus.indexed ? (
+                      <div className="mb-3 text-xs text-muted-foreground bg-violet-500/8 border border-violet-500/20 rounded px-3 py-2">
+                        <span className="font-medium text-violet-600 dark:text-violet-400">{kbStatus.chunks} chunks indexed</span>
+                        <br />
+                        <span className="truncate block mt-0.5" title={kbStatus.path ?? ""}>{kbStatus.path}</span>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground mb-3">No folder indexed yet. Select a folder to enable semantic search across your local files.</p>
+                    )}
+                    <div className="flex gap-2 mb-2">
+                      <input
+                        type="text"
+                        className="flex-1 text-xs border rounded px-2 py-1.5 bg-background placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-violet-500"
+                        placeholder="/path/to/folder"
+                        value={kbPath}
+                        onChange={e => setKbPath(e.target.value)}
+                      />
+                      <button
+                        onClick={browseFolder}
+                        className="shrink-0 px-2 py-1.5 rounded border text-xs text-muted-foreground hover:text-foreground hover:border-violet-500/30 transition-colors"
+                        title="Browse for folder"
+                      >
+                        <FolderOpen className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                    {kbError && <p className="text-xs text-red-500 mb-2">{kbError}</p>}
+                    <button
+                      onClick={indexKnowledgeBase}
+                      disabled={kbIndexing || !kbPath.trim()}
+                      className={cn(
+                        "w-full text-xs px-3 py-1.5 rounded-md font-medium transition-colors",
+                        "bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed",
+                      )}
+                    >
+                      {kbIndexing ? (
+                        <span className="flex items-center justify-center gap-1.5">
+                          <Loader2 className="h-3 w-3 animate-spin" /> Indexing…
+                        </span>
+                      ) : kbStatus.indexed ? "Re-index Folder" : "Index Folder"}
+                    </button>
+                    <p className="text-[10px] text-muted-foreground mt-2">
+                      Supports PDF, DOCX, TXT, MD. The agent will use <code className="font-mono">query_knowledge_base</code> automatically.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Web Access badge */}
+              <span
+                className="flex items-center gap-1 text-xs px-2 py-1.5 rounded-md border border-border text-muted-foreground"
+                title="Web search is available — agent can use web_search and read_web_page tools"
+              >
+                <Globe className="h-3.5 w-3.5" />
+                Web
+              </span>
 
               {/* Status banner */}
               <AgentStatusBanner events={agentEvents} isSending={sending} isStreaming={isStreaming} />

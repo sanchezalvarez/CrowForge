@@ -14,6 +14,7 @@ class RAGEngine:
     _model = None
     _index = None
     _chunks = [] # Stores (text, source_path) tuples
+    _indexed_path: Optional[str] = None
 
     def __new__(cls):
         if cls._instance is None:
@@ -86,8 +87,17 @@ class RAGEngine:
 
         self._index = index
         self._chunks = all_metadata
-        
+        self._indexed_path = dir_path
+
         return {"status": "success", "indexed_chunks": len(all_chunks)}
+
+    @property
+    def indexed_path(self) -> Optional[str]:
+        return self._indexed_path
+
+    @property
+    def chunk_count(self) -> int:
+        return len(self._chunks)
 
     def query(self, text: str, top_k: int = 5) -> List[Dict]:
         """Search the index for the most relevant chunks."""

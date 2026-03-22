@@ -33,10 +33,10 @@ def get_resource_path(relative_path):
     return os.path.abspath(relative_path)
 
 from backend.models import PromptTemplate, BenchmarkRun, BenchmarkRequest, ChatSession, ChatMessage, ChatMessageRequest, Document, DocumentCreate, DocumentUpdate, DocumentAIRequest, Sheet, SheetCreate, SheetColumn, SheetAddColumn, SheetUpdateCell, SheetDeleteRow, SheetDeleteColumn, SheetAICellRequest, SheetAIBatchRequest
-from backend.storage import DatabaseManager, AppRepository, PromptTemplateRepository, BenchmarkRepository, ChatSessionRepository, ChatMessageRepository, DocumentRepository, SheetRepository
+from backend.storage import DatabaseManager, AppRepository, PromptTemplateRepository, BenchmarkRepository, ChatSessionRepository, ChatMessageRepository, DocumentRepository, SheetRepository, CanvasRepository
 from backend.ai_engine import MockAIEngine, HTTPAIEngine, LocalLLAMAEngine, AILogger
 from backend.ai.engine_manager import AIEngineManager
-from backend.ai.plugin_loader import load_plugins
+from backend.ai.plugin_loader import load_plugins, GlobalPluginRegistry
 
 # Timeout for a full generation pass (seconds). If the active engine
 # produces no output within this window, we abort and fall back to mock.
@@ -149,6 +149,7 @@ chat_session_repo = ChatSessionRepository(db)
 chat_message_repo = ChatMessageRepository(db)
 document_repo = DocumentRepository(db)
 sheet_repo = SheetRepository(db)
+canvas_repo = CanvasRepository(db)
 
 # Agent imports are lazy-loaded so a failure in agent code doesn't break
 # the rest of the backend (chat, documents, sheets, etc.).
@@ -161,6 +162,16 @@ except Exception as _agent_import_err:
     print(f"[STARTUP] Agent modules unavailable: {_agent_import_err}")
     build_tool_registry = None  # type: ignore
     run_agent_loop = None  # type: ignore
+
+# RAG engine — same lazy pattern
+_rag_available = False
+try:
+    from backend.ai.rag_engine import RAGEngine as _RAGEngine
+    _rag_engine = _RAGEngine()
+    _rag_available = True
+except Exception as _rag_import_err:
+    print(f"[STARTUP] RAG engine unavailable: {_rag_import_err}")
+    _rag_engine = None  # type: ignore
 
 # ── AI Engine Manager (runtime-switchable) ───────────────────────────
 engine_manager = AIEngineManager()
@@ -347,6 +358,50 @@ async def get_dashboard_data():
         },
         "ai_engine": engine_manager.active_name,
     }
+
+@app.get("/rag/status")
+async def rag_status():
+    """Return current RAG index status."""
+    if not _rag_available or _rag_engine is None:
+        return {"indexed": False, "chunks": 0, "path": None, "available": False}
+    return {
+        "available": True,
+        "indexed": _rag_engine.chunk_count > 0,
+        "chunks": _rag_engine.chunk_count,
+        "path": _rag_engine.indexed_path,
+    }
+
+@app.post("/rag/index")
+async def rag_index(data: dict):
+    """Index a directory for RAG search."""
+    if not _rag_available or _rag_engine is None:
+        raise HTTPException(status_code=503, detail="RAG engine unavailable (missing dependencies)")
+    path = data.get("path", "").strip()
+    if not path:
+        raise HTTPException(status_code=400, detail="path is required")
+    result = _rag_engine.index_directory(path)
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result
+
+@app.get("/plugins")
+async def list_plugins():
+    """Return metadata for all loaded plugins."""
+    return GlobalPluginRegistry().get_records()
+
+@app.post("/plugins/reload")
+async def reload_plugins():
+    """Reload all plugins from disk and return updated metadata."""
+    try:
+        load_plugins()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Reload failed: {e}")
+    return GlobalPluginRegistry().get_records()
+
+@app.get("/plugins/dir")
+async def plugins_dir():
+    """Return the absolute path of the plugins directory."""
+    return {"path": os.path.abspath("plugins")}
 
 @app.post("/state")
 async def save_state(data: dict):
@@ -2292,6 +2347,41 @@ async def system_specs():
         except Exception:
             pass
     return result
+
+
+# ── Canvas endpoints ─────────────────────────────────────────────────────────
+
+@app.get("/canvases")
+async def list_canvases():
+    return canvas_repo.get_all()
+
+@app.post("/canvases")
+async def create_canvas(body: dict):
+    title = body.get("title", "Untitled Canvas")
+    return canvas_repo.create(title)
+
+@app.get("/canvases/{canvas_id}")
+async def get_canvas(canvas_id: str):
+    canvas = canvas_repo.get_by_id(canvas_id)
+    if not canvas:
+        raise HTTPException(status_code=404, detail="Canvas not found")
+    return canvas
+
+@app.put("/canvases/{canvas_id}")
+async def update_canvas(canvas_id: str, body: dict):
+    canvas = canvas_repo.get_by_id(canvas_id)
+    if not canvas:
+        raise HTTPException(status_code=404, detail="Canvas not found")
+    return canvas_repo.update(
+        canvas_id,
+        canvas_json=body.get("canvas_json"),
+        title=body.get("title"),
+    )
+
+@app.delete("/canvases/{canvas_id}")
+async def delete_canvas(canvas_id: str):
+    canvas_repo.delete(canvas_id)
+    return {"ok": True}
 
 
 if __name__ == "__main__":

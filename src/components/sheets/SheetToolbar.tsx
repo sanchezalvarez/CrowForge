@@ -3,7 +3,7 @@ import {
   AlignLeft, AlignCenter, AlignRight, AlignVerticalJustifyStart,
   AlignVerticalJustifyCenter, AlignVerticalJustifyEnd,
   Filter, Download, ChevronDown, Sparkles, Square, Loader2, X, ArrowUpDown, Palette,
-  ClipboardList, MessageSquare,
+  ClipboardList, MessageSquare, BarChart3,
 } from "lucide-react";
 import { Button } from "../ui/button";
 import { idxToCol, ROW_AI_LIMIT, type CellFormat, type Sheet } from "../../lib/cellUtils";
@@ -74,6 +74,8 @@ export interface SheetToolbarProps {
   copyAsMarkdown: () => void;
   onOpenSheetChat: () => void;
   sheetChatOpen: boolean;
+  onToggleChart: () => void;
+  chartOpen: boolean;
 }
 
 export function SheetToolbar({
@@ -91,7 +93,7 @@ export function SheetToolbar({
   aiFillCol, setAiFillCol, aiFillInstructionRef, aiFillInstruction,
   setAiFillInstruction, startAiFill, aiFillProgress, setAiFillProgress,
   autoFitAllCols, onOpenMultiSort, onOpenCondFormat, hasCondRules, copyAsMarkdown,
-  onOpenSheetChat, sheetChatOpen,
+  onOpenSheetChat, sheetChatOpen, onToggleChart, chartOpen,
 }: SheetToolbarProps) {
   return (
     <>
@@ -255,6 +257,14 @@ export function SheetToolbar({
           title="Chat with this sheet data"
         >
           <MessageSquare className="h-3 w-3" /> Ask AI
+        </Button>
+        <Button
+          variant={chartOpen ? "default" : "outline"}
+          size="sm" className="h-7 text-xs gap-1"
+          onClick={onToggleChart}
+          title="Toggle chart panel"
+        >
+          <BarChart3 className="h-3 w-3" /> Chart
         </Button>
         {/* Export dropdown — active sheet only */}
         <div className="relative" onClick={(e) => e.stopPropagation()}>

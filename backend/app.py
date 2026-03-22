@@ -2384,6 +2384,95 @@ async def delete_canvas(canvas_id: str):
     return {"ok": True}
 
 
+# ── React Flow canvas endpoints ──────────────────────────────────────────────
+
+def _ensure_rf_canvases_table():
+    """Create rf_canvases table if it does not exist yet (runtime guard)."""
+    with db.get_connection() as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS rf_canvases (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL DEFAULT 'Untitled',
+                data TEXT NOT NULL DEFAULT '{"nodes":[],"edges":[]}',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        conn.commit()
+
+_ensure_rf_canvases_table()
+
+
+def _rf_canvas_get(canvas_id: str) -> Optional[dict]:
+    with db.get_connection() as conn:
+        row = conn.execute(
+            "SELECT id, name, data, created_at, updated_at FROM rf_canvases WHERE id = ?",
+            (canvas_id,),
+        ).fetchone()
+        if not row:
+            return None
+        d = dict(row)
+        try:
+            d["data"] = json.loads(d["data"])
+        except Exception:
+            d["data"] = {"nodes": [], "edges": []}
+        return d
+
+
+def _rf_canvas_upsert(canvas_id: str, data: dict) -> None:
+    safe = json.dumps(data)
+    with db.get_connection() as conn:
+        conn.execute("""
+            INSERT INTO rf_canvases (id, data, updated_at)
+            VALUES (?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(id) DO UPDATE SET data = excluded.data, updated_at = CURRENT_TIMESTAMP
+        """, (canvas_id, safe))
+        conn.commit()
+
+
+@app.post("/canvas/run")
+async def canvas_run(body: dict, request: Request):
+    """Stream an AI response for a Canvas AI node."""
+    prompt = str(body.get("prompt", "")).strip()
+    node_id = str(body.get("node_id", ""))
+    if not prompt:
+        raise HTTPException(status_code=400, detail="prompt is required")
+
+    async def event_generator():
+        try:
+            async for chunk in engine_manager.active_engine.generate(
+                system_prompt="You are a helpful assistant embedded in a canvas workspace.",
+                user_prompt=prompt,
+                max_tokens=int(os.getenv("LLM_MAX_TOKENS", "1024")),
+                temperature=0.7,
+                json_mode=False,
+            ):
+                if await request.is_disconnected():
+                    break
+                yield {"data": chunk}
+            yield {"data": "[DONE]"}
+        except Exception as e:
+            yield {"data": f"[ERROR] {str(e).replace(chr(10), ' ')}"}
+
+    return EventSourceResponse(event_generator())
+
+
+@app.get("/canvas/{canvas_id}")
+async def get_rf_canvas(canvas_id: str):
+    row = _rf_canvas_get(canvas_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Canvas not found")
+    return row["data"]  # returns {"nodes": [...], "edges": [...]}
+
+
+@app.post("/canvas/{canvas_id}")
+async def save_rf_canvas(canvas_id: str, body: dict):
+    nodes = body.get("nodes", [])
+    edges = body.get("edges", [])
+    _rf_canvas_upsert(canvas_id, {"nodes": nodes, "edges": edges})
+    return {"ok": True}
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="127.0.0.1", port=8000, timeout_keep_alive=5, loop="asyncio")

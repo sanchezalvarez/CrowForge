@@ -3,7 +3,7 @@ import axios from "axios";
 import {
   Plus, Trash2, ZoomIn, ZoomOut, RotateCcw,
   MessageSquare, FileText, Table2,
-  ExternalLink, X, ChevronRight, Loader2, StickyNote, Link2,
+  ExternalLink, X, ChevronRight, Loader2, StickyNote, Link2, Type,
 } from "lucide-react";
 import { cn } from "../lib/utils";
 
@@ -15,12 +15,13 @@ interface Viewport { x: number; y: number; scale: number }
 
 interface NoteData { text: string; color: "yellow" | "green" | "blue" | "pink" }
 interface RefData { refType: "chat" | "document" | "sheet"; refId: string; title: string }
+interface LabelData { text: string }
 
 interface CanvasNode {
   id: string;
-  type: "note" | "ref";
+  type: "note" | "ref" | "label";
   x: number; y: number; w: number; h: number;
-  data: NoteData | RefData;
+  data: NoteData | RefData | LabelData;
 }
 interface CanvasEdge { id: string; fromNode: string; toNode: string }
 interface CanvasState {
@@ -180,6 +181,40 @@ function ReferenceCardNode({ node, selected, connecting, onDragStart, onDelete, 
   );
 }
 
+// ─── TextLabelNode ────────────────────────────────────────────────
+
+function TextLabelNode({ node, selected, onDragStart, onUpdate, onSelect }: NodeProps) {
+  const data = node.data as LabelData;
+  const [editing, setEditing] = useState(false);
+  return (
+    <div
+      className={cn(
+        "absolute flex items-center justify-center cursor-grab",
+        selected && "ring-2 ring-primary ring-offset-1 rounded",
+      )}
+      style={{ left: node.x, top: node.y, width: node.w, height: node.h }}
+      onMouseDown={(e) => { e.stopPropagation(); onSelect(node.id); if (!editing) onDragStart(node.id, e); }}
+      onDoubleClick={() => setEditing(true)}
+    >
+      {editing ? (
+        <textarea
+          autoFocus
+          className="w-full h-full resize-none bg-transparent text-center text-sm outline-none"
+          value={data.text}
+          onChange={(e) => onUpdate(node.id, { text: e.target.value })}
+          onBlur={() => setEditing(false)}
+          onKeyDown={(e) => { if (e.key === "Escape") { setEditing(false); } e.stopPropagation(); }}
+          onMouseDown={(e) => e.stopPropagation()}
+        />
+      ) : (
+        <p className="text-sm text-foreground/70 select-none text-center whitespace-pre-wrap px-1 leading-snug">
+          {data.text || <span className="italic text-muted-foreground/40 text-xs">double-click to edit</span>}
+        </p>
+      )}
+    </div>
+  );
+}
+
 // ─── Add Reference dialog ─────────────────────────────────────────
 
 interface RefItem { id: string; title: string; type: "chat" | "document" | "sheet" }
@@ -261,6 +296,8 @@ export function CanvasPage({ onNavigate }: { onNavigate?: (page: any, id?: strin
   const [connecting, setConnecting] = useState<{ fromNodeId: string; side: "out" | "in" } | null>(null);
   const [addRefOpen, setAddRefOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [editingCanvasId, setEditingCanvasId] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState("");
 
   const canvasAreaRef = useRef<HTMLDivElement>(null);
   const canvasStateRef = useRef(canvasState);
@@ -324,6 +361,13 @@ export function CanvasPage({ onNavigate }: { onNavigate?: (page: any, id?: strin
     } catch { /* ignore */ }
   }
 
+  async function renameCanvas(id: string, title: string) {
+    const t = title.trim() || "Untitled Canvas";
+    try { await axios.put(`${API_BASE}/canvases/${id}`, { title: t }); } catch { /* ignore */ }
+    setCanvases(prev => prev.map(c => c.id === id ? { ...c, title: t } : c));
+    setEditingCanvasId(null);
+  }
+
   async function deleteCanvas(id: string) {
     try { await axios.delete(`${API_BASE}/canvases/${id}`); } catch { /* ignore */ }
     setCanvases(prev => {
@@ -353,6 +397,18 @@ export function CanvasPage({ onNavigate }: { onNavigate?: (page: any, id?: strin
       id: genId(), type: "note",
       x: cx - 100, y: cy - 75, w: 200, h: 150,
       data: { text: "", color: "yellow" },
+    };
+    updateCanvas(prev => ({ ...prev, nodes: [...prev.nodes, node] }));
+    setSelected(node.id);
+  }
+
+  function addLabelNode() {
+    if (!activeIdRef.current) return;
+    const { cx, cy } = getCenter();
+    const node: CanvasNode = {
+      id: genId(), type: "label",
+      x: cx - 90, y: cy - 24, w: 180, h: 48,
+      data: { text: "Label" } as LabelData,
     };
     updateCanvas(prev => ({ ...prev, nodes: [...prev.nodes, node] }));
     setSelected(node.id);
@@ -524,15 +580,42 @@ export function CanvasPage({ onNavigate }: { onNavigate?: (page: any, id?: strin
                   ? "bg-primary/10 text-primary font-semibold"
                   : "text-muted-foreground hover:bg-muted hover:text-foreground",
               )}
-              onClick={() => loadCanvas(c.id)}
+              onClick={() => { if (editingCanvasId !== c.id) loadCanvas(c.id); }}
             >
-              <span className="flex-1 truncate text-xs">{c.title}</span>
-              <button
-                className="shrink-0 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"
-                onClick={(e) => { e.stopPropagation(); deleteCanvas(c.id); }}
-              >
-                <Trash2 size={11} />
-              </button>
+              {editingCanvasId === c.id ? (
+                <input
+                  autoFocus
+                  className="flex-1 text-xs bg-transparent border-b border-primary outline-none min-w-0"
+                  value={editingTitle}
+                  onChange={(e) => setEditingTitle(e.target.value)}
+                  onBlur={() => renameCanvas(c.id, editingTitle)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") renameCanvas(c.id, editingTitle);
+                    if (e.key === "Escape") setEditingCanvasId(null);
+                    e.stopPropagation();
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                />
+              ) : (
+                <span
+                  className="flex-1 truncate text-xs"
+                  onDoubleClick={(e) => {
+                    e.stopPropagation();
+                    setEditingCanvasId(c.id);
+                    setEditingTitle(c.title);
+                  }}
+                >
+                  {c.title}
+                </span>
+              )}
+              {editingCanvasId !== c.id && (
+                <button
+                  className="shrink-0 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"
+                  onClick={(e) => { e.stopPropagation(); deleteCanvas(c.id); }}
+                >
+                  <Trash2 size={11} />
+                </button>
+              )}
             </div>
           ))}
         </div>
@@ -549,6 +632,14 @@ export function CanvasPage({ onNavigate }: { onNavigate?: (page: any, id?: strin
           >
             <StickyNote size={13} />
             Note
+          </button>
+          <button
+            onClick={addLabelNode}
+            disabled={!activeCanvasId}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <Type size={13} />
+            Text
           </button>
           <button
             onClick={() => setAddRefOpen(true)}
@@ -611,7 +702,14 @@ export function CanvasPage({ onNavigate }: { onNavigate?: (page: any, id?: strin
             )}
             onMouseDown={handleCanvasMouseDown}
             onWheel={handleWheel}
-            onKeyDown={(e) => { if (e.key === "Escape") setConnecting(null); }}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") setConnecting(null);
+              const isTyping = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement;
+              if ((e.key === "Delete" || e.key === "Backspace") && selected && !isTyping) {
+                e.preventDefault();
+                deleteNode(selected);
+              }
+            }}
             tabIndex={0}
           >
             <div
@@ -663,6 +761,17 @@ export function CanvasPage({ onNavigate }: { onNavigate?: (page: any, id?: strin
                     onPortClick={handlePortClick}
                     onSelect={setSelected}
                     onNavigate={onNavigate}
+                  />
+                ) : node.type === "label" ? (
+                  <TextLabelNode
+                    key={node.id} node={node}
+                    selected={selected === node.id}
+                    connecting={!!connecting}
+                    onDragStart={handleNodeDragStart}
+                    onDelete={deleteNode}
+                    onUpdate={updateNodeData}
+                    onPortClick={handlePortClick}
+                    onSelect={setSelected}
                   />
                 ) : (
                   <ReferenceCardNode

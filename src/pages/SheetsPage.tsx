@@ -31,6 +31,7 @@ import { FindBar } from "../components/sheets/FindBar";
 import { MultiSortDialog, type SortLevel } from "../components/sheets/MultiSortDialog";
 import { CondFormatDialog } from "../components/sheets/CondFormatDialog";
 import { SheetChatPanel } from "../components/sheets/SheetChatPanel";
+import { ChartPanel } from "../components/sheets/ChartPanel";
 import { FormulaWizard } from "../components/sheets/FormulaWizard";
 import type { TuningParams } from "../components/AIControlPanel";
 import { SheetSidebar } from "../components/sheets/SheetSidebar";
@@ -719,6 +720,9 @@ export function SheetsPage({ tuningParams, initialSheetId }: SheetsPageProps) {
 
   // Sheet Chat panel
   const [sheetChatOpen, setSheetChatOpen] = useState(false);
+
+  // Chart panel
+  const [chartOpen, setChartOpen] = useState(false);
 
   // Formula Wizard dialog
   const [formulaWizardOpen, setFormulaWizardOpen] = useState(false);
@@ -1581,6 +1585,8 @@ export function SheetsPage({ tuningParams, initialSheetId }: SheetsPageProps) {
               copyAsMarkdown={copyAsMarkdown}
               onOpenSheetChat={() => setSheetChatOpen((o) => !o)}
               sheetChatOpen={sheetChatOpen}
+              onToggleChart={() => setChartOpen((o) => !o)}
+              chartOpen={chartOpen}
             />
 
             <FormulaBar
@@ -1724,6 +1730,12 @@ export function SheetsPage({ tuningParams, initialSheetId }: SheetsPageProps) {
                   }
                 }}
                 onClose={() => setFormulaWizardOpen(false)}
+              />
+            )}
+            {chartOpen && (
+              <ChartPanel
+                sheet={activeSheet}
+                onClose={() => setChartOpen(false)}
               />
             )}
           </>

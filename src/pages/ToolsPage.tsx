@@ -1,9 +1,9 @@
 /** Workspace Tools — Multitasking Dashboard with Dual Calculators & Converter */
 import { useState, useEffect, useCallback, useRef } from "react";
-import { 
-  Calculator, History, Delete, Trash2, ArrowRightLeft, 
+import {
+  Calculator, Trash2, ArrowRightLeft,
   Ruler, Weight, Thermometer, ChevronRight, Zap, Wrench,
-  Droplets
+  Droplets, RefreshCw, DollarSign, AlertCircle,
 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { ScrollArea } from "../components/ui/scroll-area";
@@ -564,6 +564,235 @@ function ConverterWidget() {
 }
 
 // ---------------------------------------------------------------------------
+// Currency Converter Widget
+// ---------------------------------------------------------------------------
+
+const CURRENCY_META: Record<string, { name: string; symbol: string; flag: string }> = {
+  USD: { name: "US Dollar",         symbol: "$",   flag: "🇺🇸" },
+  EUR: { name: "Euro",              symbol: "€",   flag: "🇪🇺" },
+  CZK: { name: "Czech Koruna",      symbol: "Kč",  flag: "🇨🇿" },
+  GBP: { name: "British Pound",     symbol: "£",   flag: "🇬🇧" },
+  PLN: { name: "Polish Złoty",      symbol: "zł",  flag: "🇵🇱" },
+  CNY: { name: "Chinese Yuan",      symbol: "¥",   flag: "🇨🇳" },
+  CHF: { name: "Swiss Franc",       symbol: "Fr",  flag: "🇨🇭" },
+  JPY: { name: "Japanese Yen",      symbol: "¥",   flag: "🇯🇵" },
+  HUF: { name: "Hungarian Forint",  symbol: "Ft",  flag: "🇭🇺" },
+  CAD: { name: "Canadian Dollar",   symbol: "C$",  flag: "🇨🇦" },
+};
+
+const ALL_CURRENCY_CODES = Object.keys(CURRENCY_META);
+
+interface RatesCache {
+  base: string;
+  rates: Record<string, number>;
+  updatedAt: string; // ISO string
+}
+
+const RATES_CACHE_KEY = "currency-rates-cache";
+
+function loadCachedRates(): RatesCache | null {
+  try {
+    const raw = localStorage.getItem(RATES_CACHE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as RatesCache;
+  } catch { return null; }
+}
+
+function saveCachedRates(cache: RatesCache) {
+  localStorage.setItem(RATES_CACHE_KEY, JSON.stringify(cache));
+}
+
+function timeAgoShort(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60_000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
+
+function CurrencyWidget() {
+  const [amount, setAmount] = useState("1");
+  const [base, setBase] = useState("USD");
+  const [cache, setCache] = useState<RatesCache | null>(loadCachedRates);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Convert amount in `base` → `target` using cached rates
+  function convert(target: string): string {
+    if (!cache) return "—";
+    const num = parseFloat(amount);
+    if (isNaN(num) || num < 0) return "—";
+    if (target === base) return num.toLocaleString(undefined, { maximumFractionDigits: 4 });
+    // rates are relative to cache.base
+    const toBase = cache.rates[base];   // base → cache.base
+    const toTarget = cache.rates[target]; // target → cache.base
+    if (!toBase || !toTarget) return "—";
+    const result = (num / toBase) * toTarget;
+    // format nicely
+    if (result >= 100) return result.toLocaleString(undefined, { maximumFractionDigits: 2 });
+    if (result >= 1) return result.toLocaleString(undefined, { maximumFractionDigits: 4 });
+    return result.toLocaleString(undefined, { maximumFractionDigits: 6 });
+  }
+
+  async function fetchRates() {
+    setLoading(true);
+    setError(null);
+    try {
+      const symbols = ALL_CURRENCY_CODES.join(",");
+      const res = await fetch(
+        `https://api.frankfurter.app/latest?base=USD&symbols=${symbols}`,
+        { signal: AbortSignal.timeout(10_000) }
+      );
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      // frankfurter returns rates relative to base=USD; add USD itself
+      const rates: Record<string, number> = { USD: 1, ...data.rates };
+      const newCache: RatesCache = {
+        base: "USD",
+        rates,
+        updatedAt: new Date().toISOString(),
+      };
+      setCache(newCache);
+      saveCachedRates(newCache);
+    } catch (e: any) {
+      setError(e.message ?? "Failed to fetch rates");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const others = ALL_CURRENCY_CODES.filter(c => c !== base);
+
+  return (
+    <Card className="flex flex-col shadow-md border-border/60 h-full overflow-hidden">
+      <CardHeader className="py-3 px-5 border-b bg-muted/10">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+            <DollarSign className="h-3.5 w-3.5 text-amber-500" />
+            Currency
+          </CardTitle>
+          <div className="flex items-center gap-2">
+            {cache && (
+              <span className="text-[9px] text-muted-foreground/60 font-mono">
+                {timeAgoShort(cache.updatedAt)}
+              </span>
+            )}
+            <button
+              onClick={fetchRates}
+              disabled={loading}
+              title="Fetch live rates"
+              className="flex items-center gap-1 text-[10px] font-medium px-2 py-1 rounded-md border border-border/60 hover:bg-muted transition-colors disabled:opacity-50"
+            >
+              <RefreshCw className={cn("h-3 w-3", loading && "animate-spin")} />
+              {loading ? "Loading…" : "Refresh"}
+            </button>
+          </div>
+        </div>
+      </CardHeader>
+
+      <CardContent className="p-4 flex flex-col gap-4 flex-1 overflow-hidden">
+        {/* Amount + base selector */}
+        <div className="flex gap-2 shrink-0">
+          <input
+            type="number"
+            value={amount}
+            onChange={e => setAmount(e.target.value)}
+            className="flex-1 min-w-0 h-10 px-3 bg-background border border-input rounded-lg font-mono text-base focus:outline-none focus:ring-2 focus:ring-amber-500/20 transition-all"
+            placeholder="1"
+          />
+          <Select value={base} onValueChange={setBase}>
+            <SelectTrigger className="w-28 h-10 text-xs font-mono rounded-lg">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {ALL_CURRENCY_CODES.map(code => (
+                <SelectItem key={code} value={code} className="font-mono text-xs">
+                  {CURRENCY_META[code].flag} {code}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Error */}
+        {error && (
+          <div className="flex items-center gap-2 text-xs text-destructive bg-destructive/10 rounded-lg px-3 py-2 shrink-0">
+            <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+            {error}
+          </div>
+        )}
+
+        {/* No rates yet */}
+        {!cache && !loading && !error && (
+          <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center text-muted-foreground">
+            <DollarSign className="h-8 w-8 opacity-20" />
+            <p className="text-xs">No rates loaded yet.</p>
+            <button
+              onClick={fetchRates}
+              className="text-xs px-3 py-1.5 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+            >
+              Fetch live rates
+            </button>
+          </div>
+        )}
+
+        {/* Rates list */}
+        {cache && (
+          <ScrollArea className="flex-1 min-h-0">
+            <div className="space-y-1.5 pr-1">
+              {/* Base row */}
+              <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                <span className="text-base">{CURRENCY_META[base].flag}</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold font-mono">{base}</p>
+                  <p className="text-[10px] text-muted-foreground truncate">{CURRENCY_META[base].name}</p>
+                </div>
+                <span className="font-mono text-sm font-bold text-amber-600">
+                  {parseFloat(amount) >= 0 ? parseFloat(amount).toLocaleString(undefined, { maximumFractionDigits: 4 }) : "—"}
+                </span>
+              </div>
+              {/* Other currencies */}
+              {others.map(code => {
+                const meta = CURRENCY_META[code];
+                return (
+                  <button
+                    key={code}
+                    onClick={() => {
+                      const res = convert(code).replace(/[^0-9.]/g, "");
+                      if (res && res !== "—") { setAmount(res); setBase(code); }
+                    }}
+                    className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-muted/60 transition-colors text-left border border-transparent hover:border-border/40"
+                    title={`Switch to ${code}`}
+                  >
+                    <span className="text-base">{meta.flag}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-bold font-mono">{code}</p>
+                      <p className="text-[10px] text-muted-foreground truncate">{meta.name}</p>
+                    </div>
+                    <span className="font-mono text-sm font-semibold text-foreground">
+                      {convert(code)}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </ScrollArea>
+        )}
+
+        {/* Source note */}
+        {cache && (
+          <p className="text-[9px] text-muted-foreground/40 text-center shrink-0">
+            Source: frankfurter.app (ECB) · Click a currency to use it as base
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main Page
 // ---------------------------------------------------------------------------
 
@@ -584,19 +813,20 @@ export function ToolsPage() {
         </div>
       </header>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 flex-1 min-h-0">
-        <CalculatorWidget 
-          id="A" 
-          title="Engine Alpha" 
-          isActive={activeCalc === "A"} 
-          onActivate={() => setActiveCalc("A")} 
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 flex-1 min-h-0">
+        <CalculatorWidget
+          id="A"
+          title="Engine Alpha"
+          isActive={activeCalc === "A"}
+          onActivate={() => setActiveCalc("A")}
         />
-        <CalculatorWidget 
-          id="B" 
-          title="Engine Beta" 
-          isActive={activeCalc === "B"} 
-          onActivate={() => setActiveCalc("B")} 
+        <CalculatorWidget
+          id="B"
+          title="Engine Beta"
+          isActive={activeCalc === "B"}
+          onActivate={() => setActiveCalc("B")}
         />
+        <CurrencyWidget />
         <ConverterWidget />
       </div>
       

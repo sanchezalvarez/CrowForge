@@ -122,8 +122,9 @@ export function ChartPanel({ sheet, onClose }: ChartPanelProps) {
               const val = Number(e.target.value);
               setXCol(val);
               if (yCols.includes(val)) {
+                const otherY = yCols.filter(c => c !== val);
                 const alt = Array.from({ length: numCols }, (_, i) => i).find(
-                  i => i !== val && !yCols.filter((_, idx) => yCols.indexOf(yCols[idx]) !== yCols.indexOf(val)).includes(i)
+                  i => i !== val && !otherY.includes(i)
                 );
                 if (alt !== undefined) setYCols(prev => prev.map(c => c === val ? alt : c));
               }

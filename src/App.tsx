@@ -10,7 +10,7 @@ import {
   PanelRightOpen,
   CpuIcon,
   Bot,
-  Calculator,
+  Wrench,
   Workflow,
 } from "lucide-react";
 import crowforgeLogo from "./assets/crowforge_ico.png";
@@ -22,7 +22,7 @@ import { DocumentsPage } from "./pages/DocumentsPage";
 import { SheetsPage } from "./pages/SheetsPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { AgentPage } from "./pages/AgentPage";
-import { CalculatorPage } from "./pages/CalculatorPage";
+import { ToolsPage } from "./pages/ToolsPage";
 import { CanvasPage } from "./pages/CanvasPage";
 import { SplashScreen } from "./components/SplashScreen";
 import { OnboardingPage } from "./pages/OnboardingPage";
@@ -64,7 +64,7 @@ class PageErrorBoundary extends Component<{ children: ReactNode; page: string },
 }
 
 type AppStatus = "loading" | "onboarding" | "ready" | "failed";
-type AppPage = "home" | "chat" | "agent" | "documents" | "sheets" | "calculator" | "benchmark" | "settings" | "canvas";
+type AppPage = "home" | "chat" | "agent" | "documents" | "sheets" | "tools" | "benchmark" | "settings" | "canvas";
 
 export interface DocumentContext {
   title: string;
@@ -250,7 +250,7 @@ export default function App() {
     { page: "documents", label: "Documents", icon: FileText },
     { page: "sheets", label: "Sheets", icon: Table2 },
     { page: "canvas", label: "Canvas", icon: Workflow },
-    { page: "calculator", label: "Calculator", icon: Calculator },
+    { page: "tools", label: "Tools", icon: Wrench },
     { page: "benchmark", label: "Benchmark", icon: Gauge },
     { page: "settings", label: "Settings", icon: Settings },
   ];
@@ -321,8 +321,8 @@ export default function App() {
               tuningParams={tuningParams}
               initialSheetId={activeSheetId}
             />
-          ) : currentPage === "calculator" ? (
-            <CalculatorPage />
+          ) : currentPage === "tools" ? (
+            <ToolsPage />
           ) : currentPage === "benchmark" ? (
             <BenchmarkPage />
           ) : currentPage === "canvas" ? (

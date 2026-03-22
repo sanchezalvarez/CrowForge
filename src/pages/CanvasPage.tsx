@@ -3,7 +3,7 @@ import axios from "axios";
 import {
   Plus, Trash2, ZoomIn, ZoomOut, RotateCcw,
   MessageSquare, FileText, Table2,
-  ExternalLink, X, ChevronRight, Loader2, StickyNote, Link2, Type, Copy, Maximize2,
+  ExternalLink, X, ChevronRight, Loader2, StickyNote, Link2, Type, Copy, Maximize2, Magnet,
 } from "lucide-react";
 import { cn } from "../lib/utils";
 
@@ -336,10 +336,13 @@ export function CanvasPage({ onNavigate }: { onNavigate?: (page: any, id?: strin
   const [saving, setSaving] = useState(false);
   const [editingCanvasId, setEditingCanvasId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState("");
+  const [snapToGrid, setSnapToGrid] = useState(false);
 
   const canvasAreaRef = useRef<HTMLDivElement>(null);
   const canvasStateRef = useRef(canvasState);
   canvasStateRef.current = canvasState;
+  const snapToGridRef = useRef(false);
+  snapToGridRef.current = snapToGrid;
   const activeIdRef = useRef(activeCanvasId);
   activeIdRef.current = activeCanvasId;
 
@@ -554,15 +557,19 @@ export function CanvasPage({ onNavigate }: { onNavigate?: (page: any, id?: strin
   }
 
   useEffect(() => {
+    const GRID = 24;
+    const snap = (v: number) => Math.round(v / GRID) * GRID;
     function onMouseMove(e: MouseEvent) {
       if (isDraggingNode.current && dragState.current) {
         const { nodeId, smx, smy, snx, sny } = dragState.current;
         const scale = canvasStateRef.current.viewport.scale;
         const dx = (e.clientX - smx) / scale;
         const dy = (e.clientY - smy) / scale;
+        let nx = snx + dx, ny = sny + dy;
+        if (snapToGridRef.current) { nx = snap(nx); ny = snap(ny); }
         updateCanvas(prev => ({
           ...prev,
-          nodes: prev.nodes.map(n => n.id === nodeId ? { ...n, x: snx + dx, y: sny + dy } : n),
+          nodes: prev.nodes.map(n => n.id === nodeId ? { ...n, x: nx, y: ny } : n),
         }));
       } else if (isResizing.current && resizeState.current) {
         const { nodeId, handle, smx, smy, snx, sny, snw, snh } = resizeState.current;
@@ -575,6 +582,10 @@ export function CanvasPage({ onNavigate }: { onNavigate?: (page: any, id?: strin
         if (handle === "sw") { newW = Math.max(MIN_W, snw - dx); newX = snx + (snw - newW); newH = Math.max(MIN_H, snh + dy); }
         if (handle === "ne") { newW = Math.max(MIN_W, snw + dx); newH = Math.max(MIN_H, snh - dy); newY = sny + (snh - newH); }
         if (handle === "nw") { newW = Math.max(MIN_W, snw - dx); newX = snx + (snw - newW); newH = Math.max(MIN_H, snh - dy); newY = sny + (snh - newH); }
+        if (snapToGridRef.current) {
+          newX = snap(newX); newY = snap(newY);
+          newW = Math.max(MIN_W, snap(newW)); newH = Math.max(MIN_H, snap(newH));
+        }
         updateCanvas(prev => ({
           ...prev,
           nodes: prev.nodes.map(n => n.id === nodeId ? { ...n, x: newX, y: newY, w: newW, h: newH } : n),
@@ -775,6 +786,18 @@ export function CanvasPage({ onNavigate }: { onNavigate?: (page: any, id?: strin
             </span>
           )}
           {saving && <span className="text-xs text-muted-foreground mr-2 select-none">Saving…</span>}
+          <button
+            onClick={() => setSnapToGrid(v => !v)}
+            className={cn(
+              "p-1.5 rounded-md transition-colors",
+              snapToGrid
+                ? "bg-primary/15 text-primary"
+                : "text-muted-foreground hover:bg-muted",
+            )}
+            title={snapToGrid ? "Snap to grid: ON" : "Snap to grid: OFF"}
+          >
+            <Magnet size={14} />
+          </button>
           <button
             onClick={zoomToFit}
             disabled={canvasState.nodes.length === 0}

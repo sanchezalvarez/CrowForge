@@ -106,6 +106,15 @@ class DatabaseManager:
         if "last_opened_at" not in sheet_cols:
             conn.execute("ALTER TABLE sheets ADD COLUMN last_opened_at TEXT")
 
+        # Ensure canvases table exists
+        conn.execute("""CREATE TABLE IF NOT EXISTS canvases (
+            id TEXT PRIMARY KEY,
+            title TEXT NOT NULL DEFAULT 'Untitled Canvas',
+            canvas_json TEXT NOT NULL DEFAULT '{"nodes":[],"edges":[],"viewport":{"x":0,"y":0,"scale":1}}',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )""")
+
         conn.commit()
 
 class AppRepository:
@@ -843,3 +852,55 @@ class SheetRepository:
             conn.execute("DELETE FROM sheets")
             conn.commit()
             return count
+
+
+class CanvasRepository:
+    def __init__(self, db: DatabaseManager):
+        self.db = db
+
+    def get_all(self) -> List[Dict]:
+        with self.db.get_connection() as conn:
+            rows = conn.execute(
+                "SELECT id, title, created_at, updated_at FROM canvases ORDER BY updated_at DESC"
+            ).fetchall()
+            return [dict(r) for r in rows]
+
+    def get_by_id(self, canvas_id: str) -> Optional[Dict]:
+        with self.db.get_connection() as conn:
+            row = conn.execute("SELECT * FROM canvases WHERE id = ?", (canvas_id,)).fetchone()
+            if not row:
+                return None
+            d = dict(row)
+            d["canvas_json"] = json.loads(d["canvas_json"])
+            return d
+
+    def create(self, title: str = "Untitled Canvas") -> Dict:
+        canvas_id = str(uuid.uuid4())
+        default_json = json.dumps({"nodes": [], "edges": [], "viewport": {"x": 0, "y": 0, "scale": 1}})
+        with self.db.get_connection() as conn:
+            conn.execute(
+                "INSERT INTO canvases (id, title, canvas_json) VALUES (?, ?, ?)",
+                (canvas_id, title, default_json),
+            )
+            conn.commit()
+        return self.get_by_id(canvas_id)
+
+    def update(self, canvas_id: str, canvas_json: dict = None, title: str = None) -> Optional[Dict]:
+        with self.db.get_connection() as conn:
+            if title is not None:
+                conn.execute(
+                    "UPDATE canvases SET title = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                    (title, canvas_id),
+                )
+            if canvas_json is not None:
+                conn.execute(
+                    "UPDATE canvases SET canvas_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                    (json.dumps(canvas_json), canvas_id),
+                )
+            conn.commit()
+        return self.get_by_id(canvas_id)
+
+    def delete(self, canvas_id: str) -> None:
+        with self.db.get_connection() as conn:
+            conn.execute("DELETE FROM canvases WHERE id = ?", (canvas_id,))
+            conn.commit()

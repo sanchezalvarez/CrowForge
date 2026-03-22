@@ -11,6 +11,7 @@ import {
   CpuIcon,
   Bot,
   Calculator,
+  Workflow,
 } from "lucide-react";
 import crowforgeLogo from "./assets/crowforge_ico.png";
 import { cn } from "./lib/utils";
@@ -22,6 +23,7 @@ import { SheetsPage } from "./pages/SheetsPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { AgentPage } from "./pages/AgentPage";
 import { CalculatorPage } from "./pages/CalculatorPage";
+import { CanvasPage } from "./pages/CanvasPage";
 import { SplashScreen } from "./components/SplashScreen";
 import { OnboardingPage } from "./pages/OnboardingPage";
 import { Toaster } from "./components/ui/toaster";
@@ -62,7 +64,7 @@ class PageErrorBoundary extends Component<{ children: ReactNode; page: string },
 }
 
 type AppStatus = "loading" | "onboarding" | "ready" | "failed";
-type AppPage = "home" | "chat" | "agent" | "documents" | "sheets" | "calculator" | "benchmark" | "settings";
+type AppPage = "home" | "chat" | "agent" | "documents" | "sheets" | "calculator" | "benchmark" | "settings" | "canvas";
 
 export interface DocumentContext {
   title: string;
@@ -247,6 +249,7 @@ export default function App() {
     { page: "agent", label: "Agent", icon: Bot },
     { page: "documents", label: "Documents", icon: FileText },
     { page: "sheets", label: "Sheets", icon: Table2 },
+    { page: "canvas", label: "Canvas", icon: Workflow },
     { page: "calculator", label: "Calculator", icon: Calculator },
     { page: "benchmark", label: "Benchmark", icon: Gauge },
     { page: "settings", label: "Settings", icon: Settings },
@@ -322,6 +325,8 @@ export default function App() {
             <CalculatorPage />
           ) : currentPage === "benchmark" ? (
             <BenchmarkPage />
+          ) : currentPage === "canvas" ? (
+            <CanvasPage onNavigate={handleNavigate} />
           ) : currentPage === "settings" ? (
             <SettingsPage
               theme={theme}
@@ -333,7 +338,7 @@ export default function App() {
           </PageErrorBoundary>
         </main>
 
-        {currentPage !== "settings" && (
+        {currentPage !== "settings" && currentPage !== "canvas" && (
           <div className={`shrink-0 flex flex-col bg-background${aiPanelOpen ? "" : " border-l"}`}>
             {aiPanelOpen && (
               <AIControlPanel

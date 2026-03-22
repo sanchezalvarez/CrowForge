@@ -33,7 +33,7 @@ def get_resource_path(relative_path):
     return os.path.abspath(relative_path)
 
 from backend.models import PromptTemplate, BenchmarkRun, BenchmarkRequest, ChatSession, ChatMessage, ChatMessageRequest, Document, DocumentCreate, DocumentUpdate, DocumentAIRequest, Sheet, SheetCreate, SheetColumn, SheetAddColumn, SheetUpdateCell, SheetDeleteRow, SheetDeleteColumn, SheetAICellRequest, SheetAIBatchRequest
-from backend.storage import DatabaseManager, AppRepository, PromptTemplateRepository, BenchmarkRepository, ChatSessionRepository, ChatMessageRepository, DocumentRepository, SheetRepository
+from backend.storage import DatabaseManager, AppRepository, PromptTemplateRepository, BenchmarkRepository, ChatSessionRepository, ChatMessageRepository, DocumentRepository, SheetRepository, CanvasRepository
 from backend.ai_engine import MockAIEngine, HTTPAIEngine, LocalLLAMAEngine, AILogger
 from backend.ai.engine_manager import AIEngineManager
 from backend.ai.plugin_loader import load_plugins, GlobalPluginRegistry
@@ -149,6 +149,7 @@ chat_session_repo = ChatSessionRepository(db)
 chat_message_repo = ChatMessageRepository(db)
 document_repo = DocumentRepository(db)
 sheet_repo = SheetRepository(db)
+canvas_repo = CanvasRepository(db)
 
 # Agent imports are lazy-loaded so a failure in agent code doesn't break
 # the rest of the backend (chat, documents, sheets, etc.).
@@ -2346,6 +2347,41 @@ async def system_specs():
         except Exception:
             pass
     return result
+
+
+# ── Canvas endpoints ─────────────────────────────────────────────────────────
+
+@app.get("/canvases")
+async def list_canvases():
+    return canvas_repo.get_all()
+
+@app.post("/canvases")
+async def create_canvas(body: dict):
+    title = body.get("title", "Untitled Canvas")
+    return canvas_repo.create(title)
+
+@app.get("/canvases/{canvas_id}")
+async def get_canvas(canvas_id: str):
+    canvas = canvas_repo.get_by_id(canvas_id)
+    if not canvas:
+        raise HTTPException(status_code=404, detail="Canvas not found")
+    return canvas
+
+@app.put("/canvases/{canvas_id}")
+async def update_canvas(canvas_id: str, body: dict):
+    canvas = canvas_repo.get_by_id(canvas_id)
+    if not canvas:
+        raise HTTPException(status_code=404, detail="Canvas not found")
+    return canvas_repo.update(
+        canvas_id,
+        canvas_json=body.get("canvas_json"),
+        title=body.get("title"),
+    )
+
+@app.delete("/canvases/{canvas_id}")
+async def delete_canvas(canvas_id: str):
+    canvas_repo.delete(canvas_id)
+    return {"ok": True}
 
 
 if __name__ == "__main__":

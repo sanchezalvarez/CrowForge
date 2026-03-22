@@ -234,7 +234,7 @@ const GALLERY_MODELS: GalleryModel[] = [
 
 const ALL_TAGS = ["all", "agent", "chat", "translate", "multilingual", "coding", "reasoning", "math", "fast", "general"];
 
-type Section = "ai" | "models" | "appearance" | "user" | "about";
+type Section = "ai" | "models" | "plugins" | "appearance" | "user" | "about";
 
 interface DownloadState {
   progress: number;
@@ -265,6 +265,14 @@ export function SettingsPage({ theme, setTheme, baseColor, setBaseColor }: Setti
   );
   const [confirmDelete, setConfirmDelete] = useState<"chat" | "documents" | "sheets" | "all" | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  // Plugin state
+  interface PluginRecord { name: string; file: string; tools: string[]; status: "ok" | "error"; error: string | null }
+  const [plugins, setPlugins] = useState<PluginRecord[]>([]);
+  const [pluginsLoading, setPluginsLoading] = useState(false);
+  const [pluginsReloading, setPluginsReloading] = useState(false);
+  const [pluginsDir, setPluginsDir] = useState("");
+  const [expandedPlugins, setExpandedPlugins] = useState<Set<string>>(new Set());
 
   function selectAvatar(index: number) {
     setAvatarIndex(index);
@@ -346,6 +354,16 @@ export function SettingsPage({ theme, setTheme, baseColor, setBaseColor }: Setti
       refreshDownloads();
       axios.get(`${API_BASE}/system/specs`).then((r) => setSpecs(r.data)).catch(() => {});
     }
+    if (section === "plugins") {
+      setPluginsLoading(true);
+      Promise.all([
+        axios.get(`${API_BASE}/plugins`),
+        axios.get(`${API_BASE}/plugins/dir`),
+      ]).then(([p, d]) => {
+        setPlugins(p.data);
+        setPluginsDir(d.data.path ?? "");
+      }).catch(() => {}).finally(() => setPluginsLoading(false));
+    }
   }, [section]);
 
   // Poll downloads while any are running
@@ -395,6 +413,19 @@ export function SettingsPage({ theme, setTheme, baseColor, setBaseColor }: Setti
     }
   }
 
+  async function reloadPlugins() {
+    setPluginsReloading(true);
+    try {
+      const res = await axios.post(`${API_BASE}/plugins/reload`);
+      setPlugins(res.data);
+      toast(`Plugins reloaded — ${res.data.length} found`, "success");
+    } catch {
+      toast("Failed to reload plugins", "error");
+    } finally {
+      setPluginsReloading(false);
+    }
+  }
+
   async function handleDownload(model: GalleryModel) {
     try {
       await axios.post(`${API_BASE}/ai/models/download`, {
@@ -424,6 +455,7 @@ export function SettingsPage({ theme, setTheme, baseColor, setBaseColor }: Setti
   const navItems: { id: Section; label: string }[] = [
     { id: "ai", label: "AI Configuration" },
     { id: "models", label: "Model Gallery" },
+    { id: "plugins", label: "Plugins" },
     { id: "appearance", label: "Appearance" },
     { id: "user", label: "User Settings" },
     { id: "about", label: "About" },
@@ -584,6 +616,117 @@ export function SettingsPage({ theme, setTheme, baseColor, setBaseColor }: Setti
             >
               {saving ? "Saving…" : "Save Changes"}
             </button>
+          </>
+        )}
+
+        {section === "plugins" && (
+          <>
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold">Plugins</h2>
+              <button
+                onClick={reloadPlugins}
+                disabled={pluginsReloading}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md border border-border hover:bg-muted transition-colors disabled:opacity-50"
+              >
+                {pluginsReloading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                Reload
+              </button>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Drop <code className="font-mono bg-muted px-1 rounded text-xs">.py</code> files into the plugins folder — they're auto-loaded at startup. Click Reload to apply changes without restarting.
+            </p>
+
+            {/* Plugins folder path */}
+            {pluginsDir && (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-muted/50 border text-xs font-mono text-muted-foreground">
+                <span className="shrink-0 text-foreground font-medium">Folder:</span>
+                <span className="truncate flex-1">{pluginsDir}</span>
+                <button
+                  onClick={() => navigator.clipboard.writeText(pluginsDir).then(() => toast("Path copied", "success"))}
+                  className="shrink-0 hover:text-foreground transition-colors"
+                  title="Copy path"
+                >
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  onClick={() => openUrl(`file://${pluginsDir}`).catch(() => {})}
+                  className="shrink-0 hover:text-foreground transition-colors"
+                  title="Open folder"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            )}
+
+            {/* Plugin list */}
+            {pluginsLoading ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
+                <Loader2 className="h-4 w-4 animate-spin" /> Loading plugins…
+              </div>
+            ) : plugins.length === 0 ? (
+              <div className="rounded-lg border border-dashed p-6 text-center space-y-3">
+                <p className="text-sm font-medium">No plugins loaded yet</p>
+                <p className="text-xs text-muted-foreground">Create a <code className="font-mono bg-muted px-1 rounded">.py</code> file in the plugins folder with this structure:</p>
+                <pre className="text-left text-xs bg-muted rounded-md p-3 overflow-x-auto">{`async def my_tool(param: str):
+    return {"result": "..."}
+
+def initialize_plugin(registry):
+    registry.register_tool(
+        "my_tool", my_tool,
+        {"type": "function", "function": {
+            "name": "my_tool",
+            "description": "What it does",
+            "parameters": {"type": "object",
+                "properties": {"param": {"type": "string"}},
+                "required": ["param"]}}}
+    )`}</pre>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {plugins.map((p) => (
+                  <div key={p.name} className="rounded-lg border bg-card">
+                    <button
+                      className="w-full flex items-center gap-3 px-4 py-3 text-left"
+                      onClick={() => setExpandedPlugins(prev => {
+                        const next = new Set(prev);
+                        next.has(p.name) ? next.delete(p.name) : next.add(p.name);
+                        return next;
+                      })}
+                    >
+                      <span className={`shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full ${p.status === "ok" ? "bg-green-500/15 text-green-600 dark:text-green-400" : "bg-red-500/15 text-red-600 dark:text-red-400"}`}>
+                        {p.status === "ok" ? "Loaded" : "Error"}
+                      </span>
+                      <span className="font-medium text-sm flex-1">{p.name}</span>
+                      {p.tools.length > 0 && (
+                        <span className="text-[11px] text-muted-foreground shrink-0">{p.tools.length} tool{p.tools.length !== 1 ? "s" : ""}</span>
+                      )}
+                      {expandedPlugins.has(p.name) ? <X className="h-3.5 w-3.5 text-muted-foreground shrink-0" /> : <Download className="h-3.5 w-3.5 text-muted-foreground shrink-0 rotate-180" />}
+                    </button>
+                    {expandedPlugins.has(p.name) && (
+                      <div className="px-4 pb-3 border-t pt-2 space-y-1.5 text-xs">
+                        <p className="text-muted-foreground font-mono truncate">{p.file}</p>
+                        {p.error && (
+                          <div className="flex items-start gap-1.5 text-red-600 dark:text-red-400 bg-red-500/10 rounded px-2 py-1.5">
+                            <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                            <span>{p.error}</span>
+                          </div>
+                        )}
+                        {p.tools.length > 0 && (
+                          <div>
+                            <p className="text-muted-foreground mb-1">Tools:</p>
+                            <div className="flex flex-wrap gap-1">
+                              {p.tools.map(t => (
+                                <code key={t} className="bg-muted px-2 py-0.5 rounded font-mono">{t}</code>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </>
         )}
 

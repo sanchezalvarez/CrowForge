@@ -36,7 +36,7 @@ from backend.models import PromptTemplate, BenchmarkRun, BenchmarkRequest, ChatS
 from backend.storage import DatabaseManager, AppRepository, PromptTemplateRepository, BenchmarkRepository, ChatSessionRepository, ChatMessageRepository, DocumentRepository, SheetRepository
 from backend.ai_engine import MockAIEngine, HTTPAIEngine, LocalLLAMAEngine, AILogger
 from backend.ai.engine_manager import AIEngineManager
-from backend.ai.plugin_loader import load_plugins
+from backend.ai.plugin_loader import load_plugins, GlobalPluginRegistry
 
 # Timeout for a full generation pass (seconds). If the active engine
 # produces no output within this window, we abort and fall back to mock.
@@ -382,6 +382,25 @@ async def rag_index(data: dict):
     if "error" in result:
         raise HTTPException(status_code=400, detail=result["error"])
     return result
+
+@app.get("/plugins")
+async def list_plugins():
+    """Return metadata for all loaded plugins."""
+    return GlobalPluginRegistry().get_records()
+
+@app.post("/plugins/reload")
+async def reload_plugins():
+    """Reload all plugins from disk and return updated metadata."""
+    try:
+        load_plugins()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Reload failed: {e}")
+    return GlobalPluginRegistry().get_records()
+
+@app.get("/plugins/dir")
+async def plugins_dir():
+    """Return the absolute path of the plugins directory."""
+    return {"path": os.path.abspath("plugins")}
 
 @app.post("/state")
 async def save_state(data: dict):

@@ -89,15 +89,22 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
   const activityFeed = useMemo(() => {
     if (!data) return [];
     const items: { type: "doc" | "sheet" | "chat"; id: string; title: string; time: string; meta?: string }[] = [];
-    for (const d of data.recent_documents) {
+    
+    const docs = data.recent_documents || [];
+    for (const d of docs) {
       items.push({ type: "doc", id: d.id, title: d.title || "Untitled", time: d.updated_at || d.created_at || "" });
     }
-    for (const s of data.recent_sheets) {
+    
+    const sheets = data.recent_sheets || [];
+    for (const s of sheets) {
       items.push({ type: "sheet", id: s.id, title: s.title || "Untitled Sheet", time: s.updated_at || "", meta: `${s.columns} cols, ${s.rows} rows` });
     }
-    for (const c of data.recent_chats) {
+    
+    const chats = data.recent_chats || [];
+    for (const c of chats) {
       items.push({ type: "chat", id: String(c.id), title: c.title || "New Chat", time: c.created_at || "", meta: c.mode });
     }
+    
     items.sort((a, b) => (b.time || "").localeCompare(a.time || ""));
     return items.slice(0, 8);
   }, [data]);

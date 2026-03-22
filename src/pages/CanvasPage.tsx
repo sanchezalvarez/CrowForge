@@ -59,23 +59,21 @@ const COLOR_DOT: Record<NoteData["color"], string> = {
 
 // ─── Port (shared) ────────────────────────────────────────────────
 
-function Port({ side, isWiring, onMouseDown, onMouseUp }: {
+function Port({ side, isWiring, onMouseDown }: {
   side: "in" | "out";
   isWiring: boolean;
   onMouseDown: (e: React.MouseEvent) => void;
-  onMouseUp: (e: React.MouseEvent) => void;
 }) {
   return (
     <div
       className={cn(
-        "absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full border-2 bg-background z-10 transition-all cursor-crosshair",
-        side === "in" ? "-left-2.5" : "-right-2.5",
+        "absolute top-1/2 -translate-y-1/2 w-5 h-5 rounded-full border-2 bg-background z-10 transition-all cursor-crosshair",
+        side === "in" ? "-left-3" : "-right-3",
         isWiring
           ? "border-primary bg-primary/30 scale-125"
           : "border-muted-foreground/30 hover:border-primary hover:scale-125 hover:bg-primary/20",
       )}
       onMouseDown={onMouseDown}
-      onMouseUp={onMouseUp}
     />
   );
 }
@@ -118,15 +116,14 @@ interface NodeProps {
   onDelete: (nodeId: string) => void;
   onUpdate: (nodeId: string, data: Partial<NoteData | RefData>) => void;
   onPortMouseDown: (nodeId: string, side: "in" | "out", e: React.MouseEvent) => void;
-  onPortMouseUp: (nodeId: string, e: React.MouseEvent) => void;
-  onSelect: (nodeId: string) => void;
+  onNodeMouseDown: (nodeId: string, e: React.MouseEvent) => void;
   onNavigate?: (page: any, id?: string) => void;
   onResizeStart: (nodeId: string, handle: ResizeHandlePos, e: React.MouseEvent) => void;
   onEditStart?: (nodeId: string) => void;
   onContextMenu?: (nodeId: string, x: number, y: number) => void;
 }
 
-function StickyNoteNode({ node, selected, isWiring, onDragStart, onDelete, onUpdate, onPortMouseDown, onPortMouseUp, onSelect, onResizeStart, onEditStart, onContextMenu }: NodeProps) {
+function StickyNoteNode({ node, selected, isWiring, onDragStart, onDelete, onUpdate, onPortMouseDown, onNodeMouseDown, onResizeStart, onEditStart, onContextMenu }: NodeProps) {
   const data = node.data as NoteData;
   return (
     <div
@@ -136,7 +133,7 @@ function StickyNoteNode({ node, selected, isWiring, onDragStart, onDelete, onUpd
         selected && "ring-2 ring-primary ring-offset-1",
       )}
       style={{ left: node.x, top: node.y, width: node.w, height: node.h }}
-      onMouseDown={(e) => { e.stopPropagation(); onSelect(node.id); }}
+      onMouseDown={(e) => { e.stopPropagation(); onNodeMouseDown(node.id, e); }}
       onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onContextMenu?.(node.id, e.clientX, e.clientY); }}
     >
       <div
@@ -164,8 +161,8 @@ function StickyNoteNode({ node, selected, isWiring, onDragStart, onDelete, onUpd
         onFocus={() => onEditStart?.(node.id)}
         onMouseDown={(e) => e.stopPropagation()}
       />
-      <Port side="in"  isWiring={isWiring} onMouseDown={(e) => { e.stopPropagation(); onPortMouseDown(node.id, "in", e); }} onMouseUp={(e) => onPortMouseUp(node.id, e)} />
-      <Port side="out" isWiring={isWiring} onMouseDown={(e) => { e.stopPropagation(); onPortMouseDown(node.id, "out", e); }} onMouseUp={(e) => onPortMouseUp(node.id, e)} />
+      <Port side="in"  isWiring={isWiring} onMouseDown={(e) => { e.stopPropagation(); onPortMouseDown(node.id, "in", e); }} />
+      <Port side="out" isWiring={isWiring} onMouseDown={(e) => { e.stopPropagation(); onPortMouseDown(node.id, "out", e); }} />
       {selected && (["nw","ne","sw","se"] as ResizeHandlePos[]).map(pos => (
         <ResizeHandle key={pos} pos={pos} onMouseDown={(e) => onResizeStart(node.id, pos, e)} />
       ))}
@@ -179,7 +176,7 @@ const REF_ICON = { chat: MessageSquare, document: FileText, sheet: Table2 } as c
 const REF_COLOR = { chat: "text-violet-500", document: "text-blue-500", sheet: "text-emerald-500" } as const;
 const REF_PAGE_MAP = { chat: "chat", document: "documents", sheet: "sheets" } as const;
 
-function ReferenceCardNode({ node, selected, isWiring, onDragStart, onDelete, onPortMouseDown, onPortMouseUp, onSelect, onNavigate, onResizeStart, onContextMenu }: NodeProps) {
+function ReferenceCardNode({ node, selected, isWiring, onDragStart, onDelete, onPortMouseDown, onNodeMouseDown, onNavigate, onResizeStart, onContextMenu }: NodeProps) {
   const data = node.data as RefData;
   const Icon = REF_ICON[data.refType];
   const color = REF_COLOR[data.refType];
@@ -190,7 +187,7 @@ function ReferenceCardNode({ node, selected, isWiring, onDragStart, onDelete, on
         selected && "ring-2 ring-primary ring-offset-1",
       )}
       style={{ left: node.x, top: node.y, width: node.w, height: node.h }}
-      onMouseDown={(e) => { e.stopPropagation(); onSelect(node.id); }}
+      onMouseDown={(e) => { e.stopPropagation(); onNodeMouseDown(node.id, e); }}
       onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onContextMenu?.(node.id, e.clientX, e.clientY); }}
     >
       <div
@@ -217,8 +214,8 @@ function ReferenceCardNode({ node, selected, isWiring, onDragStart, onDelete, on
           Open
         </button>
       </div>
-      <Port side="in"  isWiring={isWiring} onMouseDown={(e) => { e.stopPropagation(); onPortMouseDown(node.id, "in", e); }} onMouseUp={(e) => onPortMouseUp(node.id, e)} />
-      <Port side="out" isWiring={isWiring} onMouseDown={(e) => { e.stopPropagation(); onPortMouseDown(node.id, "out", e); }} onMouseUp={(e) => onPortMouseUp(node.id, e)} />
+      <Port side="in"  isWiring={isWiring} onMouseDown={(e) => { e.stopPropagation(); onPortMouseDown(node.id, "in", e); }} />
+      <Port side="out" isWiring={isWiring} onMouseDown={(e) => { e.stopPropagation(); onPortMouseDown(node.id, "out", e); }} />
       {selected && (["nw","ne","sw","se"] as ResizeHandlePos[]).map(pos => (
         <ResizeHandle key={pos} pos={pos} onMouseDown={(e) => onResizeStart(node.id, pos, e)} />
       ))}
@@ -228,7 +225,7 @@ function ReferenceCardNode({ node, selected, isWiring, onDragStart, onDelete, on
 
 // ─── TextLabelNode ────────────────────────────────────────────────
 
-function TextLabelNode({ node, selected, onDragStart, onUpdate, onSelect, onResizeStart, onEditStart, onContextMenu }: NodeProps) {
+function TextLabelNode({ node, selected, onDragStart, onUpdate, onNodeMouseDown, onResizeStart, onEditStart, onContextMenu }: NodeProps) {
   const data = node.data as LabelData;
   const [editing, setEditing] = useState(false);
   return (
@@ -238,7 +235,7 @@ function TextLabelNode({ node, selected, onDragStart, onUpdate, onSelect, onResi
         selected && "ring-2 ring-primary ring-offset-1 rounded",
       )}
       style={{ left: node.x, top: node.y, width: node.w, height: node.h }}
-      onMouseDown={(e) => { e.stopPropagation(); onSelect(node.id); if (!editing) onDragStart(node.id, e); }}
+      onMouseDown={(e) => { e.stopPropagation(); onNodeMouseDown(node.id, e); if (!editing) onDragStart(node.id, e); }}
       onDoubleClick={() => { onEditStart?.(node.id); setEditing(true); }}
       onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onContextMenu?.(node.id, e.clientX, e.clientY); }}
     >
@@ -365,7 +362,6 @@ export function CanvasPage({ onNavigate }: { onNavigate?: (page: any, id?: strin
 
   const wiringFromRef    = useRef<{ nodeId: string; px: number; py: number } | null>(null);
   wiringFromRef.current  = wiringFrom;
-  const wireCompletedRef = useRef(false);
 
   const isPanning = useRef(false);
   const panStart = useRef({ mx: 0, my: 0, vpX: 0, vpY: 0 });
@@ -577,38 +573,33 @@ export function CanvasPage({ onNavigate }: { onNavigate?: (page: any, id?: strin
     e.preventDefault();
     const node = canvasStateRef.current.nodes.find(n => n.id === nodeId);
     if (!node) return;
-    // Port position in canvas coordinates — no DOM queries needed
     const px = side === "out" ? node.x + node.w : node.x;
     const py = node.y + node.h / 2;
     const wf = { nodeId, px, py };
-    wireCompletedRef.current = false;
     wiringFromRef.current = wf;
     setWiringFrom(wf);
     setWirePos({ x: px, y: py });
   }
 
-  function handlePortMouseUp(nodeId: string, _e: React.MouseEvent) {
-    const wf = wiringFromRef.current;
-    if (!wf || wf.nodeId === nodeId) {
-      wiringFromRef.current = null;
-      setWiringFrom(null);
-      setWirePos(null);
-      return;
+  // Fallback: detect port proximity from the node's own mousedown (in case the small port div
+  // doesn't receive the event in the Tauri webview)
+  function onNodeMouseDown(nodeId: string, e: React.MouseEvent) {
+    const node = canvasStateRef.current.nodes.find(n => n.id === nodeId);
+    if (!node) { setSelected(nodeId); return; }
+    const rect = canvasAreaRef.current?.getBoundingClientRect();
+    if (!rect) { setSelected(nodeId); return; }
+    const vp = canvasStateRef.current.viewport;
+    const mx = (e.clientX - rect.left - vp.x) / vp.scale;
+    const my = (e.clientY - rect.top  - vp.y) / vp.scale;
+    const py = node.y + node.h / 2;
+    const HIT_R = 18; // canvas-space hit radius (generous to cover port + its surroundings)
+    if (Math.hypot(mx - node.x, my - py) < HIT_R) {
+      handlePortMouseDown(nodeId, "in", e);
+    } else if (Math.hypot(mx - (node.x + node.w), my - py) < HIT_R) {
+      handlePortMouseDown(nodeId, "out", e);
+    } else {
+      setSelected(nodeId);
     }
-    wireCompletedRef.current = true;
-    wiringFromRef.current = null;
-    const from = wf.nodeId;
-    const to   = nodeId;
-    const exists = canvasStateRef.current.edges.some(ed => ed.fromNode === from && ed.toNode === to);
-    if (!exists) {
-      pushHistory(canvasStateRef.current);
-      updateCanvas(prev => ({
-        ...prev,
-        edges: [...prev.edges, { id: genId(), fromNode: from, toNode: to }],
-      }));
-    }
-    setWiringFrom(null);
-    setWirePos(null);
   }
 
   function deleteEdge(edgeId: string) {
@@ -714,8 +705,36 @@ export function CanvasPage({ onNavigate }: { onNavigate?: (page: any, id?: strin
         }));
       }
     }
-    function onMouseUp() {
-      if (wiringFromRef.current && !wireCompletedRef.current) {
+    const HIT_R = 22; // canvas-space proximity radius for completing a connection
+    function onMouseUp(e: MouseEvent) {
+      if (wiringFromRef.current) {
+        const wf = wiringFromRef.current;
+        const canvasRect = canvasAreaRef.current?.getBoundingClientRect();
+        if (canvasRect) {
+          const vp = canvasStateRef.current.viewport;
+          const mx = (e.clientX - canvasRect.left - vp.x) / vp.scale;
+          const my = (e.clientY - canvasRect.top  - vp.y) / vp.scale;
+          for (const node of canvasStateRef.current.nodes) {
+            if (node.id === wf.nodeId) continue;
+            const py = node.y + node.h / 2;
+            if (
+              Math.hypot(mx - node.x, my - py) < HIT_R ||
+              Math.hypot(mx - (node.x + node.w), my - py) < HIT_R
+            ) {
+              const exists = canvasStateRef.current.edges.some(
+                ed => ed.fromNode === wf.nodeId && ed.toNode === node.id,
+              );
+              if (!exists) {
+                pushHistory(canvasStateRef.current);
+                updateCanvas(prev => ({
+                  ...prev,
+                  edges: [...prev.edges, { id: genId(), fromNode: wf.nodeId, toNode: node.id }],
+                }));
+              }
+              break;
+            }
+          }
+        }
         wiringFromRef.current = null;
         setWiringFrom(null);
         setWirePos(null);
@@ -1121,8 +1140,7 @@ export function CanvasPage({ onNavigate }: { onNavigate?: (page: any, id?: strin
                     onDelete={deleteNode}
                     onUpdate={updateNodeData}
                     onPortMouseDown={handlePortMouseDown}
-                    onPortMouseUp={handlePortMouseUp}
-                    onSelect={setSelected}
+                    onNodeMouseDown={onNodeMouseDown}
                     onNavigate={onNavigate}
                     onResizeStart={handleNodeResizeStart}
                     onEditStart={handleEditStart}
@@ -1137,8 +1155,7 @@ export function CanvasPage({ onNavigate }: { onNavigate?: (page: any, id?: strin
                     onDelete={deleteNode}
                     onUpdate={updateNodeData}
                     onPortMouseDown={handlePortMouseDown}
-                    onPortMouseUp={handlePortMouseUp}
-                    onSelect={setSelected}
+                    onNodeMouseDown={onNodeMouseDown}
                     onResizeStart={handleNodeResizeStart}
                     onEditStart={handleEditStart}
                     onContextMenu={handleNodeContextMenu}
@@ -1152,8 +1169,7 @@ export function CanvasPage({ onNavigate }: { onNavigate?: (page: any, id?: strin
                     onDelete={deleteNode}
                     onUpdate={updateNodeData}
                     onPortMouseDown={handlePortMouseDown}
-                    onPortMouseUp={handlePortMouseUp}
-                    onSelect={setSelected}
+                    onNodeMouseDown={onNodeMouseDown}
                     onNavigate={onNavigate}
                     onResizeStart={handleNodeResizeStart}
                     onContextMenu={handleNodeContextMenu}

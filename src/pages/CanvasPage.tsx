@@ -3,7 +3,7 @@ import axios from "axios";
 import {
   Plus, Trash2, ZoomIn, ZoomOut, RotateCcw,
   MessageSquare, FileText, Table2,
-  ExternalLink, X, ChevronRight, Loader2, StickyNote, Link2, Type,
+  ExternalLink, X, ChevronRight, Loader2, StickyNote, Link2, Type, Copy, Maximize2,
 } from "lucide-react";
 import { cn } from "../lib/utils";
 
@@ -76,6 +76,34 @@ function Port({ side, connecting, onClick }: {
   );
 }
 
+// ─── ResizeHandle ─────────────────────────────────────────────────
+
+type ResizeHandlePos = "nw" | "ne" | "sw" | "se";
+
+const RESIZE_CURSOR: Record<ResizeHandlePos, string> = {
+  nw: "nw-resize", ne: "ne-resize", sw: "sw-resize", se: "se-resize",
+};
+const RESIZE_POS: Record<ResizeHandlePos, React.CSSProperties> = {
+  nw: { top: -4, left: -4 },  ne: { top: -4, right: -4 },
+  sw: { bottom: -4, left: -4 }, se: { bottom: -4, right: -4 },
+};
+
+function ResizeHandle({ pos, onMouseDown }: {
+  pos: ResizeHandlePos;
+  onMouseDown: (e: React.MouseEvent) => void;
+}) {
+  return (
+    <div
+      style={{
+        position: "absolute", width: 8, height: 8, zIndex: 20,
+        background: "hsl(var(--primary))", border: "2px solid white",
+        borderRadius: 2, cursor: RESIZE_CURSOR[pos], ...RESIZE_POS[pos],
+      }}
+      onMouseDown={(e) => { e.stopPropagation(); onMouseDown(e); }}
+    />
+  );
+}
+
 // ─── StickyNoteNode ───────────────────────────────────────────────
 
 interface NodeProps {
@@ -88,9 +116,10 @@ interface NodeProps {
   onPortClick: (nodeId: string, side: "out" | "in") => void;
   onSelect: (nodeId: string) => void;
   onNavigate?: (page: any, id?: string) => void;
+  onResizeStart: (nodeId: string, handle: ResizeHandlePos, e: React.MouseEvent) => void;
 }
 
-function StickyNoteNode({ node, selected, connecting, onDragStart, onDelete, onUpdate, onPortClick, onSelect }: NodeProps) {
+function StickyNoteNode({ node, selected, connecting, onDragStart, onDelete, onUpdate, onPortClick, onSelect, onResizeStart }: NodeProps) {
   const data = node.data as NoteData;
   return (
     <div
@@ -128,6 +157,9 @@ function StickyNoteNode({ node, selected, connecting, onDragStart, onDelete, onU
       />
       <Port side="in"  connecting={connecting} onClick={(e) => { e.stopPropagation(); onPortClick(node.id, "in");  }} />
       <Port side="out" connecting={connecting} onClick={(e) => { e.stopPropagation(); onPortClick(node.id, "out"); }} />
+      {selected && (["nw","ne","sw","se"] as ResizeHandlePos[]).map(pos => (
+        <ResizeHandle key={pos} pos={pos} onMouseDown={(e) => onResizeStart(node.id, pos, e)} />
+      ))}
     </div>
   );
 }
@@ -138,7 +170,7 @@ const REF_ICON = { chat: MessageSquare, document: FileText, sheet: Table2 } as c
 const REF_COLOR = { chat: "text-violet-500", document: "text-blue-500", sheet: "text-emerald-500" } as const;
 const REF_PAGE_MAP = { chat: "chat", document: "documents", sheet: "sheets" } as const;
 
-function ReferenceCardNode({ node, selected, connecting, onDragStart, onDelete, onPortClick, onSelect, onNavigate }: NodeProps) {
+function ReferenceCardNode({ node, selected, connecting, onDragStart, onDelete, onPortClick, onSelect, onNavigate, onResizeStart }: NodeProps) {
   const data = node.data as RefData;
   const Icon = REF_ICON[data.refType];
   const color = REF_COLOR[data.refType];
@@ -177,13 +209,16 @@ function ReferenceCardNode({ node, selected, connecting, onDragStart, onDelete, 
       </div>
       <Port side="in"  connecting={connecting} onClick={(e) => { e.stopPropagation(); onPortClick(node.id, "in");  }} />
       <Port side="out" connecting={connecting} onClick={(e) => { e.stopPropagation(); onPortClick(node.id, "out"); }} />
+      {selected && (["nw","ne","sw","se"] as ResizeHandlePos[]).map(pos => (
+        <ResizeHandle key={pos} pos={pos} onMouseDown={(e) => onResizeStart(node.id, pos, e)} />
+      ))}
     </div>
   );
 }
 
 // ─── TextLabelNode ────────────────────────────────────────────────
 
-function TextLabelNode({ node, selected, onDragStart, onUpdate, onSelect }: NodeProps) {
+function TextLabelNode({ node, selected, onDragStart, onUpdate, onSelect, onResizeStart }: NodeProps) {
   const data = node.data as LabelData;
   const [editing, setEditing] = useState(false);
   return (
@@ -211,6 +246,9 @@ function TextLabelNode({ node, selected, onDragStart, onUpdate, onSelect }: Node
           {data.text || <span className="italic text-muted-foreground/40 text-xs">double-click to edit</span>}
         </p>
       )}
+      {selected && (["nw","ne","sw","se"] as ResizeHandlePos[]).map(pos => (
+        <ResizeHandle key={pos} pos={pos} onMouseDown={(e) => onResizeStart(node.id, pos, e)} />
+      ))}
     </div>
   );
 }
@@ -309,6 +347,12 @@ export function CanvasPage({ onNavigate }: { onNavigate?: (page: any, id?: strin
   const panStart = useRef({ mx: 0, my: 0, vpX: 0, vpY: 0 });
   const isDraggingNode = useRef(false);
   const dragState = useRef<{ nodeId: string; smx: number; smy: number; snx: number; sny: number } | null>(null);
+  const isResizing = useRef(false);
+  const resizeState = useRef<{
+    nodeId: string; handle: ResizeHandlePos;
+    smx: number; smy: number;
+    snx: number; sny: number; snw: number; snh: number;
+  } | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Autosave ──────────────────────────────────────────────────────
@@ -436,6 +480,17 @@ export function CanvasPage({ onNavigate }: { onNavigate?: (page: any, id?: strin
     setSelected(s => s === nodeId ? null : s);
   }
 
+  function duplicateNode(nodeId: string) {
+    const node = canvasStateRef.current.nodes.find(n => n.id === nodeId);
+    if (!node) return;
+    const newNode: CanvasNode = {
+      ...node, id: genId(), x: node.x + 24, y: node.y + 24,
+      data: { ...node.data } as NoteData | RefData | LabelData,
+    };
+    updateCanvas(prev => ({ ...prev, nodes: [...prev.nodes, newNode] }));
+    setSelected(newNode.id);
+  }
+
   function updateNodeData(nodeId: string, patch: Partial<NoteData | RefData>) {
     updateCanvas(prev => ({
       ...prev,
@@ -477,6 +532,17 @@ export function CanvasPage({ onNavigate }: { onNavigate?: (page: any, id?: strin
     setSelected(nodeId);
   }
 
+  // ── Node resize ───────────────────────────────────────────────────
+  function handleNodeResizeStart(nodeId: string, handle: ResizeHandlePos, e: React.MouseEvent) {
+    isResizing.current = true;
+    const node = canvasStateRef.current.nodes.find(n => n.id === nodeId)!;
+    resizeState.current = {
+      nodeId, handle,
+      smx: e.clientX, smy: e.clientY,
+      snx: node.x, sny: node.y, snw: node.w, snh: node.h,
+    };
+  }
+
   // ── Canvas pan ────────────────────────────────────────────────────
   function handleCanvasMouseDown(e: React.MouseEvent) {
     if (e.button !== 0) return;
@@ -498,6 +564,21 @@ export function CanvasPage({ onNavigate }: { onNavigate?: (page: any, id?: strin
           ...prev,
           nodes: prev.nodes.map(n => n.id === nodeId ? { ...n, x: snx + dx, y: sny + dy } : n),
         }));
+      } else if (isResizing.current && resizeState.current) {
+        const { nodeId, handle, smx, smy, snx, sny, snw, snh } = resizeState.current;
+        const scale = canvasStateRef.current.viewport.scale;
+        const dx = (e.clientX - smx) / scale;
+        const dy = (e.clientY - smy) / scale;
+        const MIN_W = 80, MIN_H = 40;
+        let newX = snx, newY = sny, newW = snw, newH = snh;
+        if (handle === "se") { newW = Math.max(MIN_W, snw + dx); newH = Math.max(MIN_H, snh + dy); }
+        if (handle === "sw") { newW = Math.max(MIN_W, snw - dx); newX = snx + (snw - newW); newH = Math.max(MIN_H, snh + dy); }
+        if (handle === "ne") { newW = Math.max(MIN_W, snw + dx); newH = Math.max(MIN_H, snh - dy); newY = sny + (snh - newH); }
+        if (handle === "nw") { newW = Math.max(MIN_W, snw - dx); newX = snx + (snw - newW); newH = Math.max(MIN_H, snh - dy); newY = sny + (snh - newH); }
+        updateCanvas(prev => ({
+          ...prev,
+          nodes: prev.nodes.map(n => n.id === nodeId ? { ...n, x: newX, y: newY, w: newW, h: newH } : n),
+        }));
       } else if (isPanning.current) {
         const dx = e.clientX - panStart.current.mx;
         const dy = e.clientY - panStart.current.my;
@@ -510,7 +591,9 @@ export function CanvasPage({ onNavigate }: { onNavigate?: (page: any, id?: strin
     function onMouseUp() {
       isDraggingNode.current = false;
       isPanning.current = false;
+      isResizing.current = false;
       dragState.current = null;
+      resizeState.current = null;
     }
     window.addEventListener("mousemove", onMouseMove);
     window.addEventListener("mouseup", onMouseUp);
@@ -542,6 +625,24 @@ export function CanvasPage({ onNavigate }: { onNavigate?: (page: any, id?: strin
 
   function resetView() {
     updateCanvas(prev => ({ ...prev, viewport: { x: 0, y: 0, scale: 1 } }));
+  }
+
+  function zoomToFit() {
+    const nodes = canvasStateRef.current.nodes;
+    if (nodes.length === 0) return;
+    const area = canvasAreaRef.current;
+    if (!area) return;
+    const pad = 60;
+    const minX = Math.min(...nodes.map(n => n.x)) - pad;
+    const minY = Math.min(...nodes.map(n => n.y)) - pad;
+    const maxX = Math.max(...nodes.map(n => n.x + n.w)) + pad;
+    const maxY = Math.max(...nodes.map(n => n.y + n.h)) + pad;
+    const contentW = maxX - minX;
+    const contentH = maxY - minY;
+    const scale = Math.min(area.clientWidth / contentW, area.clientHeight / contentH, 2);
+    const x = area.clientWidth  / 2 - (minX + contentW / 2) * scale;
+    const y = area.clientHeight / 2 - (minY + contentH / 2) * scale;
+    updateCanvas(prev => ({ ...prev, viewport: { x, y, scale } }));
   }
 
   // ── SVG edge path ─────────────────────────────────────────────────
@@ -650,13 +751,22 @@ export function CanvasPage({ onNavigate }: { onNavigate?: (page: any, id?: strin
             Reference
           </button>
           {selected && (
-            <button
-              onClick={() => deleteNode(selected)}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium text-destructive hover:bg-destructive/10 transition-colors"
-            >
-              <Trash2 size={13} />
-              Delete
-            </button>
+            <>
+              <button
+                onClick={() => duplicateNode(selected)}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+              >
+                <Copy size={13} />
+                Duplicate
+              </button>
+              <button
+                onClick={() => deleteNode(selected)}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium text-destructive hover:bg-destructive/10 transition-colors"
+              >
+                <Trash2 size={13} />
+                Delete
+              </button>
+            </>
           )}
           <div className="flex-1" />
           {connecting && (
@@ -665,6 +775,14 @@ export function CanvasPage({ onNavigate }: { onNavigate?: (page: any, id?: strin
             </span>
           )}
           {saving && <span className="text-xs text-muted-foreground mr-2 select-none">Saving…</span>}
+          <button
+            onClick={zoomToFit}
+            disabled={canvasState.nodes.length === 0}
+            className="p-1.5 rounded-md text-muted-foreground hover:bg-muted transition-colors disabled:opacity-40"
+            title="Zoom to fit all nodes"
+          >
+            <Maximize2 size={14} />
+          </button>
           <button onClick={() => zoomBy(1 / 1.2)} className="p-1.5 rounded-md text-muted-foreground hover:bg-muted transition-colors" title="Zoom out">
             <ZoomOut size={14} />
           </button>
@@ -708,6 +826,20 @@ export function CanvasPage({ onNavigate }: { onNavigate?: (page: any, id?: strin
               if ((e.key === "Delete" || e.key === "Backspace") && selected && !isTyping) {
                 e.preventDefault();
                 deleteNode(selected);
+              }
+              if ((e.key === "d" || e.key === "D") && (e.ctrlKey || e.metaKey) && selected && !isTyping) {
+                e.preventDefault();
+                duplicateNode(selected);
+              }
+              if (["ArrowLeft","ArrowRight","ArrowUp","ArrowDown"].includes(e.key) && selected && !isTyping) {
+                e.preventDefault();
+                const step = e.shiftKey ? 10 : 1;
+                const dx = e.key === "ArrowLeft" ? -step : e.key === "ArrowRight" ? step : 0;
+                const dy = e.key === "ArrowUp"   ? -step : e.key === "ArrowDown"  ? step : 0;
+                updateCanvas(prev => ({
+                  ...prev,
+                  nodes: prev.nodes.map(n => n.id === selected ? { ...n, x: n.x + dx, y: n.y + dy } : n),
+                }));
               }
             }}
             tabIndex={0}
@@ -761,6 +893,7 @@ export function CanvasPage({ onNavigate }: { onNavigate?: (page: any, id?: strin
                     onPortClick={handlePortClick}
                     onSelect={setSelected}
                     onNavigate={onNavigate}
+                    onResizeStart={handleNodeResizeStart}
                   />
                 ) : node.type === "label" ? (
                   <TextLabelNode
@@ -772,6 +905,7 @@ export function CanvasPage({ onNavigate }: { onNavigate?: (page: any, id?: strin
                     onUpdate={updateNodeData}
                     onPortClick={handlePortClick}
                     onSelect={setSelected}
+                    onResizeStart={handleNodeResizeStart}
                   />
                 ) : (
                   <ReferenceCardNode
@@ -784,6 +918,7 @@ export function CanvasPage({ onNavigate }: { onNavigate?: (page: any, id?: strin
                     onPortClick={handlePortClick}
                     onSelect={setSelected}
                     onNavigate={onNavigate}
+                    onResizeStart={handleNodeResizeStart}
                   />
                 )
               )}

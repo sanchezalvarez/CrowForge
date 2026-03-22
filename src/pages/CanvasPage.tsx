@@ -4,6 +4,7 @@ import {
   Plus, Trash2, ZoomIn, ZoomOut, RotateCcw,
   MessageSquare, FileText, Table2,
   ExternalLink, X, ChevronRight, Loader2, StickyNote, Link2, Type, Copy, Maximize2, Magnet,
+  Undo2, Redo2,
 } from "lucide-react";
 import { cn } from "../lib/utils";
 
@@ -23,7 +24,7 @@ interface CanvasNode {
   x: number; y: number; w: number; h: number;
   data: NoteData | RefData | LabelData;
 }
-interface CanvasEdge { id: string; fromNode: string; toNode: string }
+interface CanvasEdge { id: string; fromNode: string; toNode: string; label?: string }
 interface CanvasState {
   nodes: CanvasNode[];
   edges: CanvasEdge[];
@@ -117,9 +118,11 @@ interface NodeProps {
   onSelect: (nodeId: string) => void;
   onNavigate?: (page: any, id?: string) => void;
   onResizeStart: (nodeId: string, handle: ResizeHandlePos, e: React.MouseEvent) => void;
+  onEditStart?: (nodeId: string) => void;
+  onContextMenu?: (nodeId: string, x: number, y: number) => void;
 }
 
-function StickyNoteNode({ node, selected, connecting, onDragStart, onDelete, onUpdate, onPortClick, onSelect, onResizeStart }: NodeProps) {
+function StickyNoteNode({ node, selected, connecting, onDragStart, onDelete, onUpdate, onPortClick, onSelect, onResizeStart, onEditStart, onContextMenu }: NodeProps) {
   const data = node.data as NoteData;
   return (
     <div
@@ -130,6 +133,7 @@ function StickyNoteNode({ node, selected, connecting, onDragStart, onDelete, onU
       )}
       style={{ left: node.x, top: node.y, width: node.w, height: node.h }}
       onMouseDown={(e) => { e.stopPropagation(); onSelect(node.id); }}
+      onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onContextMenu?.(node.id, e.clientX, e.clientY); }}
     >
       <div
         className={cn("flex items-center justify-between px-2 py-1 rounded-t-md cursor-grab shrink-0", NOTE_HEAD[data.color])}
@@ -153,6 +157,7 @@ function StickyNoteNode({ node, selected, connecting, onDragStart, onDelete, onU
         value={data.text}
         onChange={(e) => onUpdate(node.id, { text: e.target.value })}
         placeholder="Write something…"
+        onFocus={() => onEditStart?.(node.id)}
         onMouseDown={(e) => e.stopPropagation()}
       />
       <Port side="in"  connecting={connecting} onClick={(e) => { e.stopPropagation(); onPortClick(node.id, "in");  }} />
@@ -170,7 +175,7 @@ const REF_ICON = { chat: MessageSquare, document: FileText, sheet: Table2 } as c
 const REF_COLOR = { chat: "text-violet-500", document: "text-blue-500", sheet: "text-emerald-500" } as const;
 const REF_PAGE_MAP = { chat: "chat", document: "documents", sheet: "sheets" } as const;
 
-function ReferenceCardNode({ node, selected, connecting, onDragStart, onDelete, onPortClick, onSelect, onNavigate, onResizeStart }: NodeProps) {
+function ReferenceCardNode({ node, selected, connecting, onDragStart, onDelete, onPortClick, onSelect, onNavigate, onResizeStart, onContextMenu }: NodeProps) {
   const data = node.data as RefData;
   const Icon = REF_ICON[data.refType];
   const color = REF_COLOR[data.refType];
@@ -182,6 +187,7 @@ function ReferenceCardNode({ node, selected, connecting, onDragStart, onDelete, 
       )}
       style={{ left: node.x, top: node.y, width: node.w, height: node.h }}
       onMouseDown={(e) => { e.stopPropagation(); onSelect(node.id); }}
+      onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onContextMenu?.(node.id, e.clientX, e.clientY); }}
     >
       <div
         className="flex items-center justify-between px-2.5 py-1.5 border-b bg-muted/50 rounded-t-md cursor-grab shrink-0"
@@ -218,7 +224,7 @@ function ReferenceCardNode({ node, selected, connecting, onDragStart, onDelete, 
 
 // ─── TextLabelNode ────────────────────────────────────────────────
 
-function TextLabelNode({ node, selected, onDragStart, onUpdate, onSelect, onResizeStart }: NodeProps) {
+function TextLabelNode({ node, selected, onDragStart, onUpdate, onSelect, onResizeStart, onEditStart, onContextMenu }: NodeProps) {
   const data = node.data as LabelData;
   const [editing, setEditing] = useState(false);
   return (
@@ -229,7 +235,8 @@ function TextLabelNode({ node, selected, onDragStart, onUpdate, onSelect, onResi
       )}
       style={{ left: node.x, top: node.y, width: node.w, height: node.h }}
       onMouseDown={(e) => { e.stopPropagation(); onSelect(node.id); if (!editing) onDragStart(node.id, e); }}
-      onDoubleClick={() => setEditing(true)}
+      onDoubleClick={() => { onEditStart?.(node.id); setEditing(true); }}
+      onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onContextMenu?.(node.id, e.clientX, e.clientY); }}
     >
       {editing ? (
         <textarea
@@ -337,6 +344,11 @@ export function CanvasPage({ onNavigate }: { onNavigate?: (page: any, id?: strin
   const [editingCanvasId, setEditingCanvasId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState("");
   const [snapToGrid, setSnapToGrid] = useState(false);
+  const [historyLen, setHistoryLen] = useState(0);
+  const [futureLen,  setFutureLen]  = useState(0);
+  const [editingEdgeId,    setEditingEdgeId]    = useState<string | null>(null);
+  const [editingEdgeLabel, setEditingEdgeLabel] = useState("");
+  const [contextMenu, setContextMenu] = useState<{ nodeId: string; x: number; y: number } | null>(null);
 
   const canvasAreaRef = useRef<HTMLDivElement>(null);
   const canvasStateRef = useRef(canvasState);
@@ -357,6 +369,11 @@ export function CanvasPage({ onNavigate }: { onNavigate?: (page: any, id?: strin
     snx: number; sny: number; snw: number; snh: number;
   } | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const historyRef      = useRef<CanvasState[]>([]);
+  const futureRef       = useRef<CanvasState[]>([]);
+  const preDragStateRef = useRef<CanvasState | null>(null);
+  const editingNodeRef  = useRef<string | null>(null);
+  const MAX_HISTORY = 50;
 
   // ── Autosave ──────────────────────────────────────────────────────
   const scheduleAutoSave = useCallback((state: CanvasState, id: string) => {
@@ -376,6 +393,41 @@ export function CanvasPage({ onNavigate }: { onNavigate?: (page: any, id?: strin
       return next;
     });
   }, [scheduleAutoSave]);
+
+  // ── History ───────────────────────────────────────────────────────
+  function pushHistory(state: CanvasState) {
+    historyRef.current = [...historyRef.current.slice(-(MAX_HISTORY - 1)), state];
+    futureRef.current  = [];
+    editingNodeRef.current = null;
+    setHistoryLen(historyRef.current.length);
+    setFutureLen(0);
+  }
+
+  function undo() {
+    if (!historyRef.current.length) return;
+    const prev = historyRef.current[historyRef.current.length - 1];
+    historyRef.current = historyRef.current.slice(0, -1);
+    futureRef.current  = [canvasStateRef.current, ...futureRef.current.slice(0, MAX_HISTORY - 1)];
+    setHistoryLen(historyRef.current.length);
+    setFutureLen(futureRef.current.length);
+    updateCanvas(() => prev);
+  }
+
+  function redo() {
+    if (!futureRef.current.length) return;
+    const next = futureRef.current[0];
+    futureRef.current  = futureRef.current.slice(1);
+    historyRef.current = [...historyRef.current.slice(-(MAX_HISTORY - 1)), canvasStateRef.current];
+    setHistoryLen(historyRef.current.length);
+    setFutureLen(futureRef.current.length);
+    updateCanvas(() => next);
+  }
+
+  function handleEditStart(nodeId: string) {
+    if (editingNodeRef.current === nodeId) return;
+    pushHistory(canvasStateRef.current);
+    editingNodeRef.current = nodeId;
+  }
 
   // ── Load canvases ─────────────────────────────────────────────────
   useEffect(() => {
@@ -439,6 +491,7 @@ export function CanvasPage({ onNavigate }: { onNavigate?: (page: any, id?: strin
 
   function addStickyNote() {
     if (!activeIdRef.current) return;
+    pushHistory(canvasStateRef.current);
     const { cx, cy } = getCenter();
     const node: CanvasNode = {
       id: genId(), type: "note",
@@ -451,6 +504,7 @@ export function CanvasPage({ onNavigate }: { onNavigate?: (page: any, id?: strin
 
   function addLabelNode() {
     if (!activeIdRef.current) return;
+    pushHistory(canvasStateRef.current);
     const { cx, cy } = getCenter();
     const node: CanvasNode = {
       id: genId(), type: "label",
@@ -463,6 +517,7 @@ export function CanvasPage({ onNavigate }: { onNavigate?: (page: any, id?: strin
 
   function addRefCard(item: RefItem) {
     if (!activeIdRef.current) return;
+    pushHistory(canvasStateRef.current);
     const { cx, cy } = getCenter();
     const node: CanvasNode = {
       id: genId(), type: "ref",
@@ -475,6 +530,7 @@ export function CanvasPage({ onNavigate }: { onNavigate?: (page: any, id?: strin
   }
 
   function deleteNode(nodeId: string) {
+    pushHistory(canvasStateRef.current);
     updateCanvas(prev => ({
       ...prev,
       nodes: prev.nodes.filter(n => n.id !== nodeId),
@@ -486,6 +542,7 @@ export function CanvasPage({ onNavigate }: { onNavigate?: (page: any, id?: strin
   function duplicateNode(nodeId: string) {
     const node = canvasStateRef.current.nodes.find(n => n.id === nodeId);
     if (!node) return;
+    pushHistory(canvasStateRef.current);
     const newNode: CanvasNode = {
       ...node, id: genId(), x: node.x + 24, y: node.y + 24,
       data: { ...node.data } as NoteData | RefData | LabelData,
@@ -495,6 +552,7 @@ export function CanvasPage({ onNavigate }: { onNavigate?: (page: any, id?: strin
   }
 
   function updateNodeData(nodeId: string, patch: Partial<NoteData | RefData>) {
+    if (!('text' in patch)) pushHistory(canvasStateRef.current);
     updateCanvas(prev => ({
       ...prev,
       nodes: prev.nodes.map(n =>
@@ -514,6 +572,7 @@ export function CanvasPage({ onNavigate }: { onNavigate?: (page: any, id?: strin
     if (from !== to) {
       const exists = canvasStateRef.current.edges.some(e => e.fromNode === from && e.toNode === to);
       if (!exists) {
+        pushHistory(canvasStateRef.current);
         updateCanvas(prev => ({
           ...prev,
           edges: [...prev.edges, { id: genId(), fromNode: from, toNode: to }],
@@ -524,11 +583,27 @@ export function CanvasPage({ onNavigate }: { onNavigate?: (page: any, id?: strin
   }
 
   function deleteEdge(edgeId: string) {
+    pushHistory(canvasStateRef.current);
     updateCanvas(prev => ({ ...prev, edges: prev.edges.filter(e => e.id !== edgeId) }));
+  }
+
+  function saveEdgeLabel(edgeId: string, label: string) {
+    pushHistory(canvasStateRef.current);
+    updateCanvas(prev => ({
+      ...prev,
+      edges: prev.edges.map(e => e.id === edgeId ? { ...e, label: label.trim() || undefined } : e),
+    }));
+    setEditingEdgeId(null);
+  }
+
+  function handleNodeContextMenu(nodeId: string, x: number, y: number) {
+    setSelected(nodeId);
+    setContextMenu({ nodeId, x, y });
   }
 
   // ── Node drag ─────────────────────────────────────────────────────
   function handleNodeDragStart(nodeId: string, e: React.MouseEvent) {
+    preDragStateRef.current = canvasStateRef.current;
     isDraggingNode.current = true;
     const node = canvasStateRef.current.nodes.find(n => n.id === nodeId)!;
     dragState.current = { nodeId, smx: e.clientX, smy: e.clientY, snx: node.x, sny: node.y };
@@ -537,6 +612,7 @@ export function CanvasPage({ onNavigate }: { onNavigate?: (page: any, id?: strin
 
   // ── Node resize ───────────────────────────────────────────────────
   function handleNodeResizeStart(nodeId: string, handle: ResizeHandlePos, e: React.MouseEvent) {
+    preDragStateRef.current = canvasStateRef.current;
     isResizing.current = true;
     const node = canvasStateRef.current.nodes.find(n => n.id === nodeId)!;
     resizeState.current = {
@@ -550,6 +626,7 @@ export function CanvasPage({ onNavigate }: { onNavigate?: (page: any, id?: strin
   function handleCanvasMouseDown(e: React.MouseEvent) {
     if (e.button !== 0) return;
     setSelected(null);
+    setContextMenu(null);
     if (connecting) { setConnecting(null); return; }
     isPanning.current = true;
     const vp = canvasStateRef.current.viewport;
@@ -600,6 +677,10 @@ export function CanvasPage({ onNavigate }: { onNavigate?: (page: any, id?: strin
       }
     }
     function onMouseUp() {
+      if ((isDraggingNode.current || isResizing.current) && preDragStateRef.current) {
+        pushHistory(preDragStateRef.current);
+        preDragStateRef.current = null;
+      }
       isDraggingNode.current = false;
       isPanning.current = false;
       isResizing.current = false;
@@ -787,6 +868,23 @@ export function CanvasPage({ onNavigate }: { onNavigate?: (page: any, id?: strin
           )}
           {saving && <span className="text-xs text-muted-foreground mr-2 select-none">Saving…</span>}
           <button
+            onClick={undo}
+            disabled={historyLen === 0}
+            className="p-1.5 rounded-md text-muted-foreground hover:bg-muted transition-colors disabled:opacity-40"
+            title="Undo (Ctrl+Z)"
+          >
+            <Undo2 size={14} />
+          </button>
+          <button
+            onClick={redo}
+            disabled={futureLen === 0}
+            className="p-1.5 rounded-md text-muted-foreground hover:bg-muted transition-colors disabled:opacity-40"
+            title="Redo (Ctrl+Shift+Z)"
+          >
+            <Redo2 size={14} />
+          </button>
+          <div className="w-px h-4 bg-border mx-0.5" />
+          <button
             onClick={() => setSnapToGrid(v => !v)}
             className={cn(
               "p-1.5 rounded-md transition-colors",
@@ -844,7 +942,7 @@ export function CanvasPage({ onNavigate }: { onNavigate?: (page: any, id?: strin
             onMouseDown={handleCanvasMouseDown}
             onWheel={handleWheel}
             onKeyDown={(e) => {
-              if (e.key === "Escape") setConnecting(null);
+              if (e.key === "Escape") { setConnecting(null); setContextMenu(null); }
               const isTyping = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement;
               if ((e.key === "Delete" || e.key === "Backspace") && selected && !isTyping) {
                 e.preventDefault();
@@ -854,11 +952,20 @@ export function CanvasPage({ onNavigate }: { onNavigate?: (page: any, id?: strin
                 e.preventDefault();
                 duplicateNode(selected);
               }
+              if ((e.key === "z" || e.key === "Z") && (e.ctrlKey || e.metaKey) && !isTyping) {
+                e.preventDefault();
+                e.shiftKey ? redo() : undo();
+              }
+              if ((e.key === "y" || e.key === "Y") && (e.ctrlKey || e.metaKey) && !isTyping) {
+                e.preventDefault();
+                redo();
+              }
               if (["ArrowLeft","ArrowRight","ArrowUp","ArrowDown"].includes(e.key) && selected && !isTyping) {
                 e.preventDefault();
                 const step = e.shiftKey ? 10 : 1;
                 const dx = e.key === "ArrowLeft" ? -step : e.key === "ArrowRight" ? step : 0;
                 const dy = e.key === "ArrowUp"   ? -step : e.key === "ArrowDown"  ? step : 0;
+                pushHistory(canvasStateRef.current);
                 updateCanvas(prev => ({
                   ...prev,
                   nodes: prev.nodes.map(n => n.id === selected ? { ...n, x: n.x + dx, y: n.y + dy } : n),
@@ -888,17 +995,62 @@ export function CanvasPage({ onNavigate }: { onNavigate?: (page: any, id?: strin
                   const fn = canvasState.nodes.find(n => n.id === edge.fromNode);
                   const tn = canvasState.nodes.find(n => n.id === edge.toNode);
                   if (!fn || !tn) return null;
+                  const ox = fn.x + fn.w, oy = fn.y + fn.h / 2;
+                  const ix = tn.x,        iy = tn.y + tn.h / 2;
+                  const mx = (ox + ix) / 2;
+                  const my = (oy + iy) / 2;
                   return (
-                    <path
-                      key={edge.id}
-                      d={edgePath(fn, tn)}
-                      fill="none"
-                      stroke="hsl(var(--primary))"
-                      strokeWidth={Math.max(1, 2 / vp.scale)}
-                      strokeOpacity={0.65}
-                      style={{ pointerEvents: "stroke", cursor: "pointer" }}
-                      onClick={() => deleteEdge(edge.id)}
-                    />
+                    <g key={edge.id}>
+                      <path
+                        d={edgePath(fn, tn)}
+                        fill="none"
+                        stroke="hsl(var(--primary))"
+                        strokeWidth={Math.max(1, 2 / vp.scale)}
+                        strokeOpacity={0.65}
+                        style={{ pointerEvents: "stroke", cursor: "pointer" }}
+                        onClick={() => deleteEdge(edge.id)}
+                      />
+                      {editingEdgeId === edge.id ? (
+                        <foreignObject x={mx - 52} y={my - 13} width={104} height={26} style={{ overflow: "visible" }}>
+                          <input
+                            autoFocus
+                            className="w-full text-xs text-center bg-background border border-primary rounded px-1 outline-none"
+                            style={{ height: 24 }}
+                            value={editingEdgeLabel}
+                            onChange={e => setEditingEdgeLabel(e.target.value)}
+                            onBlur={() => saveEdgeLabel(edge.id, editingEdgeLabel)}
+                            onKeyDown={e => {
+                              if (e.key === "Enter") saveEdgeLabel(edge.id, editingEdgeLabel);
+                              if (e.key === "Escape") setEditingEdgeId(null);
+                              e.stopPropagation();
+                            }}
+                          />
+                        </foreignObject>
+                      ) : edge.label ? (
+                        <>
+                          <rect
+                            x={mx - edge.label.length * 3.5} y={my - 9}
+                            width={edge.label.length * 7} height={16}
+                            fill="hsl(var(--background))" rx={3}
+                          />
+                          <text x={mx} y={my} textAnchor="middle" dominantBaseline="middle"
+                            fontSize={11} fill="hsl(var(--foreground))"
+                            className="select-none pointer-events-none">
+                            {edge.label}
+                          </text>
+                        </>
+                      ) : null}
+                      <circle
+                        cx={mx} cy={my} r={8}
+                        fill="transparent"
+                        style={{ cursor: "text", pointerEvents: "all" }}
+                        onDoubleClick={(e) => {
+                          e.stopPropagation();
+                          setEditingEdgeId(edge.id);
+                          setEditingEdgeLabel(edge.label ?? "");
+                        }}
+                      />
+                    </g>
                   );
                 })}
               </svg>
@@ -917,6 +1069,8 @@ export function CanvasPage({ onNavigate }: { onNavigate?: (page: any, id?: strin
                     onSelect={setSelected}
                     onNavigate={onNavigate}
                     onResizeStart={handleNodeResizeStart}
+                    onEditStart={handleEditStart}
+                    onContextMenu={handleNodeContextMenu}
                   />
                 ) : node.type === "label" ? (
                   <TextLabelNode
@@ -929,6 +1083,8 @@ export function CanvasPage({ onNavigate }: { onNavigate?: (page: any, id?: strin
                     onPortClick={handlePortClick}
                     onSelect={setSelected}
                     onResizeStart={handleNodeResizeStart}
+                    onEditStart={handleEditStart}
+                    onContextMenu={handleNodeContextMenu}
                   />
                 ) : (
                   <ReferenceCardNode
@@ -942,6 +1098,7 @@ export function CanvasPage({ onNavigate }: { onNavigate?: (page: any, id?: strin
                     onSelect={setSelected}
                     onNavigate={onNavigate}
                     onResizeStart={handleNodeResizeStart}
+                    onContextMenu={handleNodeContextMenu}
                   />
                 )
               )}
@@ -954,6 +1111,44 @@ export function CanvasPage({ onNavigate }: { onNavigate?: (page: any, id?: strin
       {addRefOpen && (
         <AddRefDialog onAdd={addRefCard} onClose={() => setAddRefOpen(false)} />
       )}
+
+      {/* Right-click context menu */}
+      {contextMenu && (() => {
+        const node = canvasState.nodes.find(n => n.id === contextMenu.nodeId);
+        if (!node) return null;
+        return (
+          <div
+            className="fixed z-50 bg-background border rounded-md shadow-lg py-1 min-w-36 text-sm"
+            style={{ left: contextMenu.x, top: contextMenu.y }}
+            onMouseDown={e => e.stopPropagation()}
+          >
+            <button
+              className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2 text-sm"
+              onClick={() => { duplicateNode(contextMenu.nodeId); setContextMenu(null); }}
+            >
+              <Copy size={13} /> Duplicate
+            </button>
+            {node.type === "note" && (
+              <div className="px-3 py-1.5 flex items-center gap-1.5">
+                {(["yellow","green","blue","pink"] as const).map(c => (
+                  <button
+                    key={c}
+                    className={cn("w-4 h-4 rounded-full border border-black/10", COLOR_DOT[c])}
+                    onClick={() => { updateNodeData(contextMenu.nodeId, { color: c }); setContextMenu(null); }}
+                  />
+                ))}
+              </div>
+            )}
+            <div className="border-t my-1" />
+            <button
+              className="w-full px-3 py-1.5 text-left text-destructive hover:bg-destructive/10 flex items-center gap-2 text-sm"
+              onClick={() => { deleteNode(contextMenu.nodeId); setContextMenu(null); }}
+            >
+              <Trash2 size={13} /> Delete
+            </button>
+          </div>
+        );
+      })()}
     </div>
   );
 }

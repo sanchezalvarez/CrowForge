@@ -93,6 +93,14 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             print(f"[LIFESPAN] Failed to restore engine from DB: {e}")
 
+    # Migrate rss_articles: add image_url column if missing (for existing DBs)
+    try:
+        with _rss_db() as conn:
+            conn.execute("ALTER TABLE rss_articles ADD COLUMN image_url TEXT DEFAULT NULL")
+            conn.commit()
+    except Exception:
+        pass  # Column already exists
+
     # Start background tasks
     idle_task = asyncio.create_task(_idle_unload_watcher())
     parent_task = asyncio.create_task(_parent_watchdog())
@@ -2488,6 +2496,328 @@ async def save_rf_canvas(canvas_id: str, body: dict):
     edges = body.get("edges", [])
     _rf_canvas_upsert(canvas_id, {"nodes": nodes, "edges": edges})
     return {"ok": True}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# RSS NEWS FEED
+# ─────────────────────────────────────────────────────────────────────────────
+import xml.etree.ElementTree as ET
+from datetime import datetime, timezone
+
+def _rss_db():
+    return db.get_connection()
+
+def _row_to_dict(row):
+    if row is None:
+        return None
+    if hasattr(row, "keys"):
+        return dict(row)
+    return row
+
+# ── Feed helpers ──────────────────────────────────────────────────────────────
+
+def _get_feeds(active_only=False):
+    with _rss_db() as conn:
+        if active_only:
+            rows = conn.execute("SELECT * FROM rss_feeds WHERE is_active=1 ORDER BY created_at").fetchall()
+        else:
+            rows = conn.execute("SELECT * FROM rss_feeds ORDER BY created_at").fetchall()
+        return [dict(r) for r in rows]
+
+_MEDIA_NS = "http://search.yahoo.com/mrss/"
+
+def _extract_image(el) -> str | None:
+    """Extract image URL from an RSS item or Atom entry element."""
+    # <enclosure url="..." type="image/..."/>
+    enc = el.find("enclosure")
+    if enc is not None and (enc.get("type", "")).startswith("image/"):
+        url = enc.get("url", "")
+        if url:
+            return url
+    # <media:content url="..."/>
+    mc = el.find(f"{{{_MEDIA_NS}}}content")
+    if mc is not None:
+        url = mc.get("url", "")
+        if url:
+            return url
+    # <media:thumbnail url="..."/>
+    mt = el.find(f"{{{_MEDIA_NS}}}thumbnail")
+    if mt is not None:
+        url = mt.get("url", "")
+        if url:
+            return url
+    return None
+
+def _upsert_articles(feed_id: int, articles: list):
+    new_count = 0
+    with _rss_db() as conn:
+        for a in articles:
+            try:
+                conn.execute(
+                    "INSERT OR IGNORE INTO rss_articles (feed_id, guid, title, summary, url, image_url, published_at) VALUES (?,?,?,?,?,?,?)",
+                    (feed_id, a["guid"], a["title"], a["summary"], a["url"], a.get("image_url"), a.get("published_at")),
+                )
+                if conn.execute("SELECT changes()").fetchone()[0]:
+                    new_count += 1
+            except Exception:
+                pass
+        conn.execute("UPDATE rss_feeds SET last_fetched_at=CURRENT_TIMESTAMP WHERE id=?", (feed_id,))
+        conn.commit()
+    return new_count
+
+def _parse_rss(xml_text: str, feed_id: int) -> list:
+    """Parse RSS 2.0 or Atom feed, return list of article dicts."""
+    articles = []
+    try:
+        root = ET.fromstring(xml_text)
+    except ET.ParseError:
+        return articles
+
+    ns = {"atom": "http://www.w3.org/2005/Atom"}
+    tag = root.tag.lower()
+
+    # Atom feed
+    if "feed" in tag:
+        for entry in root.findall("atom:entry", ns) or root.findall("{http://www.w3.org/2005/Atom}entry"):
+            def _at(tag_name):
+                el = entry.find(f"atom:{tag_name}", ns) or entry.find(f"{{http://www.w3.org/2005/Atom}}{tag_name}")
+                return (el.text or "").strip() if el is not None else ""
+            link_el = entry.find("atom:link", ns) or entry.find("{http://www.w3.org/2005/Atom}link")
+            url = link_el.get("href", "") if link_el is not None else ""
+            guid = _at("id") or url
+            title = _at("title")
+            summary = _at("summary") or _at("content")
+            published = _at("published") or _at("updated")
+            image_url = _extract_image(entry)
+            if title or url:
+                articles.append({"guid": guid, "title": title, "summary": summary[:500], "url": url, "image_url": image_url, "published_at": published or None})
+    else:
+        # RSS 2.0
+        channel = root.find("channel") or root
+        for item in channel.findall("item"):
+            def _it(tag_name):
+                el = item.find(tag_name)
+                return (el.text or "").strip() if el is not None else ""
+            url = _it("link")
+            guid = _it("guid") or url
+            title = _it("title")
+            summary = _it("description")
+            published = _it("pubDate")
+            image_url = _extract_image(item)
+            if title or url:
+                articles.append({"guid": guid, "title": title, "summary": summary[:500], "url": url, "image_url": image_url, "published_at": published or None})
+
+    return articles
+
+def _auto_detect_feed_title(xml_text: str) -> tuple[str, str]:
+    """Extract feed title and description from XML."""
+    try:
+        root = ET.fromstring(xml_text)
+        ns = {"atom": "http://www.w3.org/2005/Atom"}
+        tag = root.tag.lower()
+        if "feed" in tag:
+            title_el = root.find("atom:title", ns) or root.find("{http://www.w3.org/2005/Atom}title")
+            subtitle_el = root.find("atom:subtitle", ns) or root.find("{http://www.w3.org/2005/Atom}subtitle")
+            title = (title_el.text or "").strip() if title_el is not None else ""
+            desc = (subtitle_el.text or "").strip() if subtitle_el is not None else ""
+        else:
+            channel = root.find("channel") or root
+            title_el = channel.find("title")
+            desc_el = channel.find("description")
+            title = (title_el.text or "").strip() if title_el is not None else ""
+            desc = (desc_el.text or "").strip() if desc_el is not None else ""
+        return title, desc
+    except Exception:
+        return "", ""
+
+# ── GET /rss/feeds ────────────────────────────────────────────────────────────
+
+@app.get("/rss/feeds")
+async def get_rss_feeds():
+    feeds = _get_feeds()
+    # Enrich with article counts
+    result = []
+    with _rss_db() as conn:
+        for f in feeds:
+            count = conn.execute("SELECT COUNT(*) FROM rss_articles WHERE feed_id=?", (f["id"],)).fetchone()[0]
+            f["article_count"] = count
+            result.append(f)
+    return result
+
+# ── POST /rss/feeds ───────────────────────────────────────────────────────────
+
+@app.post("/rss/feeds")
+async def add_rss_feed(body: dict):
+    url = (body.get("url") or "").strip()
+    title = (body.get("title") or "").strip()
+    if not url or not url.startswith("http"):
+        raise HTTPException(status_code=400, detail="Invalid URL")
+
+    if not title:
+        title = url
+
+    try:
+        with _rss_db() as conn:
+            cur = conn.execute(
+                "INSERT INTO rss_feeds (url, title, description) VALUES (?,?,?) RETURNING *",
+                (url, title, ""),
+            )
+            row = cur.fetchone()
+            conn.commit()
+            return dict(row)
+    except Exception as e:
+        if "UNIQUE" in str(e):
+            raise HTTPException(status_code=409, detail="Feed already exists")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ── DELETE /rss/feeds/{feed_id} ───────────────────────────────────────────────
+
+@app.delete("/rss/feeds/{feed_id}")
+async def delete_rss_feed(feed_id: int):
+    with _rss_db() as conn:
+        conn.execute("DELETE FROM rss_feeds WHERE id=?", (feed_id,))
+        conn.commit()
+    return {"ok": True}
+
+# ── PATCH /rss/feeds/{feed_id} ────────────────────────────────────────────────
+
+@app.patch("/rss/feeds/{feed_id}")
+async def patch_rss_feed(feed_id: int, body: dict):
+    is_active = 1 if body.get("is_active") else 0
+    with _rss_db() as conn:
+        conn.execute("UPDATE rss_feeds SET is_active=? WHERE id=?", (is_active, feed_id))
+        conn.commit()
+    return {"ok": True}
+
+# ── POST /rss/fetch ───────────────────────────────────────────────────────────
+
+@app.post("/rss/fetch")
+async def fetch_rss_feeds():
+    feeds = _get_feeds(active_only=True)
+    if not feeds:
+        return {"fetched": 0, "new_articles": 0, "feeds_updated": 0}
+
+    total_new = 0
+    feeds_updated = 0
+
+    async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
+        for feed in feeds:
+            try:
+                resp = await client.get(feed["url"], headers={"User-Agent": "CrowForge RSS Reader/1.0"})
+                articles = _parse_rss(resp.text, feed["id"])
+                new = _upsert_articles(feed["id"], articles)
+                total_new += new
+                feeds_updated += 1
+            except Exception as e:
+                print(f"[RSS] Failed to fetch {feed['url']}: {e}")
+
+    return {"fetched": len(feeds), "new_articles": total_new, "feeds_updated": feeds_updated}
+
+# ── GET /rss/articles ─────────────────────────────────────────────────────────
+
+@app.get("/rss/articles")
+async def get_rss_articles(limit: int = 50, offset: int = 0, feed_id: Optional[int] = None):
+    with _rss_db() as conn:
+        if feed_id:
+            rows = conn.execute(
+                """SELECT a.*, f.title as feed_title FROM rss_articles a
+                   JOIN rss_feeds f ON f.id=a.feed_id
+                   WHERE a.feed_id=? ORDER BY a.fetched_at DESC LIMIT ? OFFSET ?""",
+                (feed_id, limit, offset),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """SELECT a.*, f.title as feed_title FROM rss_articles a
+                   JOIN rss_feeds f ON f.id=a.feed_id AND f.is_active=1
+                   ORDER BY a.fetched_at DESC LIMIT ? OFFSET ?""",
+                (limit, offset),
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+# ── GET /rss/digest/cached ────────────────────────────────────────────────────
+
+@app.get("/rss/digest/cached")
+async def get_rss_digest_cached():
+    cached = app_repo.get_setting("rss_digest_cache")
+    last_gen = app_repo.get_setting("rss_digest_last_generated")
+    count_row = None
+    try:
+        with _rss_db() as conn:
+            count_row = conn.execute(
+                "SELECT COUNT(*) FROM rss_articles a JOIN rss_feeds f ON f.id=a.feed_id AND f.is_active=1"
+            ).fetchone()[0]
+    except Exception:
+        pass
+    return {
+        "digest": cached or "",
+        "last_generated": last_gen or "",
+        "article_count": count_row or 0,
+    }
+
+# ── POST /rss/digest ──────────────────────────────────────────────────────────
+
+@app.post("/rss/digest")
+async def generate_rss_digest(request: Request):
+    # Fetch recent articles from active feeds
+    with _rss_db() as conn:
+        rows = conn.execute(
+            """SELECT a.title, a.summary, a.url, a.published_at, f.title as feed_title
+               FROM rss_articles a
+               JOIN rss_feeds f ON f.id=a.feed_id AND f.is_active=1
+               ORDER BY a.fetched_at DESC LIMIT 40"""
+        ).fetchall()
+        articles = [dict(r) for r in rows]
+
+    if not articles:
+        async def empty_gen():
+            yield {"data": "No articles found. Add RSS feeds in Settings and refresh."}
+            yield {"data": "[DONE]"}
+        return EventSourceResponse(empty_gen())
+
+    # Build articles text grouped by feed
+    from collections import defaultdict
+    by_feed = defaultdict(list)
+    for a in articles:
+        by_feed[a["feed_title"]].append(a)
+
+    articles_text = ""
+    for feed_title, items in by_feed.items():
+        articles_text += f"\n[Feed: {feed_title}]\n"
+        for item in items[:10]:
+            summary = (item["summary"] or "")[:200].replace("\n", " ")
+            articles_text += f"- {item['title']}: {summary} ({item['url']})\n"
+
+    system_prompt = """You are a news digest assistant. Create a concise, well-structured digest.
+Format:
+1. Start with a 2-3 sentence overall summary paragraph.
+2. Then for each feed/topic, write:
+## [Feed Name]
+- **[Article Title]** — one sentence summary.
+
+Keep each bullet under 25 words. Be factual and clear. Include all articles provided."""
+
+    user_prompt = f"Create a news digest from these articles:\n{articles_text}"
+
+    async def event_generator():
+        full_response = ""
+        try:
+            async for chunk in engine_manager.get_active().generate_stream(
+                system_prompt, user_prompt,
+                temperature=0.5, max_tokens=2048, json_mode=False,
+            ):
+                if await request.is_disconnected():
+                    break
+                full_response += chunk
+                yield {"data": chunk}
+            yield {"data": "[DONE]"}
+            # Cache the digest
+            if full_response.strip():
+                app_repo.set_setting("rss_digest_cache", full_response.strip())
+                app_repo.set_setting("rss_digest_last_generated", datetime.now(timezone.utc).isoformat())
+        except Exception as e:
+            yield {"data": f"[ERROR] {str(e).replace(chr(10), ' ')}"}
+
+    return EventSourceResponse(event_generator())
 
 
 if __name__ == "__main__":

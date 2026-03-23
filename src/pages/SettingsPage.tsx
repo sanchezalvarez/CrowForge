@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from "react";
 import axios from "axios";
-import { Download, CheckCircle2, Loader2, X, AlertCircle, Trash2, ExternalLink, Cpu, HardDrive, Monitor, MemoryStick } from "lucide-react";
+import { Download, CheckCircle2, Loader2, X, AlertCircle, Trash2, ExternalLink, Cpu, HardDrive, Monitor, MemoryStick, Rss, Plus, ToggleLeft, ToggleRight, Check, Newspaper } from "lucide-react";
 import { toast } from "../hooks/useToast";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { useRssFeeds, RssFeed } from "../hooks/useRssFeeds";
 
 const API_BASE = "http://127.0.0.1:8000";
 
@@ -234,7 +235,278 @@ const GALLERY_MODELS: GalleryModel[] = [
 
 const ALL_TAGS = ["all", "agent", "chat", "translate", "multilingual", "coding", "reasoning", "math", "fast", "general"];
 
-type Section = "ai" | "models" | "plugins" | "appearance" | "user" | "about";
+type Section = "ai" | "models" | "plugins" | "appearance" | "user" | "news" | "about";
+
+interface CuratedFeed {
+  url: string;
+  title: string;
+  category: string;
+}
+
+const CURATED_FEEDS: CuratedFeed[] = [
+  // World News
+  { url: "http://feeds.bbci.co.uk/news/world/rss.xml", title: "BBC World News", category: "World" },
+  { url: "https://feeds.reuters.com/reuters/topNews", title: "Reuters Top News", category: "World" },
+  { url: "https://www.aljazeera.com/xml/rss/all.xml", title: "Al Jazeera", category: "World" },
+  // Technology
+  { url: "https://hnrss.org/frontpage", title: "Hacker News", category: "Technology" },
+  { url: "https://www.theverge.com/rss/index.xml", title: "The Verge", category: "Technology" },
+  { url: "https://www.wired.com/feed/rss", title: "Wired", category: "Technology" },
+  { url: "https://techcrunch.com/feed/", title: "TechCrunch", category: "Technology" },
+  { url: "https://feeds.arstechnica.com/arstechnica/index", title: "Ars Technica", category: "Technology" },
+  // Economics
+  { url: "https://feeds.bloomberg.com/markets/news.rss", title: "Bloomberg Markets", category: "Economics" },
+  { url: "https://www.economist.com/latest/rss.xml", title: "The Economist", category: "Economics" },
+  { url: "https://feeds.a.dj.com/rss/RSSMarketsMain.xml", title: "WSJ Markets", category: "Economics" },
+  // Sports
+  { url: "http://feeds.bbci.co.uk/sport/rss.xml", title: "BBC Sport", category: "Sports" },
+  { url: "https://www.espn.com/espn/rss/news", title: "ESPN", category: "Sports" },
+  // Science
+  { url: "https://www.nasa.gov/rss/dyn/breaking_news.rss", title: "NASA Breaking News", category: "Science" },
+  { url: "https://feeds.newscientist.com/home", title: "New Scientist", category: "Science" },
+];
+
+const CATEGORY_COLORS: Record<string, string> = {
+  World: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
+  Technology: "bg-violet-500/10 text-violet-600 dark:text-violet-400",
+  Economics: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+  Sports: "bg-orange-500/10 text-orange-600 dark:text-orange-400",
+  Science: "bg-cyan-500/10 text-cyan-600 dark:text-cyan-400",
+};
+
+const FEED_DOT_COLORS: string[] = [
+  "bg-blue-500", "bg-violet-500", "bg-emerald-500", "bg-orange-500",
+  "bg-pink-500", "bg-cyan-500", "bg-amber-500", "bg-rose-500",
+];
+
+function feedDotColor(title: string): string {
+  let hash = 0;
+  for (let i = 0; i < title.length; i++) hash = (hash * 31 + title.charCodeAt(i)) & 0xffffffff;
+  return FEED_DOT_COLORS[Math.abs(hash) % FEED_DOT_COLORS.length];
+}
+
+function fmtFeedDate(str: string | null): string {
+  if (!str) return "Never";
+  const diff = Date.now() - new Date(str).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
+
+function NewsFeedsSection() {
+  const { feeds, loading, loadFeeds, addFeed, deleteFeed, toggleFeed } = useRssFeeds();
+  const [urlInput, setUrlInput] = useState("");
+  const [titleInput, setTitleInput] = useState("");
+  const [adding, setAdding] = useState(false);
+  const [addError, setAddError] = useState("");
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [pendingUrls, setPendingUrls] = useState<Set<string>>(new Set());
+
+  useEffect(() => { loadFeeds(); }, []);
+
+  async function handleAdd() {
+    if (!urlInput.trim()) return;
+    setAdding(true);
+    setAddError("");
+    try {
+      await addFeed(urlInput.trim(), titleInput.trim());
+      setUrlInput("");
+      setTitleInput("");
+    } catch (e: any) {
+      setAddError(e?.response?.data?.detail ?? "Failed to add feed.");
+    } finally {
+      setAdding(false);
+    }
+  }
+
+  async function handleDelete(id: number) {
+    setDeletingId(id);
+    try {
+      await deleteFeed(id);
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  async function handleAddCurated(feed: CuratedFeed) {
+    if (pendingUrls.has(feed.url)) return;
+    setPendingUrls((s) => new Set(s).add(feed.url));
+    try {
+      await addFeed(feed.url, feed.title);
+    } catch {
+      // 409 duplicate — ignore, loadFeeds already called
+    } finally {
+      setPendingUrls((s) => { const n = new Set(s); n.delete(feed.url); return n; });
+    }
+  }
+
+  const addedUrls = new Set(feeds.map((f: RssFeed) => f.url));
+  const categories = [...new Set(CURATED_FEEDS.map((f) => f.category))];
+
+  return (
+    <div className="space-y-6 max-w-2xl">
+      <div>
+        <h2 className="text-lg font-semibold">News Feeds</h2>
+        <p className="text-sm text-muted-foreground mt-1">
+          Manage RSS feeds for your AI news digest. Active feeds are fetched when you generate a digest.
+        </p>
+      </div>
+
+      {/* Curated feed library */}
+      <div className="rounded-lg border bg-muted/20 p-4 space-y-4">
+        <p className="text-sm font-medium flex items-center gap-2">
+          <Newspaper className="h-4 w-4 text-primary" />
+          Feed Library
+          <span className="text-xs text-muted-foreground font-normal">— click + to add</span>
+        </p>
+        {categories.map((cat) => (
+          <div key={cat}>
+            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">{cat}</p>
+            <div className="flex flex-wrap gap-2">
+              {CURATED_FEEDS.filter((f) => f.category === cat).map((feed) => {
+                const isAdded = addedUrls.has(feed.url);
+                const isPending = pendingUrls.has(feed.url);
+                return (
+                  <button
+                    key={feed.url}
+                    onClick={() => !isAdded && !isPending && handleAddCurated(feed)}
+                    disabled={isAdded || isPending}
+                    title={isAdded ? "Already added" : `Add ${feed.title}`}
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${
+                      isAdded
+                        ? "bg-primary/10 text-primary border-primary/30 opacity-60 cursor-default"
+                        : isPending
+                          ? "opacity-60 cursor-wait border-transparent"
+                          : `${CATEGORY_COLORS[cat] ?? ""} border-transparent hover:border-current hover:shadow-sm cursor-pointer`
+                    }`}
+                  >
+                    {isAdded
+                      ? <Check className="h-3 w-3" />
+                      : isPending
+                        ? <Loader2 className="h-3 w-3 animate-spin" />
+                        : <Plus className="h-3 w-3" />
+                    }
+                    {feed.title}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Add feed form */}
+      <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
+        <p className="text-sm font-medium flex items-center gap-2">
+          <Rss className="h-4 w-4 text-primary" />
+          Add Custom Feed
+        </p>
+        <div className="flex flex-col gap-2">
+          <input
+            type="url"
+            placeholder="https://example.com/feed.xml"
+            value={urlInput}
+            onChange={(e) => setUrlInput(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleAdd()}
+            className="w-full px-3 py-2 rounded-md border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+          />
+          <div className="flex gap-2">
+            <input
+              type="text"
+              placeholder="Display name (optional)"
+              value={titleInput}
+              onChange={(e) => setTitleInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleAdd()}
+              className="flex-1 px-3 py-2 rounded-md border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+            />
+            <button
+              onClick={handleAdd}
+              disabled={adding || !urlInput.trim()}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
+            >
+              {adding ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+              Add Feed
+            </button>
+          </div>
+        </div>
+        {addError && (
+          <p className="text-xs text-destructive">{addError}</p>
+        )}
+      </div>
+
+      {/* Feed list */}
+      {loading ? (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Loading feeds…
+        </div>
+      ) : feeds.length === 0 ? (
+        <div className="rounded-lg border border-dashed p-6 flex flex-col items-center gap-3 text-center">
+          <Rss className="h-8 w-8 text-muted-foreground/50" />
+          <div>
+            <p className="text-sm font-medium">No feeds yet</p>
+            <p className="text-xs text-muted-foreground mt-1">Pick feeds from the library above or add a custom URL</p>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{feeds.length} feed{feeds.length !== 1 ? "s" : ""}</p>
+            <span className="text-xs text-muted-foreground">{feeds.filter((f: RssFeed) => f.is_active === 1).length} active</span>
+          </div>
+          {feeds.map((feed: RssFeed) => {
+            const dot = feedDotColor(feed.title || feed.url);
+            const isActive = feed.is_active === 1;
+            return (
+              <div
+                key={feed.id}
+                className={`rounded-lg border p-3 flex items-start gap-3 transition-colors ${isActive ? "bg-background" : "bg-muted/20 opacity-60"}`}
+              >
+                <span className={`mt-1 w-2.5 h-2.5 rounded-full shrink-0 ${dot}`} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{feed.title || feed.url}</p>
+                  <p className="text-xs text-muted-foreground truncate">{feed.url}</p>
+                  <div className="flex items-center gap-3 mt-1 text-[11px] text-muted-foreground">
+                    <span>Last fetched: {fmtFeedDate(feed.last_fetched_at)}</span>
+                    {feed.article_count > 0 && (
+                      <span>{feed.article_count} article{feed.article_count !== 1 ? "s" : ""}</span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    onClick={() => toggleFeed(feed.id, !isActive)}
+                    title={isActive ? "Disable feed" : "Enable feed"}
+                    className="p-1 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+                  >
+                    {isActive
+                      ? <ToggleRight className="h-4 w-4 text-primary" />
+                      : <ToggleLeft className="h-4 w-4" />
+                    }
+                  </button>
+                  <button
+                    onClick={() => handleDelete(feed.id)}
+                    disabled={deletingId === feed.id}
+                    title="Delete feed"
+                    className="p-1 rounded hover:bg-destructive/10 hover:text-destructive transition-colors text-muted-foreground"
+                  >
+                    {deletingId === feed.id
+                      ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      : <Trash2 className="h-3.5 w-3.5" />
+                    }
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 
 interface DownloadState {
   progress: number;
@@ -458,6 +730,7 @@ export function SettingsPage({ theme, setTheme, baseColor, setBaseColor }: Setti
     { id: "plugins", label: "Plugins" },
     { id: "appearance", label: "Appearance" },
     { id: "user", label: "User Settings" },
+    { id: "news", label: "News Feeds" },
     { id: "about", label: "About" },
   ];
 
@@ -1106,6 +1379,10 @@ def initialize_plugin(registry):
               </div>
             )}
           </div>
+        )}
+
+        {section === "news" && (
+          <NewsFeedsSection />
         )}
 
         {section === "about" && (

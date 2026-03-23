@@ -2,9 +2,12 @@ import { useEffect, useState, useMemo } from "react";
 import { Card, CardContent } from "../components/ui/card";
 import {
   FileText, Table2, MessageSquare, Plus, Sparkles, Cpu,
-  ArrowRight, Loader2, Zap, Clock,
+  ArrowRight, Loader2, Zap, Clock, RefreshCw, Newspaper,
 } from "lucide-react";
 import axios from "axios";
+import { NewsDigest } from "../components/News/NewsDigest";
+import { NewsFeedCard } from "../components/News/NewsFeedCard";
+import { useRssDigest } from "../hooks/useRssDigest";
 
 const API_BASE = "http://127.0.0.1:8000";
 
@@ -69,6 +72,9 @@ function greeting(): string {
 export default function DashboardPage({ onNavigate }: DashboardPageProps) {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [articles, setArticles] = useState<any[]>([]);
+
+  const { digest, isGenerating, lastGenerated, articleCount, error, loadCached, generateDigest } = useRssDigest();
 
   useEffect(() => {
     let cancelled = false;
@@ -83,6 +89,11 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
       }
     })();
     return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    loadCached();
+    axios.get(`${API_BASE}/rss/articles?limit=12`).then(r => setArticles(r.data)).catch(() => {});
   }, []);
 
   // Unified activity feed — mix all recent items, sort by time
@@ -180,6 +191,46 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
   return (
     <div className="flex-1 overflow-y-auto">
       <div className="p-8 max-w-5xl mx-auto space-y-8">
+        {/* News Digest — hero section at top */}
+        <section>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-bold flex items-center gap-2">
+              <Newspaper className="h-5 w-5 text-primary" />
+              AI News Digest
+            </h2>
+            <button
+              onClick={generateDigest}
+              disabled={isGenerating}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-colors disabled:opacity-50"
+            >
+              {isGenerating ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+              {isGenerating ? "Generating…" : "Refresh & Generate"}
+            </button>
+          </div>
+          <Card className="border-border/50">
+            <CardContent className="p-6">
+              <NewsDigest
+                digest={digest}
+                isGenerating={isGenerating}
+                lastGenerated={lastGenerated}
+                articleCount={articleCount}
+                error={error}
+                onGenerate={generateDigest}
+              />
+            </CardContent>
+          </Card>
+        </section>
+
+        {/* Recent articles grid */}
+        {articles.length > 0 && (
+          <section>
+            <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">Latest Articles</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {articles.map((a) => <NewsFeedCard key={a.id} article={a} />)}
+            </div>
+          </section>
+        )}
+
         {/* Header */}
         <header>
           <h1 className="text-2xl font-bold tracking-tight">{greeting()}</h1>

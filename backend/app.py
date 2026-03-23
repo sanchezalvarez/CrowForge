@@ -2432,17 +2432,34 @@ def _rf_canvas_upsert(canvas_id: str, data: dict) -> None:
 
 @app.post("/canvas/run")
 async def canvas_run(body: dict, request: Request):
-    """Stream an AI response for a Canvas AI node."""
+    """Stream an AI response for a Canvas AI node, with optional chain context."""
     prompt = str(body.get("prompt", "")).strip()
     node_id = str(body.get("node_id", ""))
+    context_nodes = body.get("context_nodes") or []
     if not prompt:
         raise HTTPException(status_code=400, detail="prompt is required")
+
+    # Build final prompt — prepend context from upstream nodes if present
+    if context_nodes:
+        parts = [
+            "You are part of an automated workflow. "
+            "Here is the output from previous steps:\n"
+        ]
+        for ctx in context_nodes:
+            label = str(ctx.get("label", "Previous step"))
+            output = str(ctx.get("output", ""))
+            parts.append(f"--- {label} ---\n{output}\n")
+        parts.append("\nNow complete the following task:\n\n")
+        parts.append(prompt)
+        final_prompt = "\n".join(parts)
+    else:
+        final_prompt = prompt
 
     async def event_generator():
         try:
             async for chunk in engine_manager.active_engine.generate(
                 system_prompt="You are a helpful assistant embedded in a canvas workspace.",
-                user_prompt=prompt,
+                user_prompt=final_prompt,
                 max_tokens=int(os.getenv("LLM_MAX_TOKENS", "1024")),
                 temperature=0.7,
                 json_mode=False,

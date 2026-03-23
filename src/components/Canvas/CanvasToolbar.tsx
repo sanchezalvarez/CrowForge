@@ -1,22 +1,26 @@
 import { useReactFlow } from "@xyflow/react";
-import { StickyNote, Bot, Image, Layers, LayoutDashboard, Trash2 } from "lucide-react";
+import {
+  StickyNote, Bot, Image, LayoutDashboard, Trash2, Grid3x3,
+} from "lucide-react";
 import { applyAutoLayout } from "./utils/autoLayout";
 import { cn } from "../../lib/utils";
 
 interface CanvasToolbarProps {
-  onAddText: () => void;
-  onAddAI: () => void;
-  onAddImage: () => void;
-  onAddGroup: () => void;
-  onClear: () => void;
+  onAddText:    () => void;
+  onAddAI:      () => void;
+  onAddImage:   () => void;
+  onClear:      () => void;
+  snapToGrid:   boolean;
+  onSnapToggle: () => void;
 }
 
 export function CanvasToolbar({
   onAddText,
   onAddAI,
   onAddImage,
-  onAddGroup,
   onClear,
+  snapToGrid,
+  onSnapToggle,
 }: CanvasToolbarProps) {
   const { getNodes, getEdges, setNodes, fitView } = useReactFlow();
 
@@ -53,24 +57,36 @@ export function CanvasToolbar({
         Image
       </button>
 
-      <button className={btnCls} onClick={onAddGroup} title="Add group">
-        <Layers size={12} />
-        Group
-      </button>
-
       <div className="w-px h-5 bg-border mx-1" />
 
       <button
         className={cn(btnCls, "hover:bg-primary/10 hover:text-primary hover:border-primary/40")}
         onClick={handleAutoLayout}
-        title="Auto-layout (dagre TB)"
+        title="Auto-layout"
       >
         <LayoutDashboard size={12} />
         Auto layout
       </button>
 
       <button
-        className={cn(btnCls, "ml-auto hover:bg-destructive/10 hover:text-destructive hover:border-destructive/40")}
+        className={cn(
+          btnCls,
+          snapToGrid
+            ? "bg-primary/10 text-primary border-primary/40"
+            : "hover:bg-primary/10 hover:text-primary hover:border-primary/40",
+        )}
+        onClick={onSnapToggle}
+        title={snapToGrid ? "Snap to grid: ON" : "Snap to grid: OFF"}
+      >
+        <Grid3x3 size={12} />
+        Snap
+      </button>
+
+      <button
+        className={cn(
+          btnCls,
+          "ml-auto hover:bg-destructive/10 hover:text-destructive hover:border-destructive/40",
+        )}
         onClick={onClear}
         title="Clear canvas"
       >

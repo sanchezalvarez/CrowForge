@@ -1,4 +1,4 @@
-/** Workspace Tools — Multitasking Dashboard with Dual Calculators & Converter */
+/** Workspace Tools — Multitasking Dashboard with Calculators, Converter & World Clock */
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Calculator, Trash2, ArrowRightLeft,
@@ -270,6 +270,8 @@ function CalculatorWidget({ id, title, isActive, onActivate }: CalcWidgetProps) 
     if (!isActive) return;
     function onKeyDown(e: KeyboardEvent) {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.key.startsWith("F") && e.key.length > 1) return;
+      if (e.ctrlKey || e.altKey || e.metaKey) return;
       const key = e.key;
       if (/[0-9.]/.test(key)) { append(key); e.preventDefault(); }
       else if (key === "+") { append("+"); e.preventDefault(); }
@@ -796,13 +798,100 @@ function CurrencyWidget() {
 // Main Page
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Compact time strip
+// ---------------------------------------------------------------------------
+
+const TIME_CITIES = [
+  { name: "Los Angeles", tz: "America/Los_Angeles" },
+  { name: "Denver",      tz: "America/Denver"      },
+  { name: "Chicago",     tz: "America/Chicago"     },
+  { name: "New York",    tz: "America/New_York"    },
+  { name: "São Paulo",   tz: "America/Sao_Paulo"   },
+  { name: "London",      tz: "Europe/London"       },
+  { name: "Paris",       tz: "Europe/Paris"        },
+  { name: "Bratislava",  tz: "Europe/Bratislava"   },
+  { name: "Cairo",       tz: "Africa/Cairo"        },
+  { name: "Moscow",      tz: "Europe/Moscow"       },
+  { name: "Dubai",       tz: "Asia/Dubai"          },
+  { name: "Mumbai",      tz: "Asia/Kolkata"        },
+  { name: "Bangkok",     tz: "Asia/Bangkok"        },
+  { name: "Singapore",   tz: "Asia/Singapore"      },
+  { name: "Tokyo",       tz: "Asia/Tokyo"          },
+  { name: "Sydney",      tz: "Australia/Sydney"    },
+];
+
+function fmt(tz: string, now: Date) {
+  return new Intl.DateTimeFormat("sk-SK", {
+    timeZone: tz, hour: "2-digit", minute: "2-digit", hour12: false,
+  }).format(now);
+}
+
+function fmtDate(tz: string, now: Date) {
+  return new Intl.DateTimeFormat("sk-SK", {
+    timeZone: tz, weekday: "short", day: "numeric", month: "short",
+  }).format(now);
+}
+
+function isDaytz(tz: string, now: Date) {
+  const h = parseInt(new Intl.DateTimeFormat("en-US", { timeZone: tz, hour: "numeric", hour12: false }).format(now), 10);
+  return h >= 6 && h < 20;
+}
+
+function TimeStrip() {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  const userTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+  return (
+    <div className="flex items-center gap-1.5 flex-wrap">
+      {TIME_CITIES.map((c) => {
+        const isUser = c.tz === userTz;
+        const day    = isDaytz(c.tz, now);
+        return (
+          <div
+            key={c.name}
+            className={cn(
+              "flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-xs",
+              isUser
+                ? "bg-primary/10 border-primary/30 text-primary"
+                : "bg-muted/40 border-border/50 text-foreground",
+            )}
+          >
+            <span className="text-[10px] text-muted-foreground shrink-0">
+              {day ? "☀️" : "🌙"}
+            </span>
+            <span className={cn("font-medium shrink-0", isUser && "text-primary")}>
+              {c.name}
+            </span>
+            <span className="font-mono font-semibold tabular-nums">
+              {fmt(c.tz, now)}
+            </span>
+            <span className="text-[9px] text-muted-foreground hidden lg:block">
+              {fmtDate(c.tz, now)}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main Page
+// ---------------------------------------------------------------------------
+
 export function ToolsPage() {
   const [activeCalc, setActiveCalc] = useState<"A" | "B">("A");
 
   return (
     <div className="flex flex-col h-full overflow-hidden p-4 md:p-6 lg:p-8 gap-6 max-w-[1800px] mx-auto w-full">
-      <header className="flex flex-col gap-1 text-center lg:text-left">
-        <div className="flex items-center justify-center lg:justify-start gap-3">
+      <header className="flex flex-col gap-3 shrink-0">
+        <div className="flex items-center gap-3">
           <div className="p-2 bg-primary/10 rounded-xl">
             <Wrench className="h-6 w-6 text-primary" />
           </div>
@@ -811,6 +900,7 @@ export function ToolsPage() {
             <p className="text-muted-foreground text-xs font-medium uppercase tracking-[0.2em] opacity-60">Productivity Powerhouse</p>
           </div>
         </div>
+        <TimeStrip />
       </header>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 flex-1 min-h-0">
@@ -829,7 +919,7 @@ export function ToolsPage() {
         <CurrencyWidget />
         <ConverterWidget />
       </div>
-      
+
       <div className="flex items-center justify-center gap-6 py-2 border-t border-border/40">
         <p className="text-[10px] text-muted-foreground/50 uppercase tracking-[0.3em] flex items-center gap-2">
           <Zap className="h-3 w-3" /> Click a tool to focus keyboard input

@@ -251,6 +251,9 @@ export default function App() {
     { page: "sheets", label: "Sheets", icon: Table2 },
     { page: "canvas", label: "Canvas", icon: Workflow },
     { page: "tools", label: "Tools", icon: Wrench },
+  ];
+
+  const bottomNavItems: { page: AppPage; label: string; icon: typeof MessageSquare }[] = [
     { page: "benchmark", label: "Benchmark", icon: Gauge },
     { page: "settings", label: "Settings", icon: Settings },
   ];
@@ -291,6 +294,24 @@ export default function App() {
               </button>
             ))}
           </div>
+        </div>
+
+        <div className="p-3 space-y-0.5 border-t">
+          {bottomNavItems.map(({ page, label, icon: Icon }) => (
+            <button
+              key={page}
+              onClick={() => setCurrentPage(page)}
+              className={cn(
+                "w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-sm transition-colors",
+                currentPage === page
+                  ? "bg-primary/10 text-primary font-semibold"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+              )}
+            >
+              <Icon size={14} />
+              {label}
+            </button>
+          ))}
         </div>
       </aside>
 

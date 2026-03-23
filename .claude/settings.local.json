@@ -63,7 +63,8 @@
       "WebFetch(domain:tiptap.dev)",
       "Bash(npx madge:*)",
       "Bash(find:*)",
-      "Bash(tasklist)"
+      "Bash(tasklist)",
+      "Bash(npm list:*)"
     ]
   }
 }

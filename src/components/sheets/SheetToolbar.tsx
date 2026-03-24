@@ -98,7 +98,7 @@ export function SheetToolbar({
   return (
     <>
       {/* Toolbar */}
-      <div className="border-b px-4 py-1.5 flex items-center gap-2">
+      <div className="border-b px-4 py-[7px] flex items-center gap-2">
         <Button variant="outline" size="sm" className="h-7 w-7 p-0" onClick={undoSheet} disabled={!canUndo || aiFilling} title={aiFilling ? "Cannot undo while AI is running" : "Undo (Ctrl+Z)"}>
           <Undo2 className="h-3.5 w-3.5" />
         </Button>

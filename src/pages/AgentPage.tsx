@@ -770,7 +770,7 @@ export function AgentPage({ tuningParams }: AgentPageProps) {
     <div className="flex h-full">
       {/* Sessions sidebar */}
       <div className="shrink-0 border-r bg-background flex flex-col relative" style={{ width: sidebarWidth }}>
-        <div className="p-3 border-b">
+        <div className="h-20 flex items-center px-3 border-b">
           <Button
             variant="outline"
             size="sm"
@@ -860,7 +860,7 @@ export function AgentPage({ tuningParams }: AgentPageProps) {
         {activeSessionId ? (
           <>
             {/* Header */}
-            <div className="border-b px-4 py-2 flex items-center gap-3">
+            <div className="h-20 border-b px-4 flex items-center gap-3">
               <div className="flex items-center gap-1.5 shrink-0">
                 <Bot className="h-4 w-4 text-violet-500" />
                 <span className="text-sm font-semibold text-violet-600 dark:text-violet-400">Agent</span>

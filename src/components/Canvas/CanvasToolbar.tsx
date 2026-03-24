@@ -41,13 +41,13 @@ export function CanvasToolbar({
   }
 
   const btnCls = cn(
-    "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors",
-    "bg-background border text-foreground hover:bg-muted",
+    "flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all",
+    "bg-background border border-border text-foreground hover:bg-muted hover:shadow-sm active:scale-[0.97]",
   );
 
   return (
-    <div className="flex items-center gap-1.5 px-3 py-2 border-b bg-background shrink-0 flex-wrap">
-      <span className="text-xs font-semibold text-muted-foreground mr-1 select-none">Add:</span>
+    <div className="flex items-center gap-2 px-4 py-2 border-b bg-background shrink-0 flex-wrap">
+      <span className="text-xs font-semibold text-muted-foreground mr-1 select-none uppercase tracking-wider">Add</span>
 
       <button className={btnCls} onClick={onAddText} title="Add text node">
         <Square size={12} />
@@ -79,10 +79,10 @@ export function CanvasToolbar({
         Link
       </button>
 
-      <div className="w-px h-5 bg-border mx-1" />
+      <div className="w-px h-4 bg-border mx-1" />
 
       <button
-        className={cn(btnCls, "hover:bg-primary/10 hover:text-primary hover:border-primary/40")}
+        className={cn(btnCls, "hover:bg-primary/10 hover:text-primary hover:border-primary/30")}
         onClick={handleAutoLayout}
         title="Auto-layout"
       >
@@ -95,7 +95,7 @@ export function CanvasToolbar({
           btnCls,
           snapToGrid
             ? "bg-primary/10 text-primary border-primary/40"
-            : "hover:bg-primary/10 hover:text-primary hover:border-primary/40",
+            : "hover:bg-primary/10 hover:text-primary hover:border-primary/30",
         )}
         onClick={onSnapToggle}
         title={snapToGrid ? "Snap to grid: ON" : "Snap to grid: OFF"}
@@ -107,7 +107,7 @@ export function CanvasToolbar({
       <button
         className={cn(
           btnCls,
-          "ml-auto hover:bg-destructive/10 hover:text-destructive hover:border-destructive/40",
+          "ml-auto hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30",
         )}
         onClick={onClear}
         title="Clear canvas"

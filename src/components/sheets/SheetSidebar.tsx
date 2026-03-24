@@ -57,7 +57,7 @@ export function SheetSidebar({
 
   return (
     <div className="w-[220px] shrink-0 border-r bg-background flex flex-col">
-      <div className="p-3 border-b">
+      <div className="h-20 flex items-center px-3 border-b">
         {/* Hidden file input */}
         <input
           ref={importInputRef}

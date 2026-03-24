@@ -469,6 +469,7 @@ function ConverterWidget() {
                 setConvType(id);
                 if (id === "length") { setConvFrom("m"); setConvTo("ft"); }
                 if (id === "weight") { setConvFrom("kg"); setConvTo("lb"); }
+                if (id === "volume") { setConvFrom("l"); setConvTo("gal"); }
                 if (id === "temp") { setConvFrom("c"); setConvTo("f"); }
               }}
             >
@@ -645,7 +646,7 @@ function CurrencyWidget() {
       const symbols = ALL_CURRENCY_CODES.join(",");
       const res = await fetch(
         `https://api.frankfurter.app/latest?base=USD&symbols=${symbols}`,
-        { signal: AbortSignal.timeout(10_000) }
+        { signal: AbortSignal.timeout(30_000) }
       );
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
@@ -659,7 +660,9 @@ function CurrencyWidget() {
       setCache(newCache);
       saveCachedRates(newCache);
     } catch (e: any) {
-      setError(e.message ?? "Failed to fetch rates");
+      if (e?.name === "TimeoutError" || e?.message?.includes("timeout") || e?.message?.includes("signal"))
+        setError("Request timed out — check your internet connection and try again.");
+      else setError(e.message ?? "Failed to fetch rates");
     } finally {
       setLoading(false);
     }

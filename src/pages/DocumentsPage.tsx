@@ -146,7 +146,7 @@ export function DocumentsPage({ onContextChange, tuningParams, initialDocId }: D
     <div className="flex h-full relative">
       {/* Documents sidebar */}
       <div className="w-[220px] shrink-0 border-r bg-background flex flex-col">
-        <div className="p-3 border-b">
+        <div className="h-20 flex items-center px-3 border-b">
           <Button variant="outline" size="sm" className="w-full" onClick={createDocument}>
             <PlusCircle className="h-4 w-4 mr-1.5" /> New Document
           </Button>

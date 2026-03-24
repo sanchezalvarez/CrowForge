@@ -112,7 +112,7 @@ export function CanvasSidebar({ activeId, onSelect }: CanvasSidebarProps) {
   return (
     <div className="w-[220px] shrink-0 flex flex-col border-r bg-background">
       {/* Header */}
-      <div className="p-3 border-b">
+      <div className="h-20 flex items-center px-3 border-b">
         <Button variant="outline" size="sm" className="w-full justify-start gap-1.5" onClick={handleCreate}>
           <PlusCircle className="h-4 w-4" />
           New Canvas

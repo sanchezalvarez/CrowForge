@@ -427,7 +427,7 @@ export function DocumentEditor({
       </Dialog>
 
       {/* Title bar */}
-      <div className="border-b px-4 py-2 flex items-center gap-3">
+      <div className="px-4 py-2 flex items-center gap-3">
         <input
           value={activeDoc.title}
           onChange={(e) => onTitleInputChange(activeDoc.id, e.target.value)}

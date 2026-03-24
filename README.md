@@ -1,93 +1,102 @@
 # CrowForge
 
+![CrowForge Logo](src/assets/crowforge_ico.png)
+
 A **local-first AI workspace** — Chat, Documents, Sheets, and Benchmarking — running entirely on your machine. No cloud, no telemetry, no subscriptions.
 
-Bring your own model: connect a local GGUF file, any OpenAI-compatible API (OpenAI, Ollama, LM Studio, etc.), or download a free model directly from the built-in gallery.
-
-Built with **Tauri v2** · **React 19 / TypeScript** · **Python FastAPI** · **SQLite**
-
-> **🚧 Early Access** — CrowForge is actively being developed. Things may break, features are still being added, and the project is evolving fast. Feedback, issues, and contributions are very welcome!
+**CrowForge v0.3** brings even more power to your local machine with a comprehensive "Help!" system, AI News Digest, and visual workflow canvas.
 
 ---
 
-## 📺 Demo
+## 🚀 Key Features
 
-<video src="https://github.com/your-username/CrowForge/assets/teaser_v1.mp4" width="100%" controls autoplay loop muted>
-  Your browser does not support the video tag.
-</video>
+### 🧠 Intelligent Chat
+- **Multi-session Persistence:** Never lose a conversation.
+- **Context Personas:** Specialized modes for Coding, Writing, Analysis, and General assistance.
+- **Document Awareness:** Attach open documents or PDFs directly to your chat for hyper-specific context.
 
----
+### 📝 Smart Documents
+- **Rich Text Editor:** Powered by Tiptap with full Markdown support.
+- **AI Context Toolbar:** Select text to Rewrite, Summarize, Expand, or Fix Grammar instantly.
+- **Export Everywhere:** Save your work as PDF, DOCX, or Markdown.
 
-## 📸 Screenshots
+### 📊 AI Spreadsheets
+- **Autonomous Data Fill:** Use AI to generate or process data across thousands of rows.
+- **Formula Support:** Standard spreadsheet logic (=SUM, =AVG) combined with AI schema generation.
+- **Data Privacy:** Your datasets never leave your local SQLite database.
 
-### AI Agent & Documents
-<img src="public/cw_screen01.jpg" width="100%" alt="Documents — AI suggestions panel"/>
-<br/>
-<img src="public/cw_screen02.jpg" width="100%" alt="Documents — rich text editor with outline"/>
+### 🤖 ReAct Agent
+- An autonomous assistant that can **read and edit** your workspace files.
+- Capable of multi-step reasoning to solve complex tasks across Documents and Sheets.
 
-### Chat & AI Sheets
-<img src="public/cw_screen03.jpg" width="100%" alt="Chat — document context mode"/>
-<br/>
-<img src="public/cw_screen04.jpg" width="100%" alt="Sheets — spreadsheet with AI fill"/>
+### 📰 AI News Digest
+- Subscribe to RSS/Atom feeds and let the AI curate a personalized daily summary for you.
+- Stay informed without the noise, all processed locally.
 
-### Model Gallery & Benchmarking
-<img src="public/cw_screen05.jpg" width="100%" alt="Benchmark — multi-model comparison"/>
-<br/>
-<img src="public/cw_screen06.jpg" width="100%" alt="Settings — free GGUF model gallery"/>
-
----
-
-## What's new in v0.2
-
-- **AI Agent** — ReAct-style agent that can autonomously read/write sheets and documents.
-- **Image Support** — Insert images from disk directly into your documents.
-- **Document Search** — Full-text search across your local knowledge base.
-- **AI Row Generation** — Generate entire sets of sheet rows from a simple description.
-- **Data Privacy** — One-click data deletion and backend management.
+### 🎨 Infinite Canvas
+- A visual node-based workspace for brainstorming and mapping out data flows.
 
 ---
 
-## Core Features
+## 🛠️ Technical Stack
 
-### 💬 Chat
-- Multi-session history with persistent local storage.
-- Context modes: General, Writing, Coding, Analysis, Brainstorm.
-- Document-aware Q&A: Attach your docs as context.
-- Attach files (PDF, TXT, DOCX) directly to messages.
-
-### 📄 Documents
-- Rich text editor with advanced AI writing tools (Rewrite, Summarise, Expand).
-- AI Suggestions: Generate paragraphs, headings, and quotes in one click.
-- Export to **PDF**, **DOCX**, or **Markdown**.
-
-### 📊 Sheets
-- Powerful local spreadsheet with unlimited rows/columns.
-- **AI Fill & Generate**: Describe what you want, and the AI builds the data.
-- Built-in templates for CRM, Task Lists, Budgets, and more.
-- Export to **XLSX** or **CSV**.
-
-### 📈 Benchmark
-- Compare multiple models side-by-side with the same prompt.
-- Real-time latency, token count, and output comparison.
-- Save and reload past benchmark sessions.
+- **Desktop Shell:** [Tauri v2](https://tauri.app/) (Rust)
+- **Frontend:** React 19, TypeScript, Vite 7, Tailwind CSS v4
+- **Backend (Sidecar):** Python 3.10+, FastAPI, Uvicorn
+- **Database:** SQLite
+- **AI Engines:**
+  - **Local:** llama-cpp-python (GGUF support)
+  - **Cloud (Optional):** OpenAI-compatible APIs, Google Gemini
 
 ---
 
-## 🛠 Technical Information
+## 💻 Installation & Development
 
-For detailed instructions on how to set up and build the project, or to understand its internal architecture, please refer to the following documents:
+### Prerequisites
+- [Node.js](https://nodejs.org/) (v18+)
+- [Python](https://www.python.org/) (3.10+)
+- [Rust](https://www.rust-lang.org/) (for Tauri builds)
 
-- 📥 **[Installation and Setup Guide](docs/INSTALLATION.md)** — Prerequisites, environment config, and build steps.
-- 🏗️ **[Architecture and Structure](docs/ARCHITECTURE.md)** — Project layout and technical stack overview.
+### Setup
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/yourusername/crowforge.git
+   cd crowforge
+   ```
+
+2. **Install Frontend Dependencies:**
+   ```bash
+   npm install
+   ```
+
+3. **Install Backend Dependencies:**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+4. **Run in Development:**
+   - Start the backend: `python -m backend.app`
+   - Start the frontend: `npm run tauri dev`
+
+### Building for Production
+CrowForge uses a sidecar architecture. You must freeze the Python backend before building the Tauri app:
+1. **Freeze Backend:** Use PyInstaller to create a standalone binary.
+2. **Move to Sidecar:** Place the binary in `src-tauri/bin/`.
+3. **Build:** `npm run tauri build`.
 
 ---
 
-## Credits
+## 🛡️ Privacy & Security
 
-**Made by Lubomir Timko** ([sanchez.sk](https://www.sanchez.sk)), with AI assistance from **Claude** (Anthropic).
+CrowForge is built on the principle of **User Sovereignty**.
+- **No Cloud:** We don't have servers to store your data.
+- **No Telemetry:** We don't track how you use the app.
+- **Bring Your Own Model:** Use local GGUF files for 100% offline air-gapped AI.
 
 ---
 
-## License
+## 📜 License
 
 MIT — see [LICENSE](LICENSE) for details.
+
+**Made by Lubomir Timko** ([sanchez.sk](https://www.sanchez.sk))

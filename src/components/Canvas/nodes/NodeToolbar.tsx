@@ -7,7 +7,7 @@ import {
   type Node,
 } from "@xyflow/react";
 import {
-  Trash2, Copy, Smile,
+  Trash2, Copy, Smile, Palette,
   Star, Zap, Brain, Database, Globe, Lock, Mail, Settings,
   User, Code, FileText, Image, Link, Bell, Check, X as XIcon,
   Square, Circle, Diamond, Hexagon,
@@ -36,21 +36,34 @@ export const ICON_OPTIONS = [
 
 export type IconName = (typeof ICON_OPTIONS)[number]["name"];
 
-// Look up by name for both component and color
 const ICON_DEFS = Object.fromEntries(
   ICON_OPTIONS.map((o) => [o.name, { Component: o.Component, color: o.color }]),
 ) as Record<string, { Component: React.ComponentType<{ size?: number; style?: React.CSSProperties; className?: string }>; color: string }>;
 
-// ── Color palette ─────────────────────────────────────────────────────────────
+// ── Color palette — richer, more saturated ────────────────────────────────────
 export const PRESET_COLORS = [
-  { label: "Default", value: "" },
-  { label: "Muted",   value: "hsl(var(--muted))" },
-  { label: "Blue",    value: "rgba(59,130,246,0.22)" },
-  { label: "Green",   value: "rgba(34,197,94,0.22)" },
-  { label: "Yellow",  value: "rgba(234,179,8,0.22)" },
-  { label: "Orange",  value: "rgba(249,115,22,0.22)" },
-  { label: "Red",     value: "rgba(239,68,68,0.22)" },
-  { label: "Purple",  value: "rgba(168,85,247,0.22)" },
+  { label: "Default",  value: "" },
+  { label: "Slate",    value: "rgba(100,116,139,0.20)" },
+  { label: "Sky",      value: "rgba(14,165,233,0.22)" },
+  { label: "Emerald",  value: "rgba(16,185,129,0.22)" },
+  { label: "Amber",    value: "rgba(245,158,11,0.22)" },
+  { label: "Rose",     value: "rgba(244,63,94,0.22)" },
+  { label: "Violet",   value: "rgba(139,92,246,0.22)" },
+  { label: "Orange",   value: "rgba(249,115,22,0.22)" },
+  { label: "Teal",     value: "rgba(20,184,166,0.22)" },
+  { label: "Pink",     value: "rgba(236,72,153,0.22)" },
+  { label: "Indigo",   value: "rgba(99,102,241,0.22)" },
+  { label: "Lime",     value: "rgba(132,204,22,0.22)" },
+];
+
+// Solid background variants for sticky notes / other uses
+export const SOLID_COLORS = [
+  { label: "Yellow", value: "#fef08a" },
+  { label: "Blue",   value: "#bae6fd" },
+  { label: "Green",  value: "#bbf7d0" },
+  { label: "Pink",   value: "#fecdd3" },
+  { label: "Purple", value: "#e9d5ff" },
+  { label: "Orange", value: "#fed7aa" },
 ];
 
 // ── Shapes ────────────────────────────────────────────────────────────────────
@@ -63,7 +76,8 @@ export const SHAPE_OPTIONS = [
 
 export type NodeShape = "rectangle" | "circle" | "diamond" | "hexagon";
 
-// ── Shape style helper ────────────────────────────────────────────────────────
+// ── Shape style helper — returns styles for the inner content div ──────────────
+// Drop shadow is handled by an outer wrapper in each node component.
 export function getShapeStyle(
   shape?: string,
   color?: string,
@@ -89,6 +103,18 @@ export function getShapeStyle(
   }
 }
 
+// Returns CSS filter for drop shadow — works with clipPath shapes
+export function getNodeShadow(selected?: boolean): React.CSSProperties {
+  if (selected) {
+    return {
+      filter: "drop-shadow(0 4px 12px rgba(0,0,0,0.18)) drop-shadow(0 1px 4px rgba(0,0,0,0.12))",
+    };
+  }
+  return {
+    filter: "drop-shadow(0 2px 6px rgba(0,0,0,0.12)) drop-shadow(0 1px 2px rgba(0,0,0,0.08))",
+  };
+}
+
 // ── NodeIcon — renders with the icon's preset color ───────────────────────────
 export function NodeIcon({
   name,
@@ -108,7 +134,7 @@ export function NodeIcon({
 
 // ── Toolbar button class ──────────────────────────────────────────────────────
 const toolBtn =
-  "p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-foreground";
+  "p-2 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-foreground";
 
 // ── Duplicate ID counter ──────────────────────────────────────────────────────
 let _dupCounter = 0;
@@ -124,17 +150,18 @@ interface CanvasNodeToolbarProps {
 }
 
 export function CanvasNodeToolbar({ id, selected, secondRow }: CanvasNodeToolbarProps) {
-  const [showIconPicker, setShowIconPicker] = useState(false);
+  const [showIconPicker,  setShowIconPicker]  = useState(false);
+  const [showColorPicker, setShowColorPicker] = useState(false);
 
   const {
     getNodes, getEdges,
     deleteElements, setNodes, updateNodeData,
   } = useReactFlow();
 
-  const selectedCount  = useStore((s) => s.nodes.filter((n) => n.selected).length);
+  const selectedCount   = useStore((s) => s.nodes.filter((n) => n.selected).length);
   const firstSelectedId = useStore((s) => s.nodes.find((n) => n.selected)?.id);
-  const isMultiSelect  = selectedCount > 1;
-  const isVisible      = !!selected && (selectedCount === 1 || id === firstSelectedId);
+  const isMultiSelect   = selectedCount > 1;
+  const isVisible       = !!selected && (selectedCount === 1 || id === firstSelectedId);
 
   // Delete
   const handleDelete = useCallback(() => {
@@ -175,6 +202,7 @@ export function CanvasNodeToolbar({ id, selected, secondRow }: CanvasNodeToolbar
       } else {
         updateNodeData(id, { color });
       }
+      setShowColorPicker(false);
     },
     [id, isMultiSelect, setNodes, updateNodeData],
   );
@@ -196,25 +224,25 @@ export function CanvasNodeToolbar({ id, selected, secondRow }: CanvasNodeToolbar
 
   return (
     <NodeToolbar isVisible={isVisible} position={Position.Top} offset={8}>
-      <div className="relative flex flex-col gap-1">
+      <div className="relative flex flex-col gap-1.5">
         {/* Main toolbar row */}
-        <div className="flex items-center gap-0.5 px-1.5 py-1 rounded-lg border bg-background shadow-md">
+        <div className="flex items-center gap-0.5 px-2 py-1.5 rounded-lg border bg-background shadow-lg">
           {/* Delete */}
           <button
             className={cn(toolBtn, "hover:text-destructive hover:bg-destructive/10")}
             onClick={handleDelete}
             title={isMultiSelect ? "Delete selected" : "Delete node"}
           >
-            <Trash2 size={13} />
+            <Trash2 size={15} />
           </button>
 
           {!isMultiSelect && (
             <>
               <button className={toolBtn} onClick={handleDuplicate} title="Duplicate">
-                <Copy size={13} />
+                <Copy size={15} />
               </button>
 
-              <div className="w-px h-4 bg-border mx-0.5" />
+              <div className="w-px h-5 bg-border mx-0.5" />
 
               {SHAPE_OPTIONS.map(({ name, Icon, label }) => (
                 <button
@@ -223,53 +251,92 @@ export function CanvasNodeToolbar({ id, selected, secondRow }: CanvasNodeToolbar
                   onClick={() => handleShape(name)}
                   title={`Shape: ${label}`}
                 >
-                  <Icon size={13} />
+                  <Icon size={15} />
                 </button>
               ))}
 
-              <div className="w-px h-4 bg-border mx-0.5" />
+              <div className="w-px h-5 bg-border mx-0.5" />
 
+              {/* Icon picker toggle */}
               <button
                 className={cn(toolBtn, showIconPicker && "bg-muted text-foreground")}
-                onClick={() => setShowIconPicker((v) => !v)}
+                onClick={() => {
+                  setShowIconPicker((v) => !v);
+                  setShowColorPicker(false);
+                }}
                 title="Pick icon"
               >
-                <Smile size={13} />
+                <Smile size={15} />
               </button>
 
-              <div className="w-px h-4 bg-border mx-0.5" />
+              <div className="w-px h-5 bg-border mx-0.5" />
+
+              {/* Color picker toggle — single icon */}
+              <button
+                className={cn(toolBtn, showColorPicker && "bg-muted text-foreground")}
+                onClick={() => {
+                  setShowColorPicker((v) => !v);
+                  setShowIconPicker(false);
+                }}
+                title="Pick color"
+              >
+                <Palette size={15} />
+              </button>
             </>
           )}
 
-          {/* Color swatches */}
-          {PRESET_COLORS.map((c) => (
+          {/* Multi-select: only color */}
+          {isMultiSelect && (
             <button
-              key={c.label}
-              title={`Color: ${c.label}`}
-              onClick={() => handleColor(c.value)}
-              className="w-3.5 h-3.5 rounded-full border border-border/60 hover:scale-125 transition-transform shrink-0"
-              style={{
-                backgroundColor: c.value || "hsl(var(--card))",
-                boxShadow: "inset 0 0 0 1px hsl(var(--border) / 0.6)",
-              }}
-            />
-          ))}
+              className={cn(toolBtn, showColorPicker && "bg-muted text-foreground")}
+              onClick={() => setShowColorPicker((v) => !v)}
+              title="Pick color"
+            >
+              <Palette size={15} />
+            </button>
+          )}
         </div>
 
         {/* Second row (e.g. text formatting) */}
         {secondRow && (
-          <div className="flex items-center gap-0.5 px-1.5 py-1 rounded-lg border bg-background shadow-md">
+          <div className="flex items-center gap-0.5 px-2 py-1.5 rounded-lg border bg-background shadow-lg">
             {secondRow}
+          </div>
+        )}
+
+        {/* Color picker popup */}
+        {showColorPicker && (
+          <div className="absolute top-full left-0 mt-1.5 p-2.5 bg-background border rounded-lg shadow-xl z-50 min-w-max">
+            <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-2 px-0.5">Color</div>
+            <div className="grid grid-cols-6 gap-1.5">
+              {PRESET_COLORS.map((c) => (
+                <button
+                  key={c.label}
+                  title={c.label}
+                  onClick={() => handleColor(c.value)}
+                  className="w-6 h-6 rounded-full hover:scale-125 transition-transform shrink-0 border border-border/60 relative"
+                  style={{
+                    backgroundColor: c.value || "hsl(var(--card))",
+                    boxShadow: c.value ? undefined : "inset 0 0 0 1px hsl(var(--border))",
+                  }}
+                >
+                  {!c.value && (
+                    <span className="absolute inset-0 flex items-center justify-center text-[8px] text-muted-foreground font-medium">∅</span>
+                  )}
+                </button>
+              ))}
+            </div>
           </div>
         )}
 
         {/* Icon picker — colorful grid */}
         {showIconPicker && !isMultiSelect && (
-          <div className="absolute top-full left-0 mt-1.5 p-2 bg-background border rounded-lg shadow-lg z-50 grid grid-cols-4 gap-1 min-w-max">
+          <div className="absolute top-full left-0 mt-1.5 p-2.5 bg-background border rounded-lg shadow-xl z-50 grid grid-cols-4 gap-1 min-w-max">
+            <div className="col-span-4 text-[10px] text-muted-foreground uppercase tracking-wider mb-1 px-0.5">Icon</div>
             {ICON_OPTIONS.map(({ name, Component, color }) => (
               <button
                 key={name}
-                className="p-1.5 rounded-md hover:scale-110 transition-transform flex items-center justify-center"
+                className="p-2 rounded-md hover:scale-110 transition-transform flex items-center justify-center"
                 style={{ backgroundColor: `${color}22` }}
                 onClick={() => handleIcon(name)}
                 title={name}
@@ -279,7 +346,7 @@ export function CanvasNodeToolbar({ id, selected, secondRow }: CanvasNodeToolbar
             ))}
             {/* Remove icon */}
             <button
-              className="p-1.5 rounded-md hover:bg-destructive/10 flex items-center justify-center text-destructive"
+              className="p-2 rounded-md hover:bg-destructive/10 flex items-center justify-center text-destructive"
               onClick={() => handleIcon("")}
               title="Remove icon"
             >

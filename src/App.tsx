@@ -317,7 +317,7 @@ export default function App() {
 
       {/* MAIN + AI CONTROLS */}
       <div className="flex flex-1 min-w-0 flex-col lg:flex-row overflow-hidden">
-        <main className="flex-1 min-w-0 overflow-y-auto">
+        <main className={`flex-1 min-w-0 ${currentPage === "canvas" ? "overflow-hidden" : "overflow-y-auto"}`}>
           <PageErrorBoundary page={currentPage}>
           {currentPage === "home" ? (
             <DashboardPage onNavigate={handleNavigate} />
@@ -359,7 +359,7 @@ export default function App() {
           </PageErrorBoundary>
         </main>
 
-        {currentPage !== "settings" && currentPage !== "canvas" && (
+        {currentPage !== "settings" && (
           <div className={`shrink-0 flex flex-col bg-background${aiPanelOpen ? "" : " border-l"}`}>
             {aiPanelOpen && (
               <AIControlPanel

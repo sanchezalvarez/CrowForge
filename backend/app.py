@@ -34,14 +34,34 @@ def get_resource_path(relative_path):
 
 from backend.models import PromptTemplate, BenchmarkRun, BenchmarkRequest, ChatSession, ChatMessage, ChatMessageRequest, Document, DocumentCreate, DocumentUpdate, DocumentAIRequest, Sheet, SheetCreate, SheetColumn, SheetAddColumn, SheetUpdateCell, SheetDeleteRow, SheetDeleteColumn, SheetAICellRequest, SheetAIBatchRequest
 from backend.storage import DatabaseManager, AppRepository, PromptTemplateRepository, BenchmarkRepository, ChatSessionRepository, ChatMessageRepository, DocumentRepository, SheetRepository, CanvasRepository
-from backend.ai_engine import MockAIEngine, HTTPAIEngine, LocalLLAMAEngine, AILogger
+from backend.ai_engine import MockAIEngine, HTTPAIEngine, LocalLLAMAEngine, GeminiAIEngine, AILogger
 from backend.ai.engine_manager import AIEngineManager
 from backend.ai.plugin_loader import load_plugins, GlobalPluginRegistry
 
 # Timeout for a full generation pass (seconds). If the active engine
 # produces no output within this window, we abort and fall back to mock.
 GENERATION_TIMEOUT = float(os.getenv("LLM_GENERATION_TIMEOUT", "120"))
-MODEL_IDLE_TIMEOUT = float(os.getenv("MODEL_IDLE_TIMEOUT", "600"))  # 10 minutes default
+# Mutable at runtime via /ai/idle-timeout endpoint
+_model_idle_timeout_seconds = float(os.getenv("MODEL_IDLE_TIMEOUT", "600"))  # 10 minutes default
+
+
+def _free_port_if_occupied(port: int = 8000) -> None:
+    """Kill any process currently listening on the given port (Windows + Linux)."""
+    try:
+        import psutil
+        for conn in psutil.net_connections(kind="inet"):
+            if conn.laddr.port == port and conn.status == "LISTEN":
+                pid = conn.pid
+                if pid and pid != os.getpid():
+                    try:
+                        proc = psutil.Process(pid)
+                        print(f"[STARTUP] Port {port} occupied by PID {pid} ({proc.name()}) — killing.")
+                        proc.kill()
+                        proc.wait(timeout=3)
+                    except Exception as kill_err:
+                        print(f"[STARTUP] Could not kill PID {pid}: {kill_err}")
+    except Exception as e:
+        print(f"[STARTUP] Port check failed: {e}")
 
 
 @asynccontextmanager
@@ -69,6 +89,8 @@ async def lifespan(app: FastAPI):
         model = app_repo.get_setting("ai_model") or os.getenv("LLM_MODEL", "gpt-4o-mini")
         model_path = app_repo.get_setting("ai_model_path") or ""
         ctx_size = int(app_repo.get_setting("ai_ctx_size") or "8192")
+        gemini_api_key_db = app_repo.get_setting("ai_gemini_api_key") or os.getenv("GEMINI_API_KEY", "")
+        gemini_model_db = app_repo.get_setting("ai_gemini_model") or os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
 
         try:
             engine_manager.clear()
@@ -82,6 +104,10 @@ async def lifespan(app: FastAPI):
                     )
                     engine_manager.register("local", local_engine)
                     engine_manager.set_active("local")
+                elif engine_type == "gemini":
+                    gemini_engine = GeminiAIEngine(api_key=gemini_api_key_db, model=gemini_model_db)
+                    engine_manager.register("gemini", gemini_engine)
+                    engine_manager.set_active("gemini")
                 else:
                     os.environ["LLM_BASE_URL"] = base_url
                     os.environ["LLM_API_KEY"] = api_key
@@ -132,7 +158,7 @@ async def _idle_unload_watcher():
             local = engine_manager._engines.get("local")
             if isinstance(local, LocalLLAMAEngine) and local.is_ready and local.last_used > 0:
                 idle_secs = _time.time() - local.last_used
-                if idle_secs >= MODEL_IDLE_TIMEOUT:
+                if _model_idle_timeout_seconds > 0 and idle_secs >= _model_idle_timeout_seconds:
                     local.unload()
         except Exception as e:
             print(f"[IDLE_WATCHER] Error: {e}")
@@ -436,6 +462,8 @@ async def get_ai_settings():
         "model_path": _get("ai_model_path", os.getenv("LLM_MODEL_PATH", "")),
         "models_dir": _get("ai_models_dir", LLM_MODELS_DIR),
         "ctx_size": int(_get("ai_ctx_size", os.getenv("LLM_CTX_SIZE", "8192")) or "8192"),
+        "gemini_api_key": _get("ai_gemini_api_key", os.getenv("GEMINI_API_KEY", "")),
+        "gemini_model": _get("ai_gemini_model", os.getenv("GEMINI_MODEL", "gemini-2.0-flash")),
     }
 
 
@@ -453,6 +481,8 @@ async def save_ai_settings(data: dict, background_tasks: BackgroundTasks):
         "model_path": ("ai_model_path", str),
         "models_dir": ("ai_models_dir", str),
         "ctx_size": ("ai_ctx_size", str),
+        "gemini_api_key": ("ai_gemini_api_key", str),
+        "gemini_model": ("ai_gemini_model", str),
     }
     for field, (key, transform) in mapping.items():
         if field in data:
@@ -470,6 +500,8 @@ async def save_ai_settings(data: dict, background_tasks: BackgroundTasks):
     model = app_repo.get_setting("ai_model") or os.getenv("LLM_MODEL", "gpt-4o-mini")
     model_path = app_repo.get_setting("ai_model_path") or ""
     ctx_size = int(app_repo.get_setting("ai_ctx_size") or "8192")
+    gemini_api_key = app_repo.get_setting("ai_gemini_api_key") or os.getenv("GEMINI_API_KEY", "")
+    gemini_model = app_repo.get_setting("ai_gemini_model") or os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
 
     # Persist settings to .env file for restart durability
     _write_env({
@@ -481,6 +513,8 @@ async def save_ai_settings(data: dict, background_tasks: BackgroundTasks):
         "LLM_MODEL_PATH": model_path,
         "LLM_MODELS_DIR": LLM_MODELS_DIR,
         "LLM_CTX_SIZE": str(ctx_size),
+        "GEMINI_API_KEY": gemini_api_key,
+        "GEMINI_MODEL": gemini_model,
     })
 
     # Re-init engines in background so the response returns immediately
@@ -500,6 +534,10 @@ async def save_ai_settings(data: dict, background_tasks: BackgroundTasks):
                     )
                     engine_manager.register("local", local_engine)
                     engine_manager.set_active("local")
+                elif engine_type == "gemini":
+                    gemini_engine = GeminiAIEngine(api_key=gemini_api_key, model=gemini_model)
+                    engine_manager.register("gemini", gemini_engine)
+                    engine_manager.set_active("gemini")
                 else:
                     os.environ["LLM_BASE_URL"] = base_url
                     os.environ["LLM_API_KEY"] = api_key
@@ -2438,14 +2476,51 @@ def _rf_canvas_upsert(canvas_id: str, data: dict) -> None:
         conn.commit()
 
 
+# ── Model idle timeout endpoints ─────────────────────────────────────────────
+
+@app.get("/ai/idle-timeout")
+async def get_idle_timeout():
+    return {"timeout_minutes": int(_model_idle_timeout_seconds / 60)}
+
+
+@app.post("/ai/idle-timeout")
+async def set_idle_timeout(body: dict):
+    global _model_idle_timeout_seconds
+    minutes = int(body.get("timeout_minutes", 10))
+    if minutes < 0:
+        raise HTTPException(status_code=400, detail="timeout_minutes must be >= 0 (0 = never unload)")
+    _model_idle_timeout_seconds = minutes * 60.0
+    return {"ok": True, "timeout_minutes": minutes}
+
+
+# ── Behavior system prompts ───────────────────────────────────────────────────
+_BEHAVIOR_PROMPTS: dict[str, str] = {
+    "answer":    "Answer the following question concisely and accurately.",
+    "summarize": "Summarize the following text concisely, capturing the main points.",
+    "translate": "Translate the following text to English. If already in English, translate to French.",
+    "expand":    "Expand and elaborate on the following text, adding more detail, examples, and depth.",
+    "extract":   "Extract and list the key points, facts, or data from the following text.",
+    "simplify":  "Rewrite the following text in simple, easy-to-understand language.",
+    "classify":  "Classify or categorize the following content and explain your reasoning.",
+    "rewrite":   "Rewrite the following text to improve clarity, flow, and style while preserving the meaning.",
+}
+
+
 @app.post("/canvas/run")
 async def canvas_run(body: dict, request: Request):
-    """Stream an AI response for a Canvas AI node, with optional chain context."""
+    """Stream an AI response for a Canvas AI node, with optional chain context and behavior."""
     prompt = str(body.get("prompt", "")).strip()
     node_id = str(body.get("node_id", ""))
+    behavior = str(body.get("behavior", "none")).strip()
     context_nodes = body.get("context_nodes") or []
     if not prompt:
         raise HTTPException(status_code=400, detail="prompt is required")
+
+    # Determine system prompt based on behavior
+    if behavior and behavior != "none" and behavior in _BEHAVIOR_PROMPTS:
+        system_prompt = _BEHAVIOR_PROMPTS[behavior]
+    else:
+        system_prompt = "You are a helpful assistant embedded in a canvas workspace."
 
     # Build final prompt — prepend context from upstream nodes if present
     if context_nodes:
@@ -2466,7 +2541,7 @@ async def canvas_run(body: dict, request: Request):
     async def event_generator():
         try:
             async for chunk in engine_manager.active_engine.generate(
-                system_prompt="You are a helpful assistant embedded in a canvas workspace.",
+                system_prompt=system_prompt,
                 user_prompt=final_prompt,
                 max_tokens=int(os.getenv("LLM_MAX_TOKENS", "1024")),
                 temperature=0.7,
@@ -2482,12 +2557,79 @@ async def canvas_run(body: dict, request: Request):
     return EventSourceResponse(event_generator())
 
 
+@app.get("/canvas")
+async def list_rf_canvases():
+    """List all React Flow canvases."""
+    with db.get_connection() as conn:
+        rows = conn.execute(
+            "SELECT id, name, updated_at FROM rf_canvases ORDER BY updated_at DESC"
+        ).fetchall()
+    return [{"id": r["id"], "name": r["name"], "updated_at": r["updated_at"]} for r in rows]
+
+
+@app.post("/canvas")
+async def create_rf_canvas(body: dict):
+    """Create a new named canvas."""
+    import uuid as _uuid
+    canvas_id = str(_uuid.uuid4())
+    name = str(body.get("name", "Untitled Canvas"))
+    with db.get_connection() as conn:
+        conn.execute(
+            "INSERT INTO rf_canvases (id, name, data) VALUES (?, ?, ?)",
+            (canvas_id, name, '{"nodes":[],"edges":[]}'),
+        )
+        conn.commit()
+    return {"id": canvas_id, "name": name, "updated_at": None}
+
+
+@app.delete("/canvas/{canvas_id}")
+async def delete_rf_canvas(canvas_id: str):
+    """Delete a canvas by ID."""
+    with db.get_connection() as conn:
+        conn.execute("DELETE FROM rf_canvases WHERE id = ?", (canvas_id,))
+        conn.commit()
+    return {"ok": True}
+
+
+@app.patch("/canvas/{canvas_id}/name")
+async def rename_rf_canvas(canvas_id: str, body: dict):
+    """Rename a canvas."""
+    name = str(body.get("name", "")).strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="name is required")
+    with db.get_connection() as conn:
+        conn.execute(
+            "UPDATE rf_canvases SET name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (name, canvas_id),
+        )
+        conn.commit()
+    return {"ok": True}
+
+
 @app.get("/canvas/{canvas_id}")
 async def get_rf_canvas(canvas_id: str):
     row = _rf_canvas_get(canvas_id)
     if not row:
         raise HTTPException(status_code=404, detail="Canvas not found")
     return row["data"]  # returns {"nodes": [...], "edges": [...]}
+
+
+@app.post("/canvas/{canvas_id}/duplicate")
+async def duplicate_rf_canvas(canvas_id: str):
+    """Duplicate a canvas — copies name + data, returns new canvas metadata."""
+    import uuid as _uuid
+    row = _rf_canvas_get(canvas_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Canvas not found")
+    new_id = str(_uuid.uuid4())
+    new_name = f"{row['name']} copy"
+    with db.get_connection() as conn:
+        conn.execute(
+            "INSERT INTO rf_canvases (id, name, data) VALUES (?, ?, ?)",
+            (new_id, new_name, json.dumps(row["data"])),
+        )
+        conn.commit()
+    return {"id": new_id, "name": new_name, "updated_at": None}
 
 
 @app.post("/canvas/{canvas_id}")
@@ -2846,4 +2988,6 @@ Important: Cover EVERY feed and EVERY article provided. Do not skip any."""
 
 if __name__ == "__main__":
     import uvicorn
+    # Free port 8000 if occupied by a stale backend process (e.g. after PC restart)
+    _free_port_if_occupied(8000)
     uvicorn.run(app, host="127.0.0.1", port=8000, timeout_keep_alive=5, loop="asyncio")

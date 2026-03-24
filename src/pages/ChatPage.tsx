@@ -7,7 +7,7 @@ import { oneDark, oneLight } from "react-syntax-highlighter/dist/esm/styles/pris
 import {
   PlusCircle, Send, Trash2, MessageSquare, Loader2, FileText,
   Paperclip, X, Copy, Check, Info, Upload, Square, Pencil,
-  Wrench, ChevronDown, ChevronRight,
+  Wrench, ChevronDown, ChevronRight, Link2,
 } from "lucide-react";
 import type { AgentEvent } from "../hooks/useFetchSSE";
 import { useChatStream } from "../contexts/ChatStreamContext";
@@ -654,7 +654,7 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
                     className="flex-1 bg-transparent outline-none border-b border-primary text-xs min-w-0"
                   />
                 ) : (
-                  <span className="flex-1 truncate">{s.title}</span>
+                  <span className="flex-1 min-w-0 truncate">{s.title}</span>
                 )}
               </div>
             ))}
@@ -740,53 +740,76 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
                 </span>
               )}
 
-              {documentContext && (() => {
-                const parts: string[] = ["title"];
-                if (documentContext.outline.length > 0) parts.push(`outline (${documentContext.outline.length} headings)`);
-                if (documentContext.selectedText) parts.push("selected text");
-                if (documentContext.fullText) parts.push("full body");
-                const tip = `Connected: "${documentContext.title}"\nSending: ${parts.join(", ")}\nClick × to disconnect`;
-                return (
-                  <div
-                    className="flex items-center gap-1 text-xs bg-blue-500/10 border border-blue-500/30 text-blue-700 dark:text-blue-300 px-2 py-1 rounded-full"
-                    title={tip}
+              {/* Document connection — pill button + popup */}
+              <div className="relative" ref={docPickerRef}>
+                {documentContext ? (
+                  // Connected pill
+                  <button
+                    onClick={() => setShowDocPicker(v => !v)}
+                    className="flex items-center gap-1.5 text-xs bg-blue-500/10 border border-blue-500/30 text-blue-700 dark:text-blue-300 px-2.5 py-1 rounded-full hover:bg-blue-500/15 transition-colors"
+                    title="Manage document connection"
                   >
                     <FileText className="h-3 w-3 shrink-0" />
-                    <span className="truncate max-w-[200px]">{documentContext.title}</span>
-                    <button
-                      onClick={onDisconnectDoc}
-                      className="ml-0.5 hover:text-blue-900 dark:hover:text-blue-100 transition-colors"
-                      title="Disconnect document"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </div>
-                );
-              })()}
-
-              {!documentContext && docList.length > 0 && (
-                <div className="relative" ref={docPickerRef}>
-                  <button
-                    onClick={() => setShowDocPicker(!showDocPicker)}
-                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-                  >
-                    <FileText className="h-3.5 w-3.5" /> Connect document
+                    <span className="truncate max-w-[140px] font-medium">{documentContext.title}</span>
+                    <ChevronDown className="h-3 w-3 shrink-0 opacity-70" />
                   </button>
-                  {showDocPicker && (
-                    <div className="absolute top-full mt-1 left-0 z-50 bg-background border rounded-md shadow-lg min-w-[200px] max-h-[240px] overflow-y-auto">
-                      {docList.map(doc => (
-                        <button
-                          key={doc.id}
-                          className="w-full text-left px-3 py-2 text-sm hover:bg-muted truncate"
-                          onClick={() => { onConnectDoc?.({ title: doc.title, outline: [], selectedText: null, fullText: null }); setShowDocPicker(false); }}
-                        >
-                          {doc.title}
-                        </button>
-                      ))}
+                ) : (
+                  // Connect button
+                  <button
+                    onClick={() => setShowDocPicker(v => !v)}
+                    className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground border border-border/50 hover:border-border px-2.5 py-1 rounded-full transition-colors"
+                    title="Connect a document to provide context"
+                  >
+                    <Link2 className="h-3 w-3 shrink-0" />
+                    Connect
+                    <ChevronDown className="h-3 w-3 shrink-0 opacity-70" />
+                  </button>
+                )}
+
+                {/* Dropdown popup */}
+                {showDocPicker && (
+                  <div className="absolute top-full mt-1.5 left-0 z-50 bg-background border rounded-lg shadow-xl min-w-[220px] overflow-hidden">
+                    <div className="px-3 py-2 border-b text-[11px] text-muted-foreground uppercase tracking-wider font-semibold">
+                      Context Document
                     </div>
-                  )}
-                </div>
-              )}
+                    {documentContext && (
+                      <div className="px-3 py-2 border-b bg-blue-500/5">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <FileText className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                            <span className="text-xs font-medium truncate">{documentContext.title}</span>
+                          </div>
+                          <button
+                            onClick={() => { onDisconnectDoc?.(); setShowDocPicker(false); }}
+                            className="text-[10px] text-destructive hover:text-destructive/80 shrink-0 flex items-center gap-0.5"
+                          >
+                            <X className="h-3 w-3" />
+                            Disconnect
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    {docList.length > 0 ? (
+                      <div className="max-h-[200px] overflow-y-auto py-1">
+                        {docList.map(doc => (
+                          <button
+                            key={doc.id}
+                            className={`w-full text-left px-3 py-1.5 text-xs hover:bg-muted transition-colors flex items-center gap-2 ${documentContext?.title === doc.title ? "text-primary font-medium" : "text-foreground"}`}
+                            onClick={() => { onConnectDoc?.({ title: doc.title, outline: [], selectedText: null, fullText: null }); setShowDocPicker(false); }}
+                          >
+                            <FileText className="h-3 w-3 shrink-0 text-muted-foreground" />
+                            <span className="truncate">{doc.title}</span>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="px-3 py-3 text-xs text-muted-foreground text-center">
+                        No documents available
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
 
               <span className="text-xs font-medium text-muted-foreground shrink-0">Mode</span>
               <Select value={activeMode} onValueChange={changeMode}>

@@ -1,23 +1,30 @@
 import { useReactFlow } from "@xyflow/react";
 import {
-  StickyNote, Bot, Image, LayoutDashboard, Trash2, Grid3x3,
+  Bot, Image, LayoutDashboard, Trash2, Grid3x3,
+  StickyNote, Type, Link2, Square,
 } from "lucide-react";
 import { applyAutoLayout } from "./utils/autoLayout";
 import { cn } from "../../lib/utils";
 
 interface CanvasToolbarProps {
-  onAddText:    () => void;
-  onAddAI:      () => void;
-  onAddImage:   () => void;
-  onClear:      () => void;
-  snapToGrid:   boolean;
-  onSnapToggle: () => void;
+  onAddText:       () => void;
+  onAddAI:         () => void;
+  onAddImage:      () => void;
+  onAddSticky:     () => void;
+  onAddAnnotation: () => void;
+  onAddHyperlink:  () => void;
+  onClear:         () => void;
+  snapToGrid:      boolean;
+  onSnapToggle:    () => void;
 }
 
 export function CanvasToolbar({
   onAddText,
   onAddAI,
   onAddImage,
+  onAddSticky,
+  onAddAnnotation,
+  onAddHyperlink,
   onClear,
   snapToGrid,
   onSnapToggle,
@@ -42,8 +49,8 @@ export function CanvasToolbar({
     <div className="flex items-center gap-1.5 px-3 py-2 border-b bg-background shrink-0 flex-wrap">
       <span className="text-xs font-semibold text-muted-foreground mr-1 select-none">Add:</span>
 
-      <button className={btnCls} onClick={onAddText} title="Add text note">
-        <StickyNote size={12} />
+      <button className={btnCls} onClick={onAddText} title="Add text node">
+        <Square size={12} />
         Text
       </button>
 
@@ -55,6 +62,21 @@ export function CanvasToolbar({
       <button className={btnCls} onClick={onAddImage} title="Add image node">
         <Image size={12} />
         Image
+      </button>
+
+      <button className={btnCls} onClick={onAddSticky} title="Add sticky note">
+        <StickyNote size={12} />
+        Sticky
+      </button>
+
+      <button className={btnCls} onClick={onAddAnnotation} title="Add text label (no borders)">
+        <Type size={12} />
+        Label
+      </button>
+
+      <button className={btnCls} onClick={onAddHyperlink} title="Add hyperlink node">
+        <Link2 size={12} />
+        Link
       </button>
 
       <div className="w-px h-5 bg-border mx-1" />

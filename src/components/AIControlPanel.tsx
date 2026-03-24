@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import axios from "axios";
-import { Cpu, Sliders, Bug, Loader2, RefreshCw, RotateCcw, Terminal } from "lucide-react";
+import { Cpu, Sliders, Bug, Loader2, RotateCcw, Terminal, Square, Play, RefreshCw } from "lucide-react";
 import { Card, CardContent } from "./ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./ui/tabs";
 import { Separator } from "./ui/separator";
@@ -79,30 +79,7 @@ export function AIControlPanel({ showDebug, onShowDebugChange, tuningParams, onT
     return () => clearInterval(interval);
   }, [checkBackend]);
 
-  const handleRestartBackend = useCallback(async () => {
-    setBackendStatus("restarting");
-    restartingRef.current = true;
-    setRestartAttempt(0);
-
-    if (isTauri()) {
-      // Use Tauri IPC to restart the sidecar
-      try {
-        const { invoke } = await import("@tauri-apps/api/core");
-        await invoke("restart_backend");
-      } catch (err: any) {
-        restartingRef.current = false;
-        setBackendStatus("offline");
-        toast(`Restart failed: ${err}`, "error");
-        return;
-      }
-    } else {
-      // Dev mode: just try to hit /shutdown — backend won't come back
-      try {
-        await axios.post(`${API_BASE}/shutdown`, {}, { timeout: 2000 }).catch(() => {});
-      } catch { /* expected */ }
-    }
-
-    // Poll until backend comes back (up to 30s)
+  const pollUntilOnline = useCallback((onSuccess: () => void) => {
     let attempts = 0;
     const poll = () => {
       setTimeout(async () => {
@@ -113,7 +90,7 @@ export function AIControlPanel({ showDebug, onShowDebugChange, tuningParams, onT
           restartingRef.current = false;
           setBackendStatus("online");
           setRestartAttempt(0);
-          toast("Backend restarted", "success");
+          onSuccess();
           fetchEngines();
           fetchModels();
         } else if (attempts < 30) {
@@ -127,7 +104,72 @@ export function AIControlPanel({ showDebug, onShowDebugChange, tuningParams, onT
       }, 1000);
     };
     poll();
-  }, [checkBackend]);
+  }, [checkBackend]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleRestartBackend = useCallback(async () => {
+    setBackendStatus("restarting");
+    restartingRef.current = true;
+    setRestartAttempt(0);
+
+    if (isTauri()) {
+      try {
+        const { invoke } = await import("@tauri-apps/api/core");
+        await invoke("restart_backend");
+      } catch (err: any) {
+        restartingRef.current = false;
+        setBackendStatus("offline");
+        toast(`Restart failed: ${err}`, "error");
+        return;
+      }
+    } else {
+      try {
+        await axios.post(`${API_BASE}/shutdown`, {}, { timeout: 2000 }).catch(() => {});
+      } catch { /* expected */ }
+    }
+
+    pollUntilOnline(() => toast("Backend restarted", "success"));
+  }, [checkBackend, pollUntilOnline]);
+
+  const handleKillBackend = useCallback(async () => {
+    if (isTauri()) {
+      try {
+        const { invoke } = await import("@tauri-apps/api/core");
+        await invoke("kill_backend");
+        setBackendStatus("offline");
+        toast("Backend stopped", "success");
+      } catch (err: any) {
+        toast(`Kill failed: ${err}`, "error");
+      }
+    } else {
+      try {
+        await axios.post(`${API_BASE}/shutdown`, {}, { timeout: 2000 }).catch(() => {});
+        setBackendStatus("offline");
+      } catch { /* expected */ }
+    }
+  }, []);
+
+  const handleStartBackend = useCallback(async () => {
+    if (!isTauri()) {
+      toast("Start is only available in the app (Tauri)", "error");
+      return;
+    }
+    setBackendStatus("restarting");
+    restartingRef.current = true;
+    setRestartAttempt(0);
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("start_backend").catch(() => {
+        // Might fail if already running — try restart instead
+        return invoke("restart_backend");
+      });
+    } catch (err: any) {
+      restartingRef.current = false;
+      setBackendStatus("offline");
+      toast(`Start failed: ${err}`, "error");
+      return;
+    }
+    pollUntilOnline(() => toast("Backend started", "success"));
+  }, [pollUntilOnline]);
 
   // ── Engine state ───────────────────────────────────────────────
   const [engines, setEngines] = useState<EngineInfo[]>([]);
@@ -138,6 +180,16 @@ export function AIControlPanel({ showDebug, onShowDebugChange, tuningParams, onT
   const [models, setModels] = useState<LocalModel[]>([]);
   const [activeModel, setActiveModel] = useState<string | null>(null);
   const [modelSwitching, setModelSwitching] = useState(false);
+
+  // ── Model idle timeout ─────────────────────────────────────────
+  const [idleTimeoutMin, setIdleTimeoutMin] = useState<number>(10);
+  useEffect(() => {
+    axios.get(`${API_BASE}/ai/idle-timeout`).then(r => setIdleTimeoutMin(r.data.timeout_minutes ?? 10)).catch(() => {});
+  }, []);
+  const handleIdleTimeoutChange = async (val: number) => {
+    setIdleTimeoutMin(val);
+    try { await axios.post(`${API_BASE}/ai/idle-timeout`, { timeout_minutes: val }); } catch { /* ignore */ }
+  };
 
   // ── Debug state ────────────────────────────────────────────────
   const [debugPayload, setDebugPayload] = useState<Record<string, unknown> | null>(null);
@@ -242,14 +294,24 @@ export function AIControlPanel({ showDebug, onShowDebugChange, tuningParams, onT
                 Backend Online
               </span>
             </div>
-            <button
-              onClick={handleRestartBackend}
-              className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
-              title="Restart backend"
-            >
-              <RotateCcw size={11} />
-              Restart
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={handleRestartBackend}
+                className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+                title="Restart backend"
+              >
+                <RotateCcw size={10} />
+                Restart
+              </button>
+              <button
+                onClick={handleKillBackend}
+                className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                title="Stop backend"
+              >
+                <Square size={10} />
+                Stop
+              </button>
+            </div>
           </div>
           {responseTime !== null && (
             <p className="text-[10px] text-emerald-600/70 dark:text-emerald-500/60 mt-1 ml-[18px]">
@@ -287,13 +349,22 @@ export function AIControlPanel({ showDebug, onShowDebugChange, tuningParams, onT
         </div>
         <div className="mt-2 ml-[18px]">
           {isTauri() ? (
-            <button
-              onClick={handleRestartBackend}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-red-500 text-white hover:bg-red-600 transition-colors"
-            >
-              <RotateCcw size={12} />
-              Restart Backend
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={handleStartBackend}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-emerald-500 text-white hover:bg-emerald-600 transition-colors"
+              >
+                <Play size={11} />
+                Start
+              </button>
+              <button
+                onClick={handleRestartBackend}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-red-500 text-white hover:bg-red-600 transition-colors"
+              >
+                <RotateCcw size={11} />
+                Restart
+              </button>
+            </div>
           ) : (
             <div className="space-y-1">
               <p className="text-[11px] text-red-600/80 dark:text-red-400/80">
@@ -363,9 +434,9 @@ export function AIControlPanel({ showDebug, onShowDebugChange, tuningParams, onT
                     <SelectContent>
                       {engines.map((e) => (
                         <SelectItem key={e.name} value={e.name}>
-                          <span className="font-mono">{e.name}</span>
+                          <span className="font-mono">{e.type === "mock" ? "No AI" : e.name}</span>
                           <span className="ml-2 text-muted-foreground/60 text-[10px]">
-                            {e.type}
+                            {e.type === "mock" ? "no ai" : e.type}
                           </span>
                         </SelectItem>
                       ))}
@@ -409,6 +480,30 @@ export function AIControlPanel({ showDebug, onShowDebugChange, tuningParams, onT
                           Loading model — this may take a moment...
                         </p>
                       )}
+
+                      {/* Model idle timeout */}
+                      <div className="pt-1 space-y-1">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">
+                            Auto-unload after
+                          </Label>
+                          <span className="text-xs font-mono text-foreground">
+                            {idleTimeoutMin === 0 ? "Never" : `${idleTimeoutMin}m`}
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min="0"
+                          max="60"
+                          step="5"
+                          value={idleTimeoutMin}
+                          onChange={(e) => handleIdleTimeoutChange(Number(e.target.value))}
+                          className="w-full h-2 accent-primary cursor-pointer"
+                        />
+                        <p className="text-[10px] text-muted-foreground/60">
+                          0 = keep in memory
+                        </p>
+                      </div>
                     </div>
                   </>
                 )}

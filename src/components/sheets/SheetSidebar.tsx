@@ -1,5 +1,5 @@
-import React from "react";
-import { PlusCircle, Sparkles, Upload, Download, Loader2, Table2 } from "lucide-react";
+import React, { useState, useRef, useEffect } from "react";
+import { PlusCircle, Sparkles, Upload, Loader2, Table2, FileSpreadsheet, ChevronDown } from "lucide-react";
 import { Button } from "../ui/button";
 import { ScrollArea } from "../ui/scroll-area";
 import { cn } from "../../lib/utils";
@@ -22,7 +22,6 @@ interface SheetSidebarProps {
   importInputRef: React.RefObject<HTMLInputElement | null>;
   handleImportFile: (file: File) => void;
   importing: boolean;
-  handleExportAllXLSX: () => void;
 }
 
 export function SheetSidebar({
@@ -41,20 +40,25 @@ export function SheetSidebar({
   importInputRef,
   handleImportFile,
   importing,
-  handleExportAllXLSX,
 }: SheetSidebarProps) {
+  const [showNewMenu, setShowNewMenu] = useState(false);
+  const newMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showNewMenu) return;
+    const close = (e: MouseEvent) => {
+      if (newMenuRef.current && !newMenuRef.current.contains(e.target as Node)) {
+        setShowNewMenu(false);
+      }
+    };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [showNewMenu]);
+
   return (
     <div className="w-[220px] shrink-0 border-r bg-background flex flex-col">
-      <div className="p-3 border-b flex flex-col gap-1.5">
-        <Button variant="outline" size="sm" className="w-full" onClick={() => setTemplatePickerOpen(true)}>
-          <PlusCircle className="h-4 w-4 mr-1.5" />
-          New Sheet
-        </Button>
-        <Button variant="outline" size="sm" className="w-full" onClick={() => setAiGenOpen(true)}>
-          <Sparkles className="h-4 w-4 mr-1.5" />
-          AI Generate
-        </Button>
-        {/* Import — always reachable, creates a new sheet from file */}
+      <div className="p-3 border-b">
+        {/* Hidden file input */}
         <input
           ref={importInputRef}
           type="file"
@@ -62,29 +66,62 @@ export function SheetSidebar({
           className="hidden"
           onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImportFile(f); }}
         />
-        <Button
-          variant="ghost"
-          size="sm"
-          className="w-full text-xs"
-          onClick={() => importInputRef.current?.click()}
-          disabled={importing}
-          title="Import XLSX / CSV / TSV"
-        >
-          {importing ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Upload className="h-3.5 w-3.5 mr-1.5" />}
-          Import Sheet
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="w-full text-xs"
-          disabled={sheets.length === 0}
-          onClick={handleExportAllXLSX}
-          title="Export every sheet as one XLSX workbook"
-        >
-          <Download className="h-3.5 w-3.5 mr-1.5" />
-          Export all as XLSX
-        </Button>
+
+        {/* New Sheet button + dropdown */}
+        <div className="relative" ref={newMenuRef}>
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full justify-between"
+            onClick={() => setShowNewMenu((v) => !v)}
+          >
+            <span className="flex items-center gap-1.5">
+              <PlusCircle className="h-4 w-4" />
+              New Sheet
+            </span>
+            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+          </Button>
+
+          {showNewMenu && (
+            <div className="absolute left-0 right-0 top-[calc(100%+4px)] z-50 bg-background border border-border rounded-md shadow-lg py-1 text-sm">
+              <button
+                className="w-full px-3 py-2 text-left hover:bg-muted flex items-center gap-2.5"
+                onClick={() => { setTemplatePickerOpen(true); setShowNewMenu(false); }}
+              >
+                <FileSpreadsheet className="h-4 w-4 text-muted-foreground shrink-0" />
+                <div>
+                  <div className="font-medium text-xs">Blank / Template</div>
+                  <div className="text-[11px] text-muted-foreground">Start from scratch or a preset</div>
+                </div>
+              </button>
+              <button
+                className="w-full px-3 py-2 text-left hover:bg-muted flex items-center gap-2.5"
+                onClick={() => { setAiGenOpen(true); setShowNewMenu(false); }}
+              >
+                <Sparkles className="h-4 w-4 text-muted-foreground shrink-0" />
+                <div>
+                  <div className="font-medium text-xs">AI Generate</div>
+                  <div className="text-[11px] text-muted-foreground">Describe a sheet, AI builds it</div>
+                </div>
+              </button>
+              <button
+                className="w-full px-3 py-2 text-left hover:bg-muted flex items-center gap-2.5"
+                disabled={importing}
+                onClick={() => { importInputRef.current?.click(); setShowNewMenu(false); }}
+              >
+                {importing
+                  ? <Loader2 className="h-4 w-4 text-muted-foreground shrink-0 animate-spin" />
+                  : <Upload className="h-4 w-4 text-muted-foreground shrink-0" />}
+                <div>
+                  <div className="font-medium text-xs">Import</div>
+                  <div className="text-[11px] text-muted-foreground">XLSX / CSV / TSV file</div>
+                </div>
+              </button>
+            </div>
+          )}
+        </div>
       </div>
+
       <ScrollArea className="flex-1">
         <div className="p-2 space-y-0.5">
           {sheets.map((sheet) => (
@@ -117,7 +154,7 @@ export function SheetSidebar({
                   }}
                 />
               ) : (
-                <span className="flex-1 truncate">{sheet.title}</span>
+                <span className="flex-1 min-w-0 truncate">{sheet.title}</span>
               )}
             </div>
           ))}

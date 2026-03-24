@@ -14,7 +14,7 @@ import axios from "axios";
 import { hasCycle } from "../utils/autoLayout";
 
 const API_BASE           = "http://127.0.0.1:8000";
-const CANVAS_ID          = "default";
+const DEFAULT_CANVAS_ID  = "default";
 const SAVE_DEBOUNCE_MS   = 800;
 const HISTORY_THROTTLE_MS = 500;
 const MAX_HISTORY         = 20;
@@ -22,20 +22,22 @@ const CHAIN_DELAY_MS      = 300;
 
 type Snapshot = { nodes: Node[]; edges: Edge[] };
 
-async function loadOrCreate(): Promise<{ nodes: Node[]; edges: Edge[] }> {
+async function loadOrCreate(canvasId: string): Promise<{ nodes: Node[]; edges: Edge[] }> {
   try {
-    const res = await axios.get(`${API_BASE}/canvas/${CANVAS_ID}`);
+    const res = await axios.get(`${API_BASE}/canvas/${canvasId}`);
     return res.data as { nodes: Node[]; edges: Edge[] };
   } catch (err: any) {
     if (err?.response?.status === 404) {
-      await axios.post(`${API_BASE}/canvas/${CANVAS_ID}`, { nodes: [], edges: [] });
+      await axios.post(`${API_BASE}/canvas/${canvasId}`, { nodes: [], edges: [] });
       return { nodes: [], edges: [] };
     }
     throw err;
   }
 }
 
-export function useCanvasStore() {
+export function useCanvasStore(canvasId?: string) {
+  const activeCanvasId = canvasId ?? DEFAULT_CANVAS_ID;
+
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [loaded, setLoaded]              = useState(false);
@@ -44,10 +46,8 @@ export function useCanvasStore() {
   const [runningNodes, setRunningNodes] = useState<Set<string>>(new Set());
   const runningNodesRef                 = useRef<Set<string>>(new Set());
 
-  // In-memory output cache (for context building — faster than reading node data)
   const nodeOutputsRef = useRef<Record<string, string>>({});
 
-  // Toast notification
   const [toast, setToast] = useState<string | null>(null);
 
   // ── Save / history ───────────────────────────────────────────────────────
@@ -61,19 +61,21 @@ export function useCanvasStore() {
   nodesRef.current = nodes;
   edgesRef.current = edges;
 
-  // ── React Flow helpers ───────────────────────────────────────────────────
   const { getNode, updateNodeData } = useReactFlow();
 
-  // ── Load on mount ────────────────────────────────────────────────────────
+  // ── Load on mount (re-load when canvasId changes) ─────────────────────────
   useEffect(() => {
-    loadOrCreate()
+    setLoaded(false);
+    setNodes([]);
+    setEdges([]);
+    loadOrCreate(activeCanvasId)
       .then(({ nodes: n, edges: e }) => {
         setNodes(n);
         setEdges(e);
       })
       .catch(console.error)
       .finally(() => setLoaded(true));
-  }, []);
+  }, [activeCanvasId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── History push (throttled) ─────────────────────────────────────────────
   const pushHistory = useCallback(() => {
@@ -94,13 +96,13 @@ export function useCanvasStore() {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
       axios
-        .post(`${API_BASE}/canvas/${CANVAS_ID}`, {
+        .post(`${API_BASE}/canvas/${activeCanvasId}`, {
           nodes: nodesRef.current,
           edges: edgesRef.current,
         })
         .catch(console.error);
     }, SAVE_DEBOUNCE_MS);
-  }, [loaded, pushHistory]);
+  }, [loaded, activeCanvasId, pushHistory]);
 
   // ── Undo ─────────────────────────────────────────────────────────────────
   const undo = useCallback(() => {
@@ -114,13 +116,13 @@ export function useCanvasStore() {
     setTimeout(() => {
       isUndoingRef.current = false;
       axios
-        .post(`${API_BASE}/canvas/${CANVAS_ID}`, {
+        .post(`${API_BASE}/canvas/${activeCanvasId}`, {
           nodes: snapshot.nodes,
           edges: snapshot.edges,
         })
         .catch(console.error);
     }, 50);
-  }, [setNodes, setEdges]);
+  }, [setNodes, setEdges, activeCanvasId]);
 
   // ── Running nodes helpers ────────────────────────────────────────────────
   const markRunning = useCallback((id: string) => {
@@ -156,10 +158,8 @@ export function useCanvasStore() {
 
   const triggerNode = useCallback(
     async (nodeId: string): Promise<void> => {
-      // Prevent duplicate runs
       if (runningNodesRef.current.has(nodeId)) return;
 
-      // Cycle guard
       if (hasCycle(edgesRef.current)) {
         setToast("Cycle detected in flow — cannot run.");
         return;
@@ -168,10 +168,10 @@ export function useCanvasStore() {
       const node = getNode(nodeId);
       if (!node || node.type !== "ai") return;
 
-      const prompt = (node.data.prompt as string | undefined)?.trim() ?? "";
+      const prompt   = (node.data.prompt   as string | undefined)?.trim() ?? "";
+      const behavior = (node.data.behavior as string | undefined) ?? "none";
       if (!prompt) return;
 
-      // Collect context from upstream AI nodes that have output
       const upstreamCtx = edgesRef.current
         .filter((e) => e.target === nodeId)
         .map((e) => getNode(e.source))
@@ -195,6 +195,7 @@ export function useCanvasStore() {
           headers: { "Content-Type": "application/json" },
           body:    JSON.stringify({
             prompt,
+            behavior,
             node_id:       nodeId,
             context_nodes: upstreamCtx,
           }),
@@ -236,7 +237,6 @@ export function useCanvasStore() {
 
       if (hadError) return;
 
-      // Automatically trigger downstream AI nodes
       const downstream = edgesRef.current.filter((e) => e.source === nodeId);
       for (const edge of downstream) {
         const dn = getNode(edge.target);
@@ -249,7 +249,6 @@ export function useCanvasStore() {
     [getNode, updateNodeData, markRunning, markDone, scheduleSave],
   );
 
-  // Keep ref in sync so recursive downstream calls use the latest closure
   triggerNodeRef.current = triggerNode;
 
   // ── Run all root AI nodes ─────────────────────────────────────────────────
@@ -314,11 +313,9 @@ export function useCanvasStore() {
     loaded,
     scheduleSave,
     undo,
-    // Chain execution
     runningNodes,
     triggerNode,
     runFlow,
-    // Toast
     toast,
     clearToast: () => setToast(null),
   };

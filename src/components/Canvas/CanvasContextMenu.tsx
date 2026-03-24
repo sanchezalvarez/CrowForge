@@ -57,7 +57,6 @@ export function CanvasContextMenu({ target, onClose, onAddNode }: Props) {
     return () => document.removeEventListener("mousedown", onMouseDown);
   }, [onClose]);
 
-  // Convert screen coords to flow position for adding nodes
   const flowPos = useCallback(
     () => screenToFlowPosition({ x: target.x, y: target.y }),
     [screenToFlowPosition, target.x, target.y],
@@ -102,7 +101,6 @@ export function CanvasContextMenu({ target, onClose, onAddNode }: Props) {
   // ── Node actions ────────────────────────────────────────────────────────────
   const handleNodeEditLabel = useCallback(() => {
     if (target.type !== "node") return;
-    // Trigger double-click event on the node's DOM element
     const el = document.querySelector(
       `[data-id="${target.nodeId}"]`,
     ) as HTMLElement | null;
@@ -182,15 +180,10 @@ export function CanvasContextMenu({ target, onClose, onAddNode }: Props) {
   // ── Edge actions ────────────────────────────────────────────────────────────
   const handleEdgeEditLabel = useCallback(() => {
     if (target.type !== "edge") return;
-    const label = window.prompt(
-      "Edge label:",
-      String(getEdges().find((e) => e.id === target.edgeId)?.data?.label ?? ""),
-    );
-    if (label !== null) {
-      updateEdgeData(target.edgeId, { label });
-    }
+    // Trigger inline editing via _startEditing flag — no window.prompt
+    updateEdgeData(target.edgeId, { _startEditing: true });
     onClose();
-  }, [target, getEdges, updateEdgeData, onClose]);
+  }, [target, updateEdgeData, onClose]);
 
   const handleEdgeDelete = useCallback(() => {
     if (target.type !== "edge") return;
@@ -222,32 +215,33 @@ export function CanvasContextMenu({ target, onClose, onAddNode }: Props) {
         left: target.x,
         top: target.y,
         zIndex: 9999,
-        minWidth: 180,
+        minWidth: 190,
       }}
       className="bg-background border rounded-lg shadow-xl p-1"
       onContextMenu={(e) => e.preventDefault()}
     >
       {target.type === "pane" && (
         <>
-          <div
-            className={ItemCls}
-            onClick={() => addAt("text", { label: "" })}
-          >
+          <div className={ItemCls} onClick={() => addAt("text",       { label: "" })}>
             Add Text Node
           </div>
-          <div
-            className={ItemCls}
-            onClick={() => addAt("ai", { prompt: "", output: "" })}
-          >
+          <div className={ItemCls} onClick={() => addAt("ai",         { prompt: "", output: "" })}>
             Add AI Node
           </div>
-          <div
-            className={ItemCls}
-            onClick={() => addAt("image", { src: "", alt: "" })}
-          >
+          <div className={ItemCls} onClick={() => addAt("image",      { src: "", alt: "" })}>
             Add Image Node
           </div>
+          <div className={ItemCls} onClick={() => addAt("sticky",     { label: "" })}>
+            Add Sticky Note
+          </div>
+          <div className={ItemCls} onClick={() => addAt("annotation", { label: "", fontSize: 14 })}>
+            Add Text Label
+          </div>
+          <div className={ItemCls} onClick={() => addAt("hyperlink",  { url: "", title: "" })}>
+            Add Hyperlink
+          </div>
 
+          <div className={SepCls} />
           <div
             className={nodeClipboard ? ItemCls : DisabledCls}
             onClick={nodeClipboard ? handlePaste : undefined}

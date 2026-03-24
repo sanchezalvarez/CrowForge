@@ -4,6 +4,8 @@ import { Download, CheckCircle2, Loader2, X, AlertCircle, Trash2, ExternalLink, 
 import { toast } from "../hooks/useToast";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useRssFeeds, RssFeed } from "../hooks/useRssFeeds";
+import { useRssDigest } from "../hooks/useRssDigest";
+import { NewsDigest } from "../components/News/NewsDigest";
 
 const API_BASE = "http://127.0.0.1:8000";
 
@@ -22,7 +24,7 @@ const USER_AVATARS = [
   { emoji: "🦔", label: "Hedgehog" },
 ];
 
-type EngineType = "mock" | "http" | "local";
+type EngineType = "mock" | "http" | "local" | "gemini";
 
 interface AIConfig {
   enable_llm: boolean;
@@ -33,6 +35,8 @@ interface AIConfig {
   model_path: string;
   models_dir: string;
   ctx_size: number;
+  gemini_api_key: string;
+  gemini_model: string;
 }
 
 interface GalleryModel {
@@ -235,7 +239,7 @@ const GALLERY_MODELS: GalleryModel[] = [
 
 const ALL_TAGS = ["all", "agent", "chat", "translate", "multilingual", "coding", "reasoning", "math", "fast", "general"];
 
-type Section = "ai" | "models" | "plugins" | "appearance" | "user" | "news" | "about";
+type Section = "ai" | "preferences" | "news" | "about";
 
 interface CuratedFeed {
   url: string;
@@ -532,6 +536,11 @@ interface SettingsPageProps {
 
 export function SettingsPage({ theme, setTheme, baseColor, setBaseColor }: SettingsPageProps) {
   const [section, setSection] = useState<Section>("ai");
+  const { digest, isGenerating, lastGenerated, articleCount, error: digestError, loadCached, generateDigest } = useRssDigest();
+
+  useEffect(() => {
+    if (section === "news") loadCached();
+  }, [section]);
   const [avatarIndex, setAvatarIndex] = useState(() =>
     parseInt(localStorage.getItem("user_avatar_index") ?? "0", 10)
   );
@@ -576,6 +585,8 @@ export function SettingsPage({ theme, setTheme, baseColor, setBaseColor }: Setti
     model_path: "",
     models_dir: "C:/models",
     ctx_size: 8192,
+    gemini_api_key: "",
+    gemini_model: "gemini-2.0-flash",
   });
   const [installedFiles, setInstalledFiles] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
@@ -621,12 +632,12 @@ export function SettingsPage({ theme, setTheme, baseColor, setBaseColor }: Setti
   }, []);
 
   useEffect(() => {
-    if (section === "models") {
+    if (section === "ai") {
       refreshModels();
       refreshDownloads();
       axios.get(`${API_BASE}/system/specs`).then((r) => setSpecs(r.data)).catch(() => {});
     }
-    if (section === "plugins") {
+    if (section === "preferences") {
       setPluginsLoading(true);
       Promise.all([
         axios.get(`${API_BASE}/plugins`),
@@ -725,11 +736,8 @@ export function SettingsPage({ theme, setTheme, baseColor, setBaseColor }: Setti
   }
 
   const navItems: { id: Section; label: string }[] = [
-    { id: "ai", label: "AI Configuration" },
-    { id: "models", label: "Model Gallery" },
-    { id: "plugins", label: "Plugins" },
-    { id: "appearance", label: "Appearance" },
-    { id: "user", label: "User Settings" },
+    { id: "ai", label: "AI & Models" },
+    { id: "preferences", label: "Preferences" },
     { id: "news", label: "News Feeds" },
     { id: "about", label: "About" },
   ];
@@ -798,9 +806,10 @@ export function SettingsPage({ theme, setTheme, baseColor, setBaseColor }: Setti
       </nav>
 
       {/* Content */}
-      <div className={`flex-1 overflow-y-auto p-6 ${section === "models" ? "" : "max-w-2xl"} space-y-6`}>
+      <div className={`flex-1 overflow-y-auto p-6 ${["ai", "news"].includes(section) ? "" : "max-w-2xl"} space-y-6`}>
         {section === "ai" && (
           <>
+            <div className="max-w-2xl space-y-6">
             <h2 className="text-lg font-semibold">AI Configuration</h2>
 
             <label className="flex items-center gap-3 cursor-pointer">
@@ -820,8 +829,9 @@ export function SettingsPage({ theme, setTheme, baseColor, setBaseColor }: Setti
                 onChange={(e) => setConfig({ ...config, engine: e.target.value as EngineType })}
                 className="mt-1 w-full rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-primary"
               >
-                <option value="mock">Mock (no AI)</option>
+                <option value="mock">No AI (mock)</option>
                 <option value="http">HTTP / OpenAI-compatible</option>
+                <option value="gemini">Google Gemini</option>
                 <option value="local">Local GGUF</option>
               </select>
             </div>
@@ -856,16 +866,47 @@ export function SettingsPage({ theme, setTheme, baseColor, setBaseColor }: Setti
               </>
             )}
 
-            <div>
-              <label className="text-xs font-medium text-muted-foreground">Models Directory</label>
-              <input
-                value={config.models_dir}
-                onChange={(e) => setConfig({ ...config, models_dir: e.target.value })}
-                className="mt-1 w-full rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-primary"
-                placeholder="C:/models"
-              />
-              <p className="text-[11px] text-muted-foreground mt-1">Downloads will be saved here.</p>
-            </div>
+            {config.engine === "gemini" && (
+              <>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">Gemini API Key</label>
+                  <input
+                    type="password"
+                    value={config.gemini_api_key}
+                    onChange={(e) => setConfig({ ...config, gemini_api_key: e.target.value })}
+                    placeholder="AIza..."
+                    className="mt-1 w-full rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-primary"
+                  />
+                  <p className="text-[11px] text-muted-foreground mt-1">Get your key at aistudio.google.com</p>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">Model</label>
+                  <select
+                    value={config.gemini_model}
+                    onChange={(e) => setConfig({ ...config, gemini_model: e.target.value })}
+                    className="mt-1 w-full rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-primary"
+                  >
+                    <option value="gemini-2.0-flash">gemini-2.0-flash (fast, recommended)</option>
+                    <option value="gemini-2.0-flash-lite">gemini-2.0-flash-lite (lite)</option>
+                    <option value="gemini-1.5-pro">gemini-1.5-pro (powerful)</option>
+                    <option value="gemini-1.5-flash">gemini-1.5-flash</option>
+                  </select>
+                </div>
+              </>
+            )}
+
+            {config.engine === "local" && (
+              <div>
+                <label className="text-xs font-medium text-muted-foreground">Models Directory</label>
+                <input
+                  value={config.models_dir}
+                  onChange={(e) => setConfig({ ...config, models_dir: e.target.value })}
+                  className="mt-1 w-full rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-primary"
+                  placeholder="C:/models"
+                />
+                <p className="text-[11px] text-muted-foreground mt-1">GGUF model files will be downloaded here.</p>
+              </div>
+            )}
 
             {config.engine === "local" && (
               <div>
@@ -889,58 +930,217 @@ export function SettingsPage({ theme, setTheme, baseColor, setBaseColor }: Setti
             >
               {saving ? "Saving…" : "Save Changes"}
             </button>
+            </div>{/* end max-w-2xl */}
+
+            {/* Model Gallery */}
+            <div className="border-t pt-6">
+              <div className="flex gap-6">
+                <div className="flex-1 max-w-2xl space-y-6">
+                  <div className="space-y-1">
+                    <h2 className="text-lg font-semibold">Free GGUF Models</h2>
+                    <p className="text-xs text-muted-foreground">
+                      {config.engine === "local"
+                        ? <>Downloads go to <span className="font-mono text-foreground">{config.models_dir || "Models Directory"}</span>.</>
+                        : "Switch engine to Local GGUF to download and run models locally."}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {ALL_TAGS.map((tag) => (
+                      <button key={tag} onClick={() => setTagFilter(tag)}
+                        className={`px-2.5 py-0.5 rounded-full text-xs font-medium transition-colors ${tagFilter === tag ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80"}`}>
+                        {tag}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="space-y-3">
+                    {filteredModels.map((m) => {
+                      const installed = installedFiles.includes(m.filename);
+                      const dl = downloads[m.filename];
+                      const pct = dl && dl.total > 0 ? Math.round((dl.progress / dl.total) * 100) : 0;
+                      return (
+                        <div key={m.filename} className="rounded-lg border p-4 space-y-2">
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="space-y-0.5 min-w-0">
+                              <div className="flex items-center gap-1.5">
+                                <p className="text-sm font-medium">{m.name}</p>
+                                {m.infoUrl && (
+                                  <button onClick={() => openUrl(m.infoUrl!)} className="text-muted-foreground hover:text-foreground transition-colors" title="More info on HuggingFace">
+                                    <ExternalLink size={12} />
+                                  </button>
+                                )}
+                              </div>
+                              <p className="text-xs text-muted-foreground">{m.description}</p>
+                              <div className="flex flex-wrap gap-2 text-xs text-muted-foreground pt-1">
+                                <span>{m.size}</span><span>·</span><span>{m.license}</span>
+                                {m.vram && <span>· GPU: {m.vram}</span>}
+                                {m.ram && <span>· RAM: {m.ram}</span>}
+                                {m.tags && m.tags.map((t) => (
+                                  <span key={t} className="px-1.5 py-0 rounded-full bg-muted text-muted-foreground/70">{t}</span>
+                                ))}
+                              </div>
+                            </div>
+                            <div className="shrink-0">
+                              {installed && !dl?.running ? (
+                                <div className="flex items-center gap-2">
+                                  <span className="flex items-center gap-1 text-xs font-medium text-green-600"><CheckCircle2 size={14} />Installed</span>
+                                  <button onClick={() => handleDeleteModel(m.filename)} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive transition-colors" title="Delete model"><Trash2 size={13} /></button>
+                                </div>
+                              ) : dl?.running ? (
+                                <button onClick={() => handleCancelDownload(m.filename)} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive transition-colors"><X size={13} />Cancel</button>
+                              ) : dl?.error ? (
+                                <button onClick={() => handleDownload(m)} className="flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium hover:bg-muted transition-colors text-destructive border-destructive/30"><AlertCircle size={13} />Retry</button>
+                              ) : (
+                                <button onClick={() => handleDownload(m)} className="flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium hover:bg-muted transition-colors"><Download size={13} />Download</button>
+                              )}
+                            </div>
+                          </div>
+                          {dl?.running && (
+                            <div className="space-y-1">
+                              <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
+                                <div className="h-full bg-primary rounded-full transition-all duration-300" style={{ width: dl.total > 0 ? `${pct}%` : "0%" }} />
+                              </div>
+                              <div className="flex justify-between text-[10px] text-muted-foreground">
+                                <span className="flex items-center gap-1"><Loader2 size={10} className="animate-spin" />Downloading…</span>
+                                <span>{dl.total > 0 ? `${fmt_bytes(dl.progress)} / ${fmt_bytes(dl.total)} (${pct}%)` : fmt_bytes(dl.progress)}</span>
+                              </div>
+                            </div>
+                          )}
+                          {dl?.error && <p className="text-[11px] text-destructive">{dl.error}</p>}
+                          {dl?.done && !installed && <p className="text-[11px] text-green-600">Download complete — rescanning…</p>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div className="w-64 shrink-0">
+                  <div className="sticky top-0 rounded-lg border bg-muted/30 p-4 space-y-4">
+                    <h3 className="text-sm font-semibold">Your PC Specs</h3>
+                    {!specs ? (
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground"><Loader2 size={12} className="animate-spin" />Detecting hardware…</div>
+                    ) : (
+                      <div className="space-y-3 text-xs">
+                        <div className="flex items-start gap-2"><Monitor size={14} className="shrink-0 mt-0.5 text-muted-foreground" /><div><p className="font-medium">OS</p><p className="text-muted-foreground">{specs.os}</p></div></div>
+                        <div className="flex items-start gap-2"><Cpu size={14} className="shrink-0 mt-0.5 text-muted-foreground" /><div><p className="font-medium">CPU</p><p className="text-muted-foreground">{specs.cpu}</p><p className="text-muted-foreground">{specs.cpu_cores} cores</p></div></div>
+                        <div className="flex items-start gap-2"><MemoryStick size={14} className="shrink-0 mt-0.5 text-muted-foreground" /><div><p className="font-medium">RAM</p><p className="text-muted-foreground">{specs.ram_total_gb} GB total</p><p className="text-muted-foreground">{specs.ram_available_gb} GB available</p></div></div>
+                        {specs.gpu && <div className="flex items-start gap-2"><Monitor size={14} className="shrink-0 mt-0.5 text-muted-foreground" /><div><p className="font-medium">GPU</p><p className="text-muted-foreground">{specs.gpu}</p>{specs.gpu_vram_gb != null && <p className="text-muted-foreground">{specs.gpu_vram_gb} GB VRAM</p>}</div></div>}
+                        <div className="flex items-start gap-2"><HardDrive size={14} className="shrink-0 mt-0.5 text-muted-foreground" /><div><p className="font-medium">Disk</p><p className="text-muted-foreground">{specs.disk_free_gb} GB free / {specs.disk_total_gb} GB</p></div></div>
+                        <div className="border-t pt-3 mt-3"><p className="text-[10px] text-muted-foreground leading-relaxed">Models run on CPU if no GPU is available. Check the GPU VRAM and RAM requirements on each model to see what fits your system.</p></div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
           </>
         )}
 
-        {section === "plugins" && (
-          <>
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold">Plugins</h2>
-              <button
-                onClick={reloadPlugins}
-                disabled={pluginsReloading}
-                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md border border-border hover:bg-muted transition-colors disabled:opacity-50"
-              >
-                {pluginsReloading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-                Reload
-              </button>
+        {section === "preferences" && (
+          <div className="space-y-10">
+            {/* ── Appearance ── */}
+            <div className="space-y-6">
+              <h2 className="text-lg font-semibold">Appearance</h2>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Theme</label>
+                  <div className="mt-2 grid grid-cols-2 gap-4">
+                    <button
+                      onClick={() => setTheme("light")}
+                      className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${theme === "light" ? "border-primary bg-primary/5 shadow-sm" : "border-transparent bg-muted/30 hover:bg-muted/50"}`}
+                    >
+                      <div className="w-full aspect-video rounded-md bg-white border shadow-sm flex items-center justify-center">
+                        <div className="w-3/4 h-2 bg-slate-100 rounded-full" />
+                      </div>
+                      <span className="text-sm font-medium">Light</span>
+                    </button>
+                    <button
+                      onClick={() => setTheme("dark")}
+                      className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${theme === "dark" ? "border-primary bg-primary/5 shadow-sm" : "border-transparent bg-muted/30 hover:bg-muted/50"}`}
+                    >
+                      <div className="w-full aspect-video rounded-md bg-slate-950 border border-slate-800 shadow-sm flex items-center justify-center">
+                        <div className="w-3/4 h-2 bg-slate-800 rounded-full" />
+                      </div>
+                      <span className="text-sm font-medium">Dark</span>
+                    </button>
+                  </div>
+                </div>
+                <div className="pt-4">
+                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Color Preset</label>
+                  <div className="mt-3 grid grid-cols-3 gap-2">
+                    {[
+                      { id: "zinc", label: "Zinc", color: "bg-zinc-500" },
+                      { id: "slate", label: "Slate", color: "bg-slate-500" },
+                      { id: "stone", label: "Stone", color: "bg-stone-500" },
+                      { id: "rose", label: "Rose", color: "bg-rose-500" },
+                      { id: "orange", label: "Orange", color: "bg-orange-500" },
+                    ].map((preset) => (
+                      <button
+                        key={preset.id}
+                        onClick={() => setBaseColor(preset.id)}
+                        className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-all ${baseColor === preset.id ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-border bg-background hover:bg-muted"}`}
+                      >
+                        <div className={`h-3 w-3 rounded-full ${preset.color}`} />
+                        <span className="text-xs font-medium">{preset.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="pt-4">
+                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Avatar</label>
+                  <div className="mt-3 grid grid-cols-6 gap-2">
+                    {USER_AVATARS.map((av, i) => (
+                      <button
+                        key={i}
+                        onClick={() => selectAvatar(i)}
+                        className={`w-10 h-10 rounded-full flex items-center justify-center transition-all text-2xl bg-muted hover:bg-muted/80 ${avatarIndex === i ? "ring-2 ring-offset-2 ring-primary" : "opacity-70 hover:opacity-100"}`}
+                        title={av.label}
+                      >
+                        {av.emoji}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </div>
-            <p className="text-sm text-muted-foreground">
-              Drop <code className="font-mono bg-muted px-1 rounded text-xs">.py</code> files into the plugins folder — they're auto-loaded at startup. Click Reload to apply changes without restarting.
-            </p>
 
-            {/* Plugins folder path */}
-            {pluginsDir && (
-              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-muted/50 border text-xs font-mono text-muted-foreground">
-                <span className="shrink-0 text-foreground font-medium">Folder:</span>
-                <span className="truncate flex-1">{pluginsDir}</span>
+            <div className="border-t" />
+
+            {/* ── Plugins ── */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold">Plugins</h2>
                 <button
-                  onClick={() => navigator.clipboard.writeText(pluginsDir).then(() => toast("Path copied", "success"))}
-                  className="shrink-0 hover:text-foreground transition-colors"
-                  title="Copy path"
+                  onClick={reloadPlugins}
+                  disabled={pluginsReloading}
+                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md border border-border hover:bg-muted transition-colors disabled:opacity-50"
                 >
-                  <CheckCircle2 className="h-3.5 w-3.5" />
-                </button>
-                <button
-                  onClick={() => openUrl(`file://${pluginsDir}`).catch(() => {})}
-                  className="shrink-0 hover:text-foreground transition-colors"
-                  title="Open folder"
-                >
-                  <ExternalLink className="h-3.5 w-3.5" />
+                  {pluginsReloading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                  Reload
                 </button>
               </div>
-            )}
-
-            {/* Plugin list */}
-            {pluginsLoading ? (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
-                <Loader2 className="h-4 w-4 animate-spin" /> Loading plugins…
-              </div>
-            ) : plugins.length === 0 ? (
-              <div className="rounded-lg border border-dashed p-6 text-center space-y-3">
-                <p className="text-sm font-medium">No plugins loaded yet</p>
-                <p className="text-xs text-muted-foreground">Create a <code className="font-mono bg-muted px-1 rounded">.py</code> file in the plugins folder with this structure:</p>
-                <pre className="text-left text-xs bg-muted rounded-md p-3 overflow-x-auto">{`async def my_tool(param: str):
+              <p className="text-sm text-muted-foreground">
+                Drop <code className="font-mono bg-muted px-1 rounded text-xs">.py</code> files into the plugins folder — they're auto-loaded at startup. Click Reload to apply changes without restarting.
+              </p>
+              {pluginsDir && (
+                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-muted/50 border text-xs font-mono text-muted-foreground">
+                  <span className="shrink-0 text-foreground font-medium">Folder:</span>
+                  <span className="truncate flex-1">{pluginsDir}</span>
+                  <button onClick={() => navigator.clipboard.writeText(pluginsDir).then(() => toast("Path copied", "success"))} className="shrink-0 hover:text-foreground transition-colors" title="Copy path">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                  </button>
+                  <button onClick={() => openUrl(`file://${pluginsDir}`).catch(() => {})} className="shrink-0 hover:text-foreground transition-colors" title="Open folder">
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              )}
+              {pluginsLoading ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Loading plugins…
+                </div>
+              ) : plugins.length === 0 ? (
+                <div className="rounded-lg border border-dashed p-6 text-center space-y-3">
+                  <p className="text-sm font-medium">No plugins loaded yet</p>
+                  <p className="text-xs text-muted-foreground">Create a <code className="font-mono bg-muted px-1 rounded">.py</code> file in the plugins folder with this structure:</p>
+                  <pre className="text-left text-xs bg-muted rounded-md p-3 overflow-x-auto">{`async def my_tool(param: str):
     return {"result": "..."}
 
 def initialize_plugin(registry):
@@ -953,391 +1153,94 @@ def initialize_plugin(registry):
                 "properties": {"param": {"type": "string"}},
                 "required": ["param"]}}}
     )`}</pre>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {plugins.map((p) => (
-                  <div key={p.name} className="rounded-lg border bg-card">
-                    <button
-                      className="w-full flex items-center gap-3 px-4 py-3 text-left"
-                      onClick={() => setExpandedPlugins(prev => {
-                        const next = new Set(prev);
-                        next.has(p.name) ? next.delete(p.name) : next.add(p.name);
-                        return next;
-                      })}
-                    >
-                      <span className={`shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full ${p.status === "ok" ? "bg-green-500/15 text-green-600 dark:text-green-400" : "bg-red-500/15 text-red-600 dark:text-red-400"}`}>
-                        {p.status === "ok" ? "Loaded" : "Error"}
-                      </span>
-                      <span className="font-medium text-sm flex-1">{p.name}</span>
-                      {p.tools.length > 0 && (
-                        <span className="text-[11px] text-muted-foreground shrink-0">{p.tools.length} tool{p.tools.length !== 1 ? "s" : ""}</span>
-                      )}
-                      {expandedPlugins.has(p.name) ? <X className="h-3.5 w-3.5 text-muted-foreground shrink-0" /> : <Download className="h-3.5 w-3.5 text-muted-foreground shrink-0 rotate-180" />}
-                    </button>
-                    {expandedPlugins.has(p.name) && (
-                      <div className="px-4 pb-3 border-t pt-2 space-y-1.5 text-xs">
-                        <p className="text-muted-foreground font-mono truncate">{p.file}</p>
-                        {p.error && (
-                          <div className="flex items-start gap-1.5 text-red-600 dark:text-red-400 bg-red-500/10 rounded px-2 py-1.5">
-                            <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-                            <span>{p.error}</span>
-                          </div>
-                        )}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {plugins.map((p) => (
+                    <div key={p.name} className="rounded-lg border bg-card">
+                      <button
+                        className="w-full flex items-center gap-3 px-4 py-3 text-left"
+                        onClick={() => setExpandedPlugins(prev => {
+                          const next = new Set(prev);
+                          next.has(p.name) ? next.delete(p.name) : next.add(p.name);
+                          return next;
+                        })}
+                      >
+                        <span className={`shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full ${p.status === "ok" ? "bg-green-500/15 text-green-600 dark:text-green-400" : "bg-red-500/15 text-red-600 dark:text-red-400"}`}>
+                          {p.status === "ok" ? "Loaded" : "Error"}
+                        </span>
+                        <span className="font-medium text-sm flex-1">{p.name}</span>
                         {p.tools.length > 0 && (
-                          <div>
-                            <p className="text-muted-foreground mb-1">Tools:</p>
-                            <div className="flex flex-wrap gap-1">
-                              {p.tools.map(t => (
-                                <code key={t} className="bg-muted px-2 py-0.5 rounded font-mono">{t}</code>
-                              ))}
-                            </div>
-                          </div>
+                          <span className="text-[11px] text-muted-foreground shrink-0">{p.tools.length} tool{p.tools.length !== 1 ? "s" : ""}</span>
                         )}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </>
-        )}
-
-        {section === "appearance" && (
-          <>
-            <h2 className="text-lg font-semibold">Appearance</h2>
-            <div className="space-y-4">
-              <div>
-                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Theme</label>
-                <div className="mt-2 grid grid-cols-2 gap-4">
-                  <button
-                    onClick={() => setTheme("light")}
-                    className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${
-                      theme === "light"
-                        ? "border-primary bg-primary/5 shadow-sm"
-                        : "border-transparent bg-muted/30 hover:bg-muted/50"
-                    }`}
-                  >
-                    <div className="w-full aspect-video rounded-md bg-white border shadow-sm flex items-center justify-center">
-                      <div className="w-3/4 h-2 bg-slate-100 rounded-full" />
-                    </div>
-                    <span className="text-sm font-medium">Light</span>
-                  </button>
-
-                  <button
-                    onClick={() => setTheme("dark")}
-                    className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${
-                      theme === "dark"
-                        ? "border-primary bg-primary/5 shadow-sm"
-                        : "border-transparent bg-muted/30 hover:bg-muted/50"
-                    }`}
-                  >
-                    <div className="w-full aspect-video rounded-md bg-slate-950 border border-slate-800 shadow-sm flex items-center justify-center">
-                      <div className="w-3/4 h-2 bg-slate-800 rounded-full" />
-                    </div>
-                    <span className="text-sm font-medium">Dark</span>
-                  </button>
-                </div>
-              </div>
-
-              <div className="pt-4">
-                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Preset</label>
-                <div className="mt-3 grid grid-cols-3 gap-2">
-                  {[
-                    { id: "zinc", label: "Zinc", color: "bg-zinc-500" },
-                    { id: "slate", label: "Slate", color: "bg-slate-500" },
-                    { id: "stone", label: "Stone", color: "bg-stone-500" },
-                    { id: "rose", label: "Rose", color: "bg-rose-500" },
-                    { id: "orange", label: "Orange", color: "bg-orange-500" },
-                  ].map((preset) => (
-                    <button
-                      key={preset.id}
-                      onClick={() => setBaseColor(preset.id)}
-                      className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-all ${
-                        baseColor === preset.id
-                          ? "border-primary bg-primary/5 ring-1 ring-primary"
-                          : "border-border bg-background hover:bg-muted"
-                      }`}
-                    >
-                      <div className={`h-3 w-3 rounded-full ${preset.color}`} />
-                      <span className="text-xs font-medium">{preset.label}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="pt-4">
-                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Your Avatar</label>
-                <div className="mt-3 grid grid-cols-6 gap-2">
-                  {USER_AVATARS.map((av, i) => (
-                    <button
-                      key={i}
-                      onClick={() => selectAvatar(i)}
-                      className={`w-10 h-10 rounded-full flex items-center justify-center transition-all text-2xl bg-muted hover:bg-muted/80 ${
-                        avatarIndex === i ? "ring-2 ring-offset-2 ring-primary" : "opacity-70 hover:opacity-100"
-                      }`}
-                      title={av.label}
-                    >
-                      {av.emoji}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </>
-        )}
-
-        {section === "models" && (
-          <div className="flex gap-6">
-            {/* Left: Model gallery */}
-            <div className="flex-1 max-w-2xl space-y-6">
-              <div className="space-y-1">
-                <h2 className="text-lg font-semibold">Free GGUF Models</h2>
-                <p className="text-xs text-muted-foreground">
-                  Downloads go to your <span className="font-mono text-foreground">{config.models_dir || "Models Directory"}</span>. Change it in AI Configuration.
-                </p>
-              </div>
-
-              {/* Tag filter */}
-              <div className="flex flex-wrap gap-1.5">
-                {ALL_TAGS.map((tag) => (
-                  <button
-                    key={tag}
-                    onClick={() => setTagFilter(tag)}
-                    className={`px-2.5 py-0.5 rounded-full text-xs font-medium transition-colors ${
-                      tagFilter === tag
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-muted text-muted-foreground hover:bg-muted/80"
-                    }`}
-                  >
-                    {tag}
-                  </button>
-                ))}
-              </div>
-
-              <div className="space-y-3">
-                {filteredModels.map((m) => {
-                  const installed = installedFiles.includes(m.filename);
-                  const dl = downloads[m.filename];
-                  const pct = dl && dl.total > 0 ? Math.round((dl.progress / dl.total) * 100) : 0;
-
-                  return (
-                    <div key={m.filename} className="rounded-lg border p-4 space-y-2">
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="space-y-0.5 min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            <p className="text-sm font-medium">{m.name}</p>
-                            {m.infoUrl && (
-                              <button
-                                onClick={() => openUrl(m.infoUrl!)}
-                                className="text-muted-foreground hover:text-foreground transition-colors"
-                                title="More info on HuggingFace"
-                              >
-                                <ExternalLink size={12} />
-                              </button>
-                            )}
-                          </div>
-                          <p className="text-xs text-muted-foreground">{m.description}</p>
-                          <div className="flex flex-wrap gap-2 text-xs text-muted-foreground pt-1">
-                            <span>{m.size}</span>
-                            <span>·</span>
-                            <span>{m.license}</span>
-                            {m.vram && <span>· GPU: {m.vram}</span>}
-                            {m.ram && <span>· RAM: {m.ram}</span>}
-                            {m.tags && m.tags.map((t) => (
-                              <span key={t} className="px-1.5 py-0 rounded-full bg-muted text-muted-foreground/70">{t}</span>
-                            ))}
-                          </div>
-                        </div>
-
-                        <div className="shrink-0">
-                          {installed && !dl?.running ? (
-                            <div className="flex items-center gap-2">
-                              <span className="flex items-center gap-1 text-xs font-medium text-green-600">
-                                <CheckCircle2 size={14} />
-                                Installed
-                              </span>
-                              <button
-                                onClick={() => handleDeleteModel(m.filename)}
-                                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive transition-colors"
-                                title="Delete model"
-                              >
-                                <Trash2 size={13} />
-                              </button>
+                        {expandedPlugins.has(p.name) ? <X className="h-3.5 w-3.5 text-muted-foreground shrink-0" /> : <Download className="h-3.5 w-3.5 text-muted-foreground shrink-0 rotate-180" />}
+                      </button>
+                      {expandedPlugins.has(p.name) && (
+                        <div className="px-4 pb-3 border-t pt-2 space-y-1.5 text-xs">
+                          <p className="text-muted-foreground font-mono truncate">{p.file}</p>
+                          {p.error && (
+                            <div className="flex items-start gap-1.5 text-red-600 dark:text-red-400 bg-red-500/10 rounded px-2 py-1.5">
+                              <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                              <span>{p.error}</span>
                             </div>
-                          ) : dl?.running ? (
-                            <button
-                              onClick={() => handleCancelDownload(m.filename)}
-                              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive transition-colors"
-                            >
-                              <X size={13} />
-                              Cancel
-                            </button>
-                          ) : dl?.error ? (
-                            <button
-                              onClick={() => handleDownload(m)}
-                              className="flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium hover:bg-muted transition-colors text-destructive border-destructive/30"
-                            >
-                              <AlertCircle size={13} />
-                              Retry
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => handleDownload(m)}
-                              className="flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium hover:bg-muted transition-colors"
-                            >
-                              <Download size={13} />
-                              Download
-                            </button>
+                          )}
+                          {p.tools.length > 0 && (
+                            <div>
+                              <p className="text-muted-foreground mb-1">Tools:</p>
+                              <div className="flex flex-wrap gap-1">
+                                {p.tools.map(t => (
+                                  <code key={t} className="bg-muted px-2 py-0.5 rounded font-mono">{t}</code>
+                                ))}
+                              </div>
+                            </div>
                           )}
                         </div>
-                      </div>
-
-                      {/* Progress bar */}
-                      {dl?.running && (
-                        <div className="space-y-1">
-                          <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-primary rounded-full transition-all duration-300"
-                              style={{ width: dl.total > 0 ? `${pct}%` : "0%" }}
-                            />
-                          </div>
-                          <div className="flex justify-between text-[10px] text-muted-foreground">
-                            <span className="flex items-center gap-1">
-                              <Loader2 size={10} className="animate-spin" />
-                              Downloading…
-                            </span>
-                            <span>
-                              {dl.total > 0
-                                ? `${fmt_bytes(dl.progress)} / ${fmt_bytes(dl.total)} (${pct}%)`
-                                : fmt_bytes(dl.progress)}
-                            </span>
-                          </div>
-                        </div>
-                      )}
-                      {dl?.error && (
-                        <p className="text-[11px] text-destructive">{dl.error}</p>
-                      )}
-                      {dl?.done && !installed && (
-                        <p className="text-[11px] text-green-600">Download complete — rescanning…</p>
                       )}
                     </div>
-                  );
-                })}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
 
-            {/* Right: System specs */}
-            <div className="w-64 shrink-0">
-              <div className="sticky top-0 rounded-lg border bg-muted/30 p-4 space-y-4">
-                <h3 className="text-sm font-semibold">Your PC Specs</h3>
-                {!specs ? (
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <Loader2 size={12} className="animate-spin" />
-                    Detecting hardware…
-                  </div>
-                ) : (
-                  <div className="space-y-3 text-xs">
-                    <div className="flex items-start gap-2">
-                      <Monitor size={14} className="shrink-0 mt-0.5 text-muted-foreground" />
-                      <div>
-                        <p className="font-medium">OS</p>
-                        <p className="text-muted-foreground">{specs.os}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-2">
-                      <Cpu size={14} className="shrink-0 mt-0.5 text-muted-foreground" />
-                      <div>
-                        <p className="font-medium">CPU</p>
-                        <p className="text-muted-foreground">{specs.cpu}</p>
-                        <p className="text-muted-foreground">{specs.cpu_cores} cores</p>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-2">
-                      <MemoryStick size={14} className="shrink-0 mt-0.5 text-muted-foreground" />
-                      <div>
-                        <p className="font-medium">RAM</p>
-                        <p className="text-muted-foreground">{specs.ram_total_gb} GB total</p>
-                        <p className="text-muted-foreground">{specs.ram_available_gb} GB available</p>
-                      </div>
-                    </div>
-                    {specs.gpu && (
-                      <div className="flex items-start gap-2">
-                        <Monitor size={14} className="shrink-0 mt-0.5 text-muted-foreground" />
-                        <div>
-                          <p className="font-medium">GPU</p>
-                          <p className="text-muted-foreground">{specs.gpu}</p>
-                          {specs.gpu_vram_gb != null && (
-                            <p className="text-muted-foreground">{specs.gpu_vram_gb} GB VRAM</p>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                    <div className="flex items-start gap-2">
-                      <HardDrive size={14} className="shrink-0 mt-0.5 text-muted-foreground" />
-                      <div>
-                        <p className="font-medium">Disk</p>
-                        <p className="text-muted-foreground">{specs.disk_free_gb} GB free / {specs.disk_total_gb} GB</p>
-                      </div>
-                    </div>
-                    <div className="border-t pt-3 mt-3">
-                      <p className="text-[10px] text-muted-foreground leading-relaxed">
-                        Models run on CPU if no GPU is available. Check the GPU VRAM and RAM requirements on each model to see what fits your system.
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
+            <div className="border-t" />
 
-        {section === "user" && (
-          <div className="space-y-6 max-w-lg">
-            <div>
-              <h2 className="text-lg font-semibold">User Settings</h2>
-              <p className="text-sm text-muted-foreground mt-1">Manage your data and preferences.</p>
-            </div>
-
-            {/* Data Management */}
-            <div className="space-y-3">
-              <h3 className="text-sm font-medium">Data Management</h3>
+            {/* ── Data Management ── */}
+            <div className="space-y-4">
+              <h2 className="text-lg font-semibold">Data Management</h2>
               <p className="text-xs text-muted-foreground">Permanently delete stored data. This cannot be undone.</p>
-
-              {/* Per-module rows */}
-              {([
-                { key: "chat" as const, label: "Chat history", description: "All chat sessions and messages" },
-                { key: "documents" as const, label: "Documents", description: "All documents and their content" },
-                { key: "sheets" as const, label: "Sheets", description: "All spreadsheets and their data" },
-              ]).map(({ key, label, description }) => (
-                <div key={key} className="flex items-center justify-between rounded-lg border border-border bg-muted/20 px-4 py-3">
+              <div className="space-y-3">
+                {([
+                  { key: "chat" as const, label: "Chat history", description: "All chat sessions and messages" },
+                  { key: "documents" as const, label: "Documents", description: "All documents and their content" },
+                  { key: "sheets" as const, label: "Sheets", description: "All spreadsheets and their data" },
+                ]).map(({ key, label, description }) => (
+                  <div key={key} className="flex items-center justify-between rounded-lg border border-border bg-muted/20 px-4 py-3">
+                    <div>
+                      <p className="text-sm font-medium">{label}</p>
+                      <p className="text-xs text-muted-foreground">{description}</p>
+                    </div>
+                    <button
+                      onClick={() => setConfirmDelete(key)}
+                      className="text-xs px-3 py-1.5 rounded-md border border-destructive/40 text-destructive hover:bg-destructive/10 transition-colors shrink-0"
+                    >
+                      <Trash2 className="h-3 w-3 inline mr-1" />
+                      Delete
+                    </button>
+                  </div>
+                ))}
+                <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium">{label}</p>
-                    <p className="text-xs text-muted-foreground">{description}</p>
+                    <p className="text-sm font-semibold text-destructive">Delete everything</p>
+                    <p className="text-xs text-muted-foreground">Wipe all chat, documents and sheets</p>
                   </div>
                   <button
-                    onClick={() => setConfirmDelete(key)}
-                    className="text-xs px-3 py-1.5 rounded-md border border-destructive/40 text-destructive hover:bg-destructive/10 transition-colors shrink-0"
+                    onClick={() => setConfirmDelete("all")}
+                    className="text-xs px-3 py-1.5 rounded-md bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors shrink-0"
                   >
                     <Trash2 className="h-3 w-3 inline mr-1" />
-                    Delete
+                    Delete all
                   </button>
                 </div>
-              ))}
-
-              {/* Delete everything */}
-              <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-semibold text-destructive">Delete everything</p>
-                  <p className="text-xs text-muted-foreground">Wipe all chat, documents and sheets</p>
-                </div>
-                <button
-                  onClick={() => setConfirmDelete("all")}
-                  className="text-xs px-3 py-1.5 rounded-md bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors shrink-0"
-                >
-                  <Trash2 className="h-3 w-3 inline mr-1" />
-                  Delete all
-                </button>
               </div>
             </div>
 
@@ -1359,18 +1262,8 @@ def initialize_plugin(registry):
                     </div>
                   </div>
                   <div className="flex justify-end gap-2">
-                    <button
-                      onClick={() => setConfirmDelete(null)}
-                      disabled={deleting}
-                      className="text-xs px-3 py-1.5 rounded-md border border-border hover:bg-muted transition-colors disabled:opacity-50"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={() => deleteData(confirmDelete)}
-                      disabled={deleting}
-                      className="text-xs px-3 py-1.5 rounded-md bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors disabled:opacity-50 flex items-center gap-1.5"
-                    >
+                    <button onClick={() => setConfirmDelete(null)} disabled={deleting} className="text-xs px-3 py-1.5 rounded-md border border-border hover:bg-muted transition-colors disabled:opacity-50">Cancel</button>
+                    <button onClick={() => deleteData(confirmDelete)} disabled={deleting} className="text-xs px-3 py-1.5 rounded-md bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors disabled:opacity-50 flex items-center gap-1.5">
                       {deleting && <Loader2 className="h-3 w-3 animate-spin" />}
                       Delete
                     </button>
@@ -1382,7 +1275,21 @@ def initialize_plugin(registry):
         )}
 
         {section === "news" && (
-          <NewsFeedsSection />
+          <div className="flex gap-6 h-full min-h-0">
+            <div className="w-80 shrink-0 overflow-y-auto">
+              <NewsFeedsSection />
+            </div>
+            <div className="flex-1 min-w-0 overflow-y-auto border-l pl-6">
+              <NewsDigest
+                digest={digest}
+                isGenerating={isGenerating}
+                lastGenerated={lastGenerated}
+                articleCount={articleCount}
+                error={digestError}
+                onGenerate={generateDigest}
+              />
+            </div>
+          </div>
         )}
 
         {section === "about" && (

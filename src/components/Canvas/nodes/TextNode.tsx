@@ -6,7 +6,7 @@ import {
   AlignStartVertical, AlignCenterVertical, AlignEndVertical,
 } from "lucide-react";
 import { cn } from "../../../lib/utils";
-import { CanvasNodeToolbar, getShapeStyle, NodeIcon } from "./NodeToolbar";
+import { CanvasNodeToolbar, getShapeStyle, getNodeShadow, NodeIcon } from "./NodeToolbar";
 import { useCanvasExecution } from "../CanvasExecutionContext";
 
 export type TextNodeData = {
@@ -35,9 +35,9 @@ function shapeContentClass(shape?: string): string {
 const FONT_SIZES = [10, 11, 12, 13, 14, 16, 18, 20, 24, 28, 32, 40, 48, 64, 72, 96, 128];
 
 const fmtBtn =
-  "p-1 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-foreground";
+  "p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-foreground";
 const fmtBtnActive =
-  "p-1 rounded bg-muted text-foreground";
+  "p-1.5 rounded bg-muted text-foreground";
 
 const sep = <div className="w-px h-4 bg-border mx-0.5" />;
 
@@ -129,7 +129,7 @@ export function TextNode({ id, data, selected }: NodeProps) {
         onClick={() => setFormat({ bold: !bold })}
         title="Bold"
       >
-        <Bold size={11} />
+        <Bold size={12} />
       </button>
       <button
         className={italic ? fmtBtnActive : fmtBtn}
@@ -137,7 +137,7 @@ export function TextNode({ id, data, selected }: NodeProps) {
         onClick={() => setFormat({ italic: !italic })}
         title="Italic"
       >
-        <Italic size={11} />
+        <Italic size={12} />
       </button>
       <button
         className={underline ? fmtBtnActive : fmtBtn}
@@ -145,7 +145,7 @@ export function TextNode({ id, data, selected }: NodeProps) {
         onClick={() => setFormat({ underline: !underline })}
         title="Underline"
       >
-        <Underline size={11} />
+        <Underline size={12} />
       </button>
 
       {sep}
@@ -157,7 +157,7 @@ export function TextNode({ id, data, selected }: NodeProps) {
         onClick={() => setFormat({ textAlign: "left" })}
         title="Align left"
       >
-        <AlignLeft size={11} />
+        <AlignLeft size={12} />
       </button>
       <button
         className={textAlign === "center" ? fmtBtnActive : fmtBtn}
@@ -165,7 +165,7 @@ export function TextNode({ id, data, selected }: NodeProps) {
         onClick={() => setFormat({ textAlign: "center" })}
         title="Align center"
       >
-        <AlignCenter size={11} />
+        <AlignCenter size={12} />
       </button>
       <button
         className={textAlign === "right" ? fmtBtnActive : fmtBtn}
@@ -173,7 +173,7 @@ export function TextNode({ id, data, selected }: NodeProps) {
         onClick={() => setFormat({ textAlign: "right" })}
         title="Align right"
       >
-        <AlignRight size={11} />
+        <AlignRight size={12} />
       </button>
 
       {sep}
@@ -185,7 +185,7 @@ export function TextNode({ id, data, selected }: NodeProps) {
         onClick={() => setFormat({ verticalAlign: "top" })}
         title="Align top"
       >
-        <AlignStartVertical size={11} />
+        <AlignStartVertical size={12} />
       </button>
       <button
         className={verticalAlign === "center" ? fmtBtnActive : fmtBtn}
@@ -193,7 +193,7 @@ export function TextNode({ id, data, selected }: NodeProps) {
         onClick={() => setFormat({ verticalAlign: "center" })}
         title="Align middle"
       >
-        <AlignCenterVertical size={11} />
+        <AlignCenterVertical size={12} />
       </button>
       <button
         className={verticalAlign === "bottom" ? fmtBtnActive : fmtBtn}
@@ -201,9 +201,15 @@ export function TextNode({ id, data, selected }: NodeProps) {
         onClick={() => setFormat({ verticalAlign: "bottom" })}
         title="Align bottom"
       >
-        <AlignEndVertical size={11} />
+        <AlignEndVertical size={12} />
       </button>
     </>
+  );
+
+  // Handle classes: hidden by default, visible when selected
+  const handleCls = cn(
+    "!bg-primary/70 !w-2.5 !h-2.5 !border-0 transition-opacity duration-150",
+    selected ? "!opacity-100" : "!opacity-0",
   );
 
   return (
@@ -217,63 +223,60 @@ export function TextNode({ id, data, selected }: NodeProps) {
       />
       <CanvasNodeToolbar id={id} selected={selected} secondRow={formattingRow} />
 
-      <Handle
-        type="target"
-        position={Position.Top}
-        className="!bg-primary/70 !w-2.5 !h-2.5 !border-0"
-      />
+      {/* 4 handles — all sides */}
+      <Handle type="target"  position={Position.Top}    className={handleCls} />
+      <Handle type="source"  position={Position.Bottom} className={handleCls} />
+      <Handle type="target"  position={Position.Left}   id="left-target"  className={handleCls} />
+      <Handle type="source"  position={Position.Right}  id="right-source" className={handleCls} />
 
-      <div
-        style={shapeStyle}
-        className={cn(
-          "w-full h-full min-w-[120px] min-h-[60px] text-card-foreground shadow-sm transition-shadow flex flex-col",
-          showBorder && (selected ? "border-2 border-primary shadow-md" : "border border-border"),
-        )}
-        onDoubleClick={startEdit}
-      >
+      {/* Drop-shadow wrapper — works with clipPath shapes */}
+      <div className="w-full h-full" style={getNodeShadow(selected)}>
         <div
+          style={shapeStyle}
           className={cn(
-            "w-full flex-1 flex flex-col gap-1.5 leading-snug min-h-0",
-            shapeContentClass(shape),
-            verticalClass,
+            "w-full h-full min-w-[120px] min-h-[60px] text-card-foreground transition-colors flex flex-col",
+            showBorder && (selected ? "border-2 border-primary" : "border border-border"),
           )}
+          onDoubleClick={startEdit}
         >
-          <div className={cn("flex items-center gap-1.5 w-full", hAlignClass)}>
-            {nodeData.icon && (
-              <NodeIcon name={nodeData.icon} size={iconSize} className="shrink-0" />
+          <div
+            className={cn(
+              "w-full flex-1 flex flex-col gap-1.5 leading-snug min-h-0",
+              shapeContentClass(shape),
+              verticalClass,
             )}
+          >
+            <div className={cn("flex items-center gap-1.5 w-full", hAlignClass)}>
+              {nodeData.icon && (
+                <NodeIcon name={nodeData.icon} size={iconSize} className="shrink-0" />
+              )}
 
-            {editing ? (
-              <textarea
-                ref={textareaRef}
-                className="flex-1 resize-none bg-transparent outline-none w-full"
-                style={textStyle}
-                rows={3}
-                value={label}
-                onChange={(e) => setLabel(e.target.value)}
-                onBlur={stopEdit}
-                onKeyDown={(e) => {
-                  if (e.key === "Escape") stopEdit();
-                  e.stopPropagation();
-                }}
-              />
-            ) : label ? (
-              <span
-                className="select-none whitespace-pre-wrap"
-                style={textStyle}
-              >
-                {label}
-              </span>
-            ) : null}
+              {editing ? (
+                <textarea
+                  ref={textareaRef}
+                  className="flex-1 resize-none bg-transparent outline-none w-full"
+                  style={textStyle}
+                  rows={3}
+                  value={label}
+                  onChange={(e) => setLabel(e.target.value)}
+                  onBlur={stopEdit}
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape") stopEdit();
+                    e.stopPropagation();
+                  }}
+                />
+              ) : label ? (
+                <span
+                  className="select-none whitespace-pre-wrap"
+                  style={textStyle}
+                >
+                  {label}
+                </span>
+              ) : null}
+            </div>
           </div>
         </div>
       </div>
-
-      <Handle
-        type="source"
-        position={Position.Bottom}
-        className="!bg-primary/70 !w-2.5 !h-2.5 !border-0"
-      />
     </>
   );
 }

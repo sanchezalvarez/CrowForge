@@ -19,7 +19,7 @@ export function CustomEdge({
   markerEnd,
   style,
 }: EdgeProps) {
-  const edgeData = (data ?? {}) as { label?: string; style?: EdgeStyle };
+  const edgeData = (data ?? {}) as { label?: string; style?: EdgeStyle; _startEditing?: boolean };
   const edgeStyle: EdgeStyle = edgeData.style ?? "solid";
 
   const { updateEdgeData } = useReactFlow();
@@ -34,13 +34,22 @@ export function CustomEdge({
     if (!editingLabel) setLabelValue(edgeData.label ?? "");
   }, [edgeData.label, editingLabel]);
 
+  // Listen for _startEditing flag set by context menu
+  useEffect(() => {
+    if (edgeData._startEditing) {
+      setEditingLabel(true);
+      // Clear the flag so it doesn't re-trigger
+      updateEdgeData(id, { _startEditing: false });
+    }
+  }, [edgeData._startEditing, id, updateEdgeData]);
+
   useEffect(() => {
     if (editingLabel) inputRef.current?.select();
   }, [editingLabel]);
 
   function commitLabel() {
     setEditingLabel(false);
-    updateEdgeData(id, { label: labelValue });
+    updateEdgeData(id, { label: labelValue, _startEditing: false });
   }
 
   // ── Path ─────────────────────────────────────────────────────────────────────
@@ -86,7 +95,7 @@ export function CustomEdge({
             {editingLabel ? (
               <input
                 ref={inputRef}
-                className="px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-background border text-foreground shadow-sm outline-none focus:ring-1 focus:ring-primary/50 w-28"
+                className="px-2 py-1 rounded-md text-xs font-medium bg-background border text-foreground shadow-md outline-none focus:ring-1 focus:ring-primary/50 w-32"
                 value={labelValue}
                 onChange={(e) => setLabelValue(e.target.value)}
                 onBlur={commitLabel}
@@ -100,7 +109,7 @@ export function CustomEdge({
                 }}
               />
             ) : (
-              <span className="px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-background border text-muted-foreground shadow-sm cursor-text">
+              <span className="px-2 py-1 rounded-md text-xs font-medium bg-background border text-muted-foreground shadow-sm cursor-text hover:bg-muted transition-colors">
                 {edgeData.label}
               </span>
             )}

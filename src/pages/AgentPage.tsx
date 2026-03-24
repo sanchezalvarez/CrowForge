@@ -811,7 +811,7 @@ export function AgentPage({ tuningParams }: AgentPageProps) {
                     className="flex-1 bg-transparent outline-none border-b border-violet-500 text-xs min-w-0"
                   />
                 ) : (
-                  <span className="flex-1 truncate">{s.title}</span>
+                  <span className="flex-1 min-w-0 truncate">{s.title}</span>
                 )}
               </div>
             ))}

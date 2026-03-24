@@ -25,13 +25,9 @@ async fn restart_backend(
     state: tauri::State<'_, BackendProcess>,
     app: tauri::AppHandle,
 ) -> Result<(), String> {
-    // Kill current process
     state.kill_inner();
-
-    // Small delay to let the port free up
     std::thread::sleep(std::time::Duration::from_millis(500));
 
-    // Spawn new sidecar
     let shell = app.shell();
     let sidecar_command = shell
         .sidecar("crowforge-backend")
@@ -40,7 +36,41 @@ async fn restart_backend(
         .spawn()
         .map_err(|e| format!("Failed to spawn sidecar: {}", e))?;
 
-    // Store the new child
+    if let Ok(mut guard) = state.0.lock() {
+        *guard = Some(child);
+    } else {
+        return Err("Failed to acquire backend process lock".into());
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn kill_backend(state: tauri::State<'_, BackendProcess>) -> Result<(), String> {
+    state.kill_inner();
+    Ok(())
+}
+
+#[tauri::command]
+async fn start_backend(
+    state: tauri::State<'_, BackendProcess>,
+    app: tauri::AppHandle,
+) -> Result<(), String> {
+    // Don't start if already running
+    if let Ok(guard) = state.0.lock() {
+        if guard.is_some() {
+            return Err("Backend is already running".into());
+        }
+    }
+
+    let shell = app.shell();
+    let sidecar_command = shell
+        .sidecar("crowforge-backend")
+        .map_err(|e| format!("Failed to create sidecar command: {}", e))?;
+    let (_rx, child) = sidecar_command
+        .spawn()
+        .map_err(|e| format!("Failed to spawn sidecar: {}", e))?;
+
     if let Ok(mut guard) = state.0.lock() {
         *guard = Some(child);
     } else {
@@ -71,13 +101,11 @@ pub fn run() {
             let (_rx, child) = sidecar_command.spawn()
                 .expect("failed to spawn crowforge-backend sidecar");
 
-            // Store child — Drop impl will kill it when Tauri exits for any reason
             app.manage(BackendProcess(Mutex::new(Some(child))));
             Ok(())
         })
         .on_window_event(|window, event| {
             match event {
-                // CloseRequested fires before the window closes — most reliable on Windows
                 tauri::WindowEvent::CloseRequested { .. } | tauri::WindowEvent::Destroyed => {
                     if let Some(state) = window.try_state::<BackendProcess>() {
                         state.kill_inner();
@@ -86,7 +114,7 @@ pub fn run() {
                 _ => {}
             }
         })
-        .invoke_handler(tauri::generate_handler![restart_backend])
+        .invoke_handler(tauri::generate_handler![restart_backend, kill_backend, start_backend])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

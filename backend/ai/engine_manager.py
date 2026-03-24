@@ -4,7 +4,7 @@ import logging
 import threading
 from typing import Dict, Optional
 
-from backend.ai_engine import AIEngine, MockAIEngine, HTTPAIEngine, LocalLLAMAEngine
+from backend.ai_engine import AIEngine, MockAIEngine, HTTPAIEngine, LocalLLAMAEngine, GeminiAIEngine
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +65,7 @@ class AIEngineManager:
                 MockAIEngine: "mock",
                 HTTPAIEngine: "http",
                 LocalLLAMAEngine: "local",
+                GeminiAIEngine: "gemini",
             }
             return [
                 {

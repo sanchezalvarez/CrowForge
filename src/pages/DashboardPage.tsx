@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from "react";
 import { Card, CardContent } from "../components/ui/card";
 import {
   FileText, Table2, MessageSquare, Plus, Sparkles, Cpu,
-  ArrowRight, Loader2, Zap, Clock, RefreshCw, Newspaper, Rss,
+  ArrowRight, Loader2, Zap, Clock, RefreshCw, Newspaper, Rss, Workflow,
 } from "lucide-react";
 import axios from "axios";
 import { NewsDigest } from "../components/News/NewsDigest";
@@ -153,6 +153,11 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
         try { const r = await axios.post(`${API_BASE}/sheets`, { title: "Untitled Sheet", columns: [{ name: "Column 1", type: "text" }] }); onNavigate("sheets", r.data.id); } catch { /**/ }
       },
     },
+    {
+      title: "New Canvas", desc: "Visual flow diagrams",
+      icon: Workflow, color: "text-orange-500", bg: "bg-orange-500/10", ring: "ring-orange-500/20",
+      onClick: () => { onNavigate("canvas"); },
+    },
   ];
 
   const typeIcon = (type: "doc" | "sheet" | "chat") => {
@@ -212,7 +217,7 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
         {/* Quick actions */}
         <section>
           <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">Create</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             {quickActions.map((a) => (
               <button
                 key={a.title}

@@ -19,6 +19,9 @@ import { CanvasToolbar }        from "./CanvasToolbar";
 import { TextNode }             from "./nodes/TextNode";
 import { AINode }               from "./nodes/AINode";
 import { ImageNode }            from "./nodes/ImageNode";
+import { StickyNoteNode }       from "./nodes/StickyNoteNode";
+import { AnnotationNode }       from "./nodes/AnnotationNode";
+import { HyperlinkNode }        from "./nodes/HyperlinkNode";
 import { CustomEdge }           from "./edges/CustomEdge";
 import {
   CanvasContextMenu,
@@ -30,9 +33,12 @@ import {
 
 // ── Node / edge type registries ───────────────────────────────────────────────
 const nodeTypes: NodeTypes = {
-  text:  TextNode,
-  ai:    AINode,
-  image: ImageNode,
+  text:       TextNode,
+  ai:         AINode,
+  image:      ImageNode,
+  sticky:     StickyNoteNode,
+  annotation: AnnotationNode,
+  hyperlink:  HyperlinkNode,
 };
 
 const edgeTypes: EdgeTypes = {
@@ -57,7 +63,11 @@ function centrePosition(el: HTMLDivElement | null): { x: number; y: number } {
   return { x: el.clientWidth / 2 - 120, y: el.clientHeight / 2 - 50 };
 }
 
-export function CanvasView() {
+interface CanvasViewProps {
+  canvasId?: string;
+}
+
+export function CanvasView({ canvasId }: CanvasViewProps) {
   const wrapperRef = useRef<HTMLDivElement>(null!);
 
   const {
@@ -73,7 +83,7 @@ export function CanvasView() {
     runFlow,
     toast,
     clearToast,
-  } = useCanvasStore();
+  } = useCanvasStore(canvasId);
 
   // ── Snap to grid ──────────────────────────────────────────────────────────
   const [snapToGrid, setSnapToGrid] = useState<boolean>(
@@ -105,6 +115,8 @@ export function CanvasView() {
         position: pos,
         data,
         ...(type === "image" ? { style: { width: 240, height: 200 } } : {}),
+        ...(type === "sticky"     ? { style: { width: 200, height: 160 } } : {}),
+        ...(type === "annotation" ? { style: { width: 200, height: 40 } } : {}),
       };
       setNodes((nds) => [...nds, node]);
       scheduleSave();
@@ -112,9 +124,12 @@ export function CanvasView() {
     [setNodes, scheduleSave],
   );
 
-  const handleAddText  = useCallback(() => addNode("text",  { label: "" }),             [addNode]);
-  const handleAddAI    = useCallback(() => addNode("ai",    { prompt: "", output: "" }), [addNode]);
-  const handleAddImage = useCallback(() => addNode("image", { src: "", alt: "" }),       [addNode]);
+  const handleAddText       = useCallback(() => addNode("text",       { label: "" }),                          [addNode]);
+  const handleAddAI         = useCallback(() => addNode("ai",         { prompt: "", output: "", behavior: "none" }), [addNode]);
+  const handleAddImage      = useCallback(() => addNode("image",      { src: "", alt: "" }),                   [addNode]);
+  const handleAddSticky     = useCallback(() => addNode("sticky",     { label: "" }),                          [addNode]);
+  const handleAddAnnotation = useCallback(() => addNode("annotation", { label: "", fontSize: 14 }),             [addNode]);
+  const handleAddHyperlink  = useCallback(() => addNode("hyperlink",  { url: "", title: "" }),                  [addNode]);
 
   const handleClear = useCallback(() => {
     if (!window.confirm("Clear all nodes and edges?")) return;
@@ -144,6 +159,9 @@ export function CanvasView() {
           onAddText={handleAddText}
           onAddAI={handleAddAI}
           onAddImage={handleAddImage}
+          onAddSticky={handleAddSticky}
+          onAddAnnotation={handleAddAnnotation}
+          onAddHyperlink={handleAddHyperlink}
           onClear={handleClear}
           snapToGrid={snapToGrid}
           onSnapToggle={handleSnapToggle}

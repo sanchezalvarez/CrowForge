@@ -6,14 +6,12 @@
 import { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import {
-  PlusCircle, FileText, Trash2, Loader2, Check, Copy, Pencil,
-  PackageOpen, Download,
+  PlusCircle, FileText, Trash2, Copy, Pencil,
 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { ScrollArea } from "../components/ui/scroll-area";
 import { cn } from "../lib/utils";
 import { toast } from "../hooks/useToast";
-import { exportDocumentsAsZip } from "../lib/fileService";
 import { DocumentEditor } from "../editor";
 import type { EditorDocument, DocumentContext } from "../editor";
 import type { TuningParams } from "../components/AIControlPanel";
@@ -34,11 +32,6 @@ export function DocumentsPage({ onContextChange, tuningParams, initialDocId }: D
   const [renamingDoc, setRenamingDoc] = useState<string | null>(null);
   const [renameDocValue, setRenameDocValue] = useState("");
   const renameDocRef = useRef<HTMLInputElement>(null);
-
-  // Bulk export
-  const [selectMode, setSelectMode] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [bulkExporting, setBulkExporting] = useState(false);
 
   const activeDoc = documents.find((d) => d.id === activeDocId) ?? null;
 
@@ -148,48 +141,16 @@ export function DocumentsPage({ onContextChange, tuningParams, initialDocId }: D
     if (renamingDoc && renameDocRef.current) renameDocRef.current.focus();
   }, [renamingDoc]);
 
-  // ── Bulk export ─────────────────────────────────────────────────────────
-  function toggleSelectMode() { setSelectMode((v) => !v); setSelectedIds(new Set()); }
-  function toggleDocSelect(id: string) {
-    setSelectedIds((prev) => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
-  }
-  function selectAll() { setSelectedIds(new Set(documents.map((d) => d.id))); }
-
-  async function handleBulkExport() {
-    const selected = documents.filter((d) => selectedIds.has(d.id));
-    if (selected.length === 0) return;
-    setBulkExporting(true);
-    try { await exportDocumentsAsZip(selected.map((d) => ({ title: d.title, content_json: d.content_json }))); }
-    finally { setBulkExporting(false); }
-  }
-
   // ── Render ──────────────────────────────────────────────────────────────
   return (
     <div className="flex h-full relative">
       {/* Documents sidebar */}
       <div className="w-[220px] shrink-0 border-r bg-background flex flex-col">
-        <div className="p-3 border-b flex flex-col gap-1.5">
+        <div className="p-3 border-b">
           <Button variant="outline" size="sm" className="w-full" onClick={createDocument}>
             <PlusCircle className="h-4 w-4 mr-1.5" /> New Document
           </Button>
-          <Button variant={selectMode ? "secondary" : "ghost"} size="sm" className="w-full text-xs" onClick={toggleSelectMode}>
-            <PackageOpen className="h-3.5 w-3.5 mr-1.5" />
-            {selectMode ? "Cancel selection" : "Select for export"}
-          </Button>
         </div>
-
-        {/* Bulk-export action bar */}
-        {selectMode && (
-          <div className="flex items-center gap-1.5 px-2 py-1.5 border-b bg-muted/30">
-            <button className="text-[11px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline" onClick={selectAll}>All</button>
-            <button className="text-[11px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline" onClick={() => setSelectedIds(new Set())}>None</button>
-            <div className="flex-1" />
-            <Button size="sm" className="h-6 text-[11px] px-2 gap-1" disabled={selectedIds.size === 0 || bulkExporting} onClick={handleBulkExport}>
-              {bulkExporting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
-              Export ({selectedIds.size})
-            </Button>
-          </div>
-        )}
 
         <ScrollArea className="flex-1">
           <div className="p-2 space-y-0.5">
@@ -198,26 +159,19 @@ export function DocumentsPage({ onContextChange, tuningParams, initialDocId }: D
                 key={doc.id}
                 className={cn(
                   "group flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-sm cursor-pointer transition-colors",
-                  activeDocId === doc.id && !selectMode ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground hover:bg-muted hover:text-foreground",
-                  selectMode && selectedIds.has(doc.id) && "bg-primary/10 text-primary",
+                  activeDocId === doc.id ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground hover:bg-muted hover:text-foreground",
                 )}
-                onClick={() => { if (selectMode) toggleDocSelect(doc.id); else setActiveDocId(doc.id); }}
-                onContextMenu={(e) => { if (selectMode) return; e.preventDefault(); setDocMenu({ docId: doc.id, x: e.clientX, y: e.clientY }); }}
+                onClick={() => setActiveDocId(doc.id)}
+                onContextMenu={(e) => { e.preventDefault(); setDocMenu({ docId: doc.id, x: e.clientX, y: e.clientY }); }}
               >
-                {selectMode ? (
-                  <div className={cn("h-3.5 w-3.5 shrink-0 rounded border flex items-center justify-center", selectedIds.has(doc.id) ? "bg-primary border-primary" : "border-muted-foreground/40")}>
-                    {selectedIds.has(doc.id) && <Check className="h-2.5 w-2.5 text-primary-foreground" />}
-                  </div>
-                ) : (
-                  <FileText className="h-3.5 w-3.5 shrink-0" />
-                )}
+                <FileText className="h-3.5 w-3.5 shrink-0" />
                 {renamingDoc === doc.id ? (
                   <input ref={renameDocRef} className="flex-1 min-w-0 h-5 px-1 text-xs border border-primary/40 rounded bg-background outline-none"
                     value={renameDocValue} onChange={(e) => setRenameDocValue(e.target.value)}
                     onClick={(e) => e.stopPropagation()} onBlur={docRenameCommit}
                     onKeyDown={(e) => { if (e.key === "Enter") docRenameCommit(); if (e.key === "Escape") setRenamingDoc(null); }} />
                 ) : (
-                  <span className="flex-1 truncate">{doc.title}</span>
+                  <span className="flex-1 min-w-0 truncate">{doc.title}</span>
                 )}
               </div>
             ))}

@@ -11,7 +11,6 @@ import {
   validateImportFile,
   parseSheetImport,
   exportSheetAs,
-  exportAllSheetsXLSX,
   SHEET_IMPORT_EXTS,
   type SheetExportFormat,
 } from "../lib/fileService";
@@ -1416,22 +1415,6 @@ export function SheetsPage({ tuningParams, initialSheetId }: SheetsPageProps) {
     });
   }
 
-  async function handleExportAllXLSX() {
-    if (sheets.length === 0) return;
-    await exportAllSheetsXLSX(
-      sheets.map((s) => ({
-        title: s.title,
-        columns: s.columns,
-        rows: s.rows,
-        formulas: s.formulas,
-        colWidths: s.sizes?.colWidths ?? {},
-        rowHeights: s.sizes?.rowHeights ?? {},
-        defaultColWidth: DEFAULT_COL_WIDTH,
-        defaultRowHeight: DEFAULT_ROW_HEIGHT,
-      }))
-    );
-  }
-
   const pendingExt   = pendingFile ? pendingFile.name.split(".").pop()?.toLowerCase() ?? "" : "";
   const pendingLabel = pendingFile ? (IMPORT_FORMAT_LABELS[pendingExt] ?? pendingExt.toUpperCase()) : "";
 
@@ -1490,7 +1473,6 @@ export function SheetsPage({ tuningParams, initialSheetId }: SheetsPageProps) {
         importInputRef={importInputRef}
         handleImportFile={handleImportFile}
         importing={importing}
-        handleExportAllXLSX={handleExportAllXLSX}
       />
 
       {/* Main area */}

@@ -254,6 +254,64 @@ class HTTPAIEngine(AIEngine):
             except Exception as e:
                 yield json.dumps({"type": "error", "message": str(e)})
 
+class GeminiAIEngine(AIEngine):
+    """Google Gemini API engine using native REST streaming."""
+
+    _GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
+
+    def __init__(self, api_key: str | None = None, model: str | None = None):
+        self.api_key = api_key or os.getenv("GEMINI_API_KEY", "")
+        self.model = model or os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+        self.timeout = float(os.getenv("LLM_TIMEOUT", "60.0"))
+
+    async def generate_stream(
+        self, system_prompt: str, user_prompt: str, *,
+        temperature: float = 0.7, top_p: float = 0.95,
+        max_tokens: int = 1024, seed: int | None = None,
+        json_mode: bool = True,
+    ) -> AsyncGenerator[str, None]:
+        url = f"{self._GEMINI_BASE}/{self.model}:streamGenerateContent?key={self.api_key}&alt=sse"
+        payload: dict = {
+            "contents": [{"role": "user", "parts": [{"text": user_prompt}]}],
+            "generationConfig": {
+                "temperature": temperature,
+                "topP": top_p,
+                "maxOutputTokens": max_tokens,
+            },
+        }
+        if system_prompt:
+            payload["system_instruction"] = {"parts": [{"text": system_prompt}]}
+        if json_mode:
+            payload["generationConfig"]["responseMimeType"] = "application/json"
+
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            try:
+                async with client.stream("POST", url, json=payload) as response:
+                    if response.status_code != 200:
+                        body = await response.aread()
+                        yield f"[ERROR] Gemini API error {response.status_code}: {body.decode()[:200]}"
+                        return
+                    async for line in response.aiter_lines():
+                        if not line.startswith("data: "):
+                            continue
+                        raw = line[6:].strip()
+                        if not raw:
+                            continue
+                        try:
+                            chunk = json.loads(raw)
+                            parts = chunk.get("candidates", [{}])[0].get("content", {}).get("parts", [])
+                            for part in parts:
+                                text = part.get("text", "")
+                                if text:
+                                    yield text
+                        except (json.JSONDecodeError, IndexError, KeyError):
+                            continue
+            except httpx.ReadTimeout:
+                yield "[ERROR] Gemini request timed out"
+            except Exception as e:
+                yield f"[ERROR] {str(e)}"
+
+
 class LocalLLAMAEngine(AIEngine):
     """Local GGUF engine with runtime model hot-swap."""
 

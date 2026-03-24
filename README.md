@@ -1,8 +1,11 @@
+<img src="src/assets/crowforge_ico.png" alt="CrowForge Logo" width="48" height="48">
+
 # CrowForge
 
-![CrowForge Logo](src/assets/crowforge_ico.png)
-
 A **local-first AI workspace** — Chat, Documents, Sheets, and Benchmarking — running entirely on your machine. No cloud, no telemetry, no subscriptions.
+
+> [!IMPORTANT]
+> **Alpha Version:** CrowForge is currently in early alpha. We are actively testing features and fixing bugs. Expect frequent updates and potential breaking changes.
 
 **CrowForge v0.3** brings even more power to your local machine with a comprehensive "Help!" system, AI News Digest, and visual workflow canvas.
 

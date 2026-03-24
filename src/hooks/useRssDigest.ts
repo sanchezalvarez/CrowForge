@@ -10,6 +10,21 @@ export interface DigestState {
   articleCount: number;
 }
 
+/** Parse SSE stream buffer. Splits by double-newline (event boundaries),
+ *  joins multi-line `data:` fields with \n so markdown newlines are preserved. */
+function parseSseBuffer(buf: string): { chunks: string[]; remainder: string } {
+  const parts = buf.split("\n\n");
+  const remainder = parts.pop() ?? "";
+  const chunks: string[] = [];
+  for (const part of parts) {
+    const dataLines = part.split("\n").filter((l) => l.startsWith("data: "));
+    if (dataLines.length > 0) {
+      chunks.push(dataLines.map((l) => l.slice(6)).join("\n"));
+    }
+  }
+  return { chunks, remainder };
+}
+
 export function useRssDigest() {
   const [digest, setDigest] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
@@ -33,26 +48,23 @@ export function useRssDigest() {
     setError("");
     setDigest("");
 
-    // First fetch new articles
+    // Fetch new articles from all feeds (parallel on backend)
     try {
       await axios.post(`${API_BASE}/rss/fetch`);
     } catch {
-      // continue even if fetch fails
+      // continue even if fetch partially fails
     }
 
-    // Then stream digest
+    // Stream digest via proper SSE POST
     return new Promise<void>((resolve) => {
-      const es = new EventSource(`${API_BASE}/rss/digest`);
-      // Note: POST /rss/digest — but EventSource only does GET.
-      // We use GET /rss/digest with a workaround: trigger via fetch streaming
-      es.close();
-
-      // Use fetch + ReadableStream for SSE POST
       let accumulated = "";
+      let sseBuffer = "";
+
       fetch(`${API_BASE}/rss/digest`, { method: "POST" })
         .then((res) => {
           const reader = res.body!.getReader();
           const decoder = new TextDecoder();
+
           function read() {
             reader.read().then(({ done, value }) => {
               if (done) {
@@ -61,27 +73,28 @@ export function useRssDigest() {
                 resolve();
                 return;
               }
-              const text = decoder.decode(value, { stream: true });
-              const lines = text.split("\n");
-              for (const line of lines) {
-                if (line.startsWith("data: ")) {
-                  const chunk = line.slice(6);
-                  if (chunk === "[DONE]") {
-                    setIsGenerating(false);
-                    setLastGenerated(new Date().toISOString());
-                    resolve();
-                    return;
-                  }
-                  if (chunk.startsWith("[ERROR]")) {
-                    setError(chunk.slice(8));
-                    setIsGenerating(false);
-                    resolve();
-                    return;
-                  }
-                  accumulated += chunk;
-                  setDigest(accumulated);
+
+              sseBuffer += decoder.decode(value, { stream: true });
+              const { chunks, remainder } = parseSseBuffer(sseBuffer);
+              sseBuffer = remainder;
+
+              for (const chunk of chunks) {
+                if (chunk === "[DONE]") {
+                  setIsGenerating(false);
+                  setLastGenerated(new Date().toISOString());
+                  resolve();
+                  return;
                 }
+                if (chunk.startsWith("[ERROR]")) {
+                  setError(chunk.slice(7).trim());
+                  setIsGenerating(false);
+                  resolve();
+                  return;
+                }
+                accumulated += chunk;
+                setDigest(accumulated);
               }
+
               read();
             });
           }

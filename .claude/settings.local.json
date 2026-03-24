@@ -64,7 +64,8 @@
       "Bash(npx madge:*)",
       "Bash(find:*)",
       "Bash(tasklist)",
-      "Bash(npm list:*)"
+      "Bash(npm list:*)",
+      "Bash(findstr :8000)"
     ]
   }
 }

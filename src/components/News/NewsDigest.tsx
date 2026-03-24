@@ -76,15 +76,27 @@ export function NewsDigest({ digest, isGenerating, lastGenerated, articleCount, 
         <div className="text-xs text-destructive bg-destructive/10 rounded-md px-3 py-2">{error}</div>
       )}
 
-      {/* Digest content */}
-      {(digest || isGenerating) && (
-        <div className={cn(
-          "prose prose-sm dark:prose-invert max-w-none text-sm",
-          "[&_h2]:text-sm [&_h2]:font-semibold [&_h2]:mt-4 [&_h2]:mb-1.5",
-          "[&_ul]:space-y-1 [&_li]:text-xs [&_li]:leading-snug",
-          "[&_strong]:font-semibold [&_p]:text-sm [&_p]:leading-relaxed",
-          "[&_a]:text-primary [&_a]:no-underline [&_a]:hover:underline",
-        )}>
+      {/* Digest content — plain pre during streaming, markdown after done */}
+      {isGenerating && digest && (
+        <pre className="text-xs font-mono whitespace-pre-wrap leading-relaxed text-foreground/80 bg-muted/30 rounded-md p-3 max-h-96 overflow-y-auto">
+          {digest}
+          <span className="animate-pulse">▌</span>
+        </pre>
+      )}
+      {!isGenerating && digest && (
+        <div
+          key="digest-done"
+          className={cn(
+            "prose prose-sm dark:prose-invert max-w-none",
+            "[&_h2]:text-base [&_h2]:font-bold [&_h2]:mt-6 [&_h2]:mb-2 [&_h2]:border-b [&_h2]:border-border/40 [&_h2]:pb-1 [&_h2]:text-foreground",
+            "[&_h3]:text-sm [&_h3]:font-semibold [&_h3]:mt-4 [&_h3]:mb-1 [&_h3]:text-foreground",
+            "[&_p]:text-sm [&_p]:leading-relaxed [&_p]:mb-2 [&_p]:text-foreground/90",
+            "[&_em]:text-muted-foreground [&_em]:text-xs",
+            "[&_a]:text-primary [&_a]:no-underline [&_a]:hover:underline [&_a]:text-xs [&_a]:font-medium",
+            "[&_ul]:mt-1 [&_ul]:space-y-0.5 [&_li]:text-xs [&_li]:text-foreground/80",
+            "[&_strong]:font-semibold [&_strong]:text-foreground",
+          )}
+        >
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}
             components={{
@@ -99,7 +111,7 @@ export function NewsDigest({ digest, isGenerating, lastGenerated, articleCount, 
               ),
             }}
           >
-            {digest + (isGenerating ? "▌" : "")}
+            {digest}
           </ReactMarkdown>
         </div>
       )}

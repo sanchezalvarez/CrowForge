@@ -2693,24 +2693,27 @@ async def patch_rss_feed(feed_id: int, body: dict):
 
 @app.post("/rss/fetch")
 async def fetch_rss_feeds():
+    import asyncio
     feeds = _get_feeds(active_only=True)
     if not feeds:
         return {"fetched": 0, "new_articles": 0, "feeds_updated": 0}
 
-    total_new = 0
-    feeds_updated = 0
-
-    async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
-        for feed in feeds:
-            try:
+    async def _fetch_one(feed):
+        try:
+            async with httpx.AsyncClient(timeout=8, follow_redirects=True) as client:
                 resp = await client.get(feed["url"], headers={"User-Agent": "CrowForge RSS Reader/1.0"})
-                articles = _parse_rss(resp.text, feed["id"])
-                new = _upsert_articles(feed["id"], articles)
-                total_new += new
-                feeds_updated += 1
-            except Exception as e:
-                print(f"[RSS] Failed to fetch {feed['url']}: {e}")
+                resp.raise_for_status()
+            articles = _parse_rss(resp.text, feed["id"])
+            new = _upsert_articles(feed["id"], articles)
+            print(f"[RSS] OK {feed['title']}: {len(articles)} articles, {new} new")
+            return new, True
+        except Exception as e:
+            print(f"[RSS] FAIL {feed.get('title', feed['url'])}: {e}")
+            return 0, False
 
+    results = await asyncio.gather(*[_fetch_one(f) for f in feeds])
+    total_new = sum(r[0] for r in results)
+    feeds_updated = sum(1 for r in results if r[1])
     return {"fetched": len(feeds), "new_articles": total_new, "feeds_updated": feeds_updated}
 
 # ── GET /rss/articles ─────────────────────────────────────────────────────────
@@ -2758,13 +2761,20 @@ async def get_rss_digest_cached():
 
 @app.post("/rss/digest")
 async def generate_rss_digest(request: Request):
-    # Fetch recent articles from active feeds
+    # Fetch top 8 most recent articles per active feed (guaranteed coverage of all feeds)
     with _rss_db() as conn:
         rows = conn.execute(
             """SELECT a.title, a.summary, a.url, a.published_at, f.title as feed_title
                FROM rss_articles a
-               JOIN rss_feeds f ON f.id=a.feed_id AND f.is_active=1
-               ORDER BY a.fetched_at DESC LIMIT 40"""
+               JOIN rss_feeds f ON f.id = a.feed_id AND f.is_active = 1
+               WHERE a.id IN (
+                 SELECT id FROM (
+                   SELECT id, ROW_NUMBER() OVER (PARTITION BY feed_id ORDER BY fetched_at DESC) as rn
+                   FROM rss_articles
+                   WHERE feed_id IN (SELECT id FROM rss_feeds WHERE is_active = 1)
+                 ) WHERE rn <= 8
+               )
+               ORDER BY f.title, a.fetched_at DESC"""
         ).fetchall()
         articles = [dict(r) for r in rows]
 
@@ -2783,20 +2793,34 @@ async def generate_rss_digest(request: Request):
     articles_text = ""
     for feed_title, items in by_feed.items():
         articles_text += f"\n[Feed: {feed_title}]\n"
-        for item in items[:10]:
-            summary = (item["summary"] or "")[:200].replace("\n", " ")
-            articles_text += f"- {item['title']}: {summary} ({item['url']})\n"
+        for item in items:
+            summary = (item["summary"] or "")[:400].replace("\n", " ")
+            pub = item.get("published_at") or ""
+            articles_text += f"- TITLE: {item['title']}\n  DATE: {pub}\n  SUMMARY: {summary}\n  URL: {item['url']}\n"
 
-    system_prompt = """You are a news digest assistant. Create a concise, well-structured digest.
-Format:
-1. Start with a 2-3 sentence overall summary paragraph.
-2. Then for each feed/topic, write:
-## [Feed Name]
-- **[Article Title]** — one sentence summary.
+    # Build sources summary
+    sources_lines = "\n".join(f"- {feed}: {len(items)} articles" for feed, items in by_feed.items())
 
-Keep each bullet under 25 words. Be factual and clear. Include all articles provided."""
+    system_prompt = """You are a news digest assistant. Create a structured news digest in Markdown.
 
-    user_prompt = f"Create a news digest from these articles:\n{articles_text}"
+For EACH article, write:
+
+### [Article Title]
+*[Feed Name] · [formatted date, e.g. Mon 23 Mar, or omit if unavailable]*
+Write 2-4 sentences (50-200 words) summarizing the article. Be factual, informative, and clear.
+[Read more](url)
+
+Group articles under ## [Feed Name] section headers.
+
+At the very end, after all articles, add:
+
+## Sources
+- Feed Name — N articles
+(one line per feed)
+
+Important: Cover EVERY feed and EVERY article provided. Do not skip any."""
+
+    user_prompt = f"Create a news digest from these articles:\n{articles_text}\n\nSources to list at end:\n{sources_lines}"
 
     async def event_generator():
         full_response = ""

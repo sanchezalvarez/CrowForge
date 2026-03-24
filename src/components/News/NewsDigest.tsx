@@ -1,6 +1,6 @@
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Loader2, RefreshCw, Newspaper } from "lucide-react";
+import { Loader2, Newspaper } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { cn } from "../../lib/utils";
 
@@ -10,7 +10,6 @@ interface NewsDigestProps {
   lastGenerated: string;
   articleCount: number;
   error: string;
-  onGenerate: () => void;
 }
 
 function timeAgo(isoStr: string): string {
@@ -24,7 +23,7 @@ function timeAgo(isoStr: string): string {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
-export function NewsDigest({ digest, isGenerating, lastGenerated, articleCount, error, onGenerate }: NewsDigestProps) {
+export function NewsDigest({ digest, isGenerating, lastGenerated, articleCount, error }: NewsDigestProps) {
   if (!digest && !isGenerating && !error) {
     return (
       <div className="flex flex-col items-center justify-center py-12 gap-4 text-center">
@@ -35,13 +34,6 @@ export function NewsDigest({ digest, isGenerating, lastGenerated, articleCount, 
           <p className="font-semibold text-sm">No digest yet</p>
           <p className="text-xs text-muted-foreground mt-1">Generate your first AI news digest from subscribed feeds</p>
         </div>
-        <button
-          onClick={onGenerate}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
-        >
-          <RefreshCw className="h-3.5 w-3.5" />
-          Generate digest
-        </button>
       </div>
     );
   }
@@ -60,15 +52,6 @@ export function NewsDigest({ digest, isGenerating, lastGenerated, articleCount, 
             <span>Updated {timeAgo(lastGenerated)} · {articleCount} articles</span>
           ) : null}
         </div>
-        {!isGenerating && (
-          <button
-            onClick={onGenerate}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-muted transition-colors border border-border/50"
-          >
-            <RefreshCw className="h-3 w-3" />
-            Regenerate
-          </button>
-        )}
       </div>
 
       {/* Error */}

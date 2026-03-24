@@ -4,8 +4,6 @@ import { Download, CheckCircle2, Loader2, X, AlertCircle, Trash2, ExternalLink, 
 import { toast } from "../hooks/useToast";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useRssFeeds, RssFeed } from "../hooks/useRssFeeds";
-import { useRssDigest } from "../hooks/useRssDigest";
-import { NewsDigest } from "../components/News/NewsDigest";
 
 const API_BASE = "http://127.0.0.1:8000";
 
@@ -351,7 +349,7 @@ function NewsFeedsSection() {
   const categories = [...new Set(CURATED_FEEDS.map((f) => f.category))];
 
   return (
-    <div className="space-y-6 max-w-2xl">
+    <div className="space-y-4">
       <div>
         <h2 className="text-lg font-semibold">News Feeds</h2>
         <p className="text-sm text-muted-foreground mt-1">
@@ -359,155 +357,168 @@ function NewsFeedsSection() {
         </p>
       </div>
 
-      {/* Curated feed library */}
-      <div className="rounded-lg border bg-muted/20 p-4 space-y-4">
-        <p className="text-sm font-medium flex items-center gap-2">
-          <Newspaper className="h-4 w-4 text-primary" />
-          Feed Library
-          <span className="text-xs text-muted-foreground font-normal">— click + to add</span>
-        </p>
-        {categories.map((cat) => (
-          <div key={cat}>
-            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">{cat}</p>
-            <div className="flex flex-wrap gap-2">
-              {CURATED_FEEDS.filter((f) => f.category === cat).map((feed) => {
-                const isAdded = addedUrls.has(feed.url);
-                const isPending = pendingUrls.has(feed.url);
-                return (
-                  <button
-                    key={feed.url}
-                    onClick={() => !isAdded && !isPending && handleAddCurated(feed)}
-                    disabled={isAdded || isPending}
-                    title={isAdded ? "Already added" : `Add ${feed.title}`}
-                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${
-                      isAdded
-                        ? "bg-primary/10 text-primary border-primary/30 opacity-60 cursor-default"
-                        : isPending
-                          ? "opacity-60 cursor-wait border-transparent"
-                          : `${CATEGORY_COLORS[cat] ?? ""} border-transparent hover:border-current hover:shadow-sm cursor-pointer`
-                    }`}
-                  >
-                    {isAdded
-                      ? <Check className="h-3 w-3" />
-                      : isPending
-                        ? <Loader2 className="h-3 w-3 animate-spin" />
-                        : <Plus className="h-3 w-3" />
-                    }
-                    {feed.title}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Add feed form */}
-      <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
-        <p className="text-sm font-medium flex items-center gap-2">
-          <Rss className="h-4 w-4 text-primary" />
-          Add Custom Feed
-        </p>
-        <div className="flex flex-col gap-2">
-          <input
-            type="url"
-            placeholder="https://example.com/feed.xml"
-            value={urlInput}
-            onChange={(e) => setUrlInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleAdd()}
-            className="w-full px-3 py-2 rounded-md border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-          />
-          <div className="flex gap-2">
-            <input
-              type="text"
-              placeholder="Display name (optional)"
-              value={titleInput}
-              onChange={(e) => setTitleInput(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleAdd()}
-              className="flex-1 px-3 py-2 rounded-md border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-            />
-            <button
-              onClick={handleAdd}
-              disabled={adding || !urlInput.trim()}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
-            >
-              {adding ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
-              Add Feed
-            </button>
-          </div>
-        </div>
-        {addError && (
-          <p className="text-xs text-destructive">{addError}</p>
-        )}
-      </div>
-
-      {/* Feed list */}
-      {loading ? (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          Loading feeds…
-        </div>
-      ) : feeds.length === 0 ? (
-        <div className="rounded-lg border border-dashed p-6 flex flex-col items-center gap-3 text-center">
-          <Rss className="h-8 w-8 text-muted-foreground/50" />
-          <div>
-            <p className="text-sm font-medium">No feeds yet</p>
-            <p className="text-xs text-muted-foreground mt-1">Pick feeds from the library above or add a custom URL</p>
-          </div>
-        </div>
-      ) : (
-        <div className="space-y-2">
-          <div className="flex items-center justify-between mb-1">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{feeds.length} feed{feeds.length !== 1 ? "s" : ""}</p>
-            <span className="text-xs text-muted-foreground">{feeds.filter((f: RssFeed) => f.is_active === 1).length} active</span>
-          </div>
-          {feeds.map((feed: RssFeed) => {
-            const dot = feedDotColor(feed.title || feed.url);
-            const isActive = feed.is_active === 1;
-            return (
-              <div
-                key={feed.id}
-                className={`rounded-lg border p-3 flex items-start gap-3 transition-colors ${isActive ? "bg-background" : "bg-muted/20 opacity-60"}`}
-              >
-                <span className={`mt-1 w-2.5 h-2.5 rounded-full shrink-0 ${dot}`} />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{feed.title || feed.url}</p>
-                  <p className="text-xs text-muted-foreground truncate">{feed.url}</p>
-                  <div className="flex items-center gap-3 mt-1 text-[11px] text-muted-foreground">
-                    <span>Last fetched: {fmtFeedDate(feed.last_fetched_at)}</span>
-                    {feed.article_count > 0 && (
-                      <span>{feed.article_count} article{feed.article_count !== 1 ? "s" : ""}</span>
-                    )}
-                  </div>
-                </div>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <button
-                    onClick={() => toggleFeed(feed.id, !isActive)}
-                    title={isActive ? "Disable feed" : "Enable feed"}
-                    className="p-1 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
-                  >
-                    {isActive
-                      ? <ToggleRight className="h-4 w-4 text-primary" />
-                      : <ToggleLeft className="h-4 w-4" />
-                    }
-                  </button>
-                  <button
-                    onClick={() => handleDelete(feed.id)}
-                    disabled={deletingId === feed.id}
-                    title="Delete feed"
-                    className="p-1 rounded hover:bg-destructive/10 hover:text-destructive transition-colors text-muted-foreground"
-                  >
-                    {deletingId === feed.id
-                      ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      : <Trash2 className="h-3.5 w-3.5" />
-                    }
-                  </button>
+      <div className="grid grid-cols-2 gap-6 items-start">
+        {/* Left: Feed Library + Add Custom */}
+        <div className="space-y-4">
+          {/* Curated feed library */}
+          <div className="rounded-lg border bg-muted/20 p-4 space-y-4">
+            <p className="text-sm font-medium flex items-center gap-2">
+              <Newspaper className="h-4 w-4 text-primary" />
+              Feed Library
+              <span className="text-xs text-muted-foreground font-normal">— click + to add</span>
+            </p>
+            {categories.map((cat) => (
+              <div key={cat}>
+                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">{cat}</p>
+                <div className="flex flex-wrap gap-2">
+                  {CURATED_FEEDS.filter((f) => f.category === cat).map((feed) => {
+                    const isAdded = addedUrls.has(feed.url);
+                    const isPending = pendingUrls.has(feed.url);
+                    return (
+                      <button
+                        key={feed.url}
+                        onClick={() => !isAdded && !isPending && handleAddCurated(feed)}
+                        disabled={isAdded || isPending}
+                        title={isAdded ? "Already added" : `Add ${feed.title}`}
+                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${
+                          isAdded
+                            ? "bg-primary/10 text-primary border-primary/30 opacity-60 cursor-default"
+                            : isPending
+                              ? "opacity-60 cursor-wait border-transparent"
+                              : `${CATEGORY_COLORS[cat] ?? ""} border-transparent hover:border-current hover:shadow-sm cursor-pointer`
+                        }`}
+                      >
+                        {isAdded
+                          ? <Check className="h-3 w-3" />
+                          : isPending
+                            ? <Loader2 className="h-3 w-3 animate-spin" />
+                            : <Plus className="h-3 w-3" />
+                        }
+                        {feed.title}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
-            );
-          })}
+            ))}
+          </div>
+
+          {/* Add custom feed form */}
+          <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
+            <p className="text-sm font-medium flex items-center gap-2">
+              <Rss className="h-4 w-4 text-primary" />
+              Add Custom Feed
+            </p>
+            <div className="flex flex-col gap-2">
+              <input
+                type="url"
+                placeholder="https://example.com/feed.xml"
+                value={urlInput}
+                onChange={(e) => setUrlInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleAdd()}
+                className="w-full px-3 py-2 rounded-md border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+              />
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Display name (optional)"
+                  value={titleInput}
+                  onChange={(e) => setTitleInput(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleAdd()}
+                  className="flex-1 px-3 py-2 rounded-md border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                />
+                <button
+                  onClick={handleAdd}
+                  disabled={adding || !urlInput.trim()}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
+                >
+                  {adding ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+                  Add Feed
+                </button>
+              </div>
+            </div>
+            {addError && (
+              <p className="text-xs text-destructive">{addError}</p>
+            )}
+          </div>
         </div>
-      )}
+
+        {/* Right: My Feeds list */}
+        <div className="space-y-3">
+          <p className="text-sm font-medium flex items-center gap-2">
+            <Rss className="h-4 w-4 text-primary" />
+            My Feeds
+          </p>
+          {loading ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading feeds…
+            </div>
+          ) : feeds.length === 0 ? (
+            <div className="rounded-lg border border-dashed p-6 flex flex-col items-center gap-3 text-center">
+              <Rss className="h-8 w-8 text-muted-foreground/50" />
+              <div>
+                <p className="text-sm font-medium">No feeds yet</p>
+                <p className="text-xs text-muted-foreground mt-1">Pick feeds from the library or add a custom URL</p>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{feeds.length} feed{feeds.length !== 1 ? "s" : ""}</p>
+                <span className="text-xs text-muted-foreground">{feeds.filter((f: RssFeed) => f.is_active === 1).length} active</span>
+              </div>
+              <div className="space-y-2">
+                {feeds.map((feed: RssFeed) => {
+                  const dot = feedDotColor(feed.title || feed.url);
+                  const isActive = feed.is_active === 1;
+                  return (
+                    <div
+                      key={feed.id}
+                      className={`rounded-lg border p-3 flex items-start gap-3 transition-colors ${isActive ? "bg-background" : "bg-muted/20 opacity-60"}`}
+                    >
+                      <span className={`mt-1 w-2.5 h-2.5 rounded-full shrink-0 ${dot}`} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{feed.title || feed.url}</p>
+                        <p className="text-xs text-muted-foreground truncate">{feed.url}</p>
+                        <div className="flex items-center gap-3 mt-1 text-[11px] text-muted-foreground">
+                          <span>Last fetched: {fmtFeedDate(feed.last_fetched_at)}</span>
+                          {feed.article_count > 0 && (
+                            <span>{feed.article_count} article{feed.article_count !== 1 ? "s" : ""}</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          onClick={() => toggleFeed(feed.id, !isActive)}
+                          title={isActive ? "Disable feed" : "Enable feed"}
+                          className="p-1 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+                        >
+                          {isActive
+                            ? <ToggleRight className="h-4 w-4 text-primary" />
+                            : <ToggleLeft className="h-4 w-4" />
+                          }
+                        </button>
+                        <button
+                          onClick={() => handleDelete(feed.id)}
+                          disabled={deletingId === feed.id}
+                          title="Delete feed"
+                          className="p-1 rounded hover:bg-destructive/10 hover:text-destructive transition-colors text-muted-foreground"
+                        >
+                          {deletingId === feed.id
+                            ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            : <Trash2 className="h-3.5 w-3.5" />
+                          }
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -536,11 +547,7 @@ interface SettingsPageProps {
 
 export function SettingsPage({ theme, setTheme, baseColor, setBaseColor }: SettingsPageProps) {
   const [section, setSection] = useState<Section>("ai");
-  const { digest, isGenerating, lastGenerated, articleCount, error: digestError, loadCached, generateDigest } = useRssDigest();
 
-  useEffect(() => {
-    if (section === "news") loadCached();
-  }, [section]);
   const [avatarIndex, setAvatarIndex] = useState(() =>
     parseInt(localStorage.getItem("user_avatar_index") ?? "0", 10)
   );
@@ -806,10 +813,12 @@ export function SettingsPage({ theme, setTheme, baseColor, setBaseColor }: Setti
       </nav>
 
       {/* Content */}
-      <div className={`flex-1 overflow-y-auto p-6 ${["ai", "news"].includes(section) ? "" : "max-w-2xl"} space-y-6`}>
+      <div className={`flex-1 overflow-y-auto p-6 ${["ai", "news", "preferences"].includes(section) ? "" : "max-w-2xl"} space-y-6`}>
         {section === "ai" && (
           <>
-            <div className="max-w-2xl space-y-6">
+            <div className="grid grid-cols-2 gap-8 items-start">
+            {/* Left: AI Configuration */}
+            <div className="space-y-6">
             <h2 className="text-lg font-semibold">AI Configuration</h2>
 
             <label className="flex items-center gap-3 cursor-pointer">
@@ -930,12 +939,12 @@ export function SettingsPage({ theme, setTheme, baseColor, setBaseColor }: Setti
             >
               {saving ? "Saving…" : "Save Changes"}
             </button>
-            </div>{/* end max-w-2xl */}
+            </div>{/* end left AI config */}
 
-            {/* Model Gallery */}
-            <div className="border-t pt-6">
-              <div className="flex gap-6">
-                <div className="flex-1 max-w-2xl space-y-6">
+            {/* Right: Model Gallery */}
+            <div className="space-y-6">
+              <div className="flex gap-4 items-start">
+                <div className="flex-1 space-y-6">
                   <div className="space-y-1">
                     <h2 className="text-lg font-semibold">Free GGUF Models</h2>
                     <p className="text-xs text-muted-foreground">
@@ -1030,13 +1039,14 @@ export function SettingsPage({ theme, setTheme, baseColor, setBaseColor }: Setti
                   </div>
                 </div>
               </div>
-            </div>
+            </div>{/* end right model gallery */}
+            </div>{/* end grid */}
           </>
         )}
 
         {section === "preferences" && (
-          <div className="space-y-10">
-            {/* ── Appearance ── */}
+          <div className="grid grid-cols-2 gap-8 items-start">
+            {/* ── Left: Appearance ── */}
             <div className="space-y-6">
               <h2 className="text-lg font-semibold">Appearance</h2>
               <div className="space-y-4">
@@ -1102,7 +1112,8 @@ export function SettingsPage({ theme, setTheme, baseColor, setBaseColor }: Setti
               </div>
             </div>
 
-            <div className="border-t" />
+            {/* ── Right column: Plugins + Data Management ── */}
+            <div className="space-y-10">
 
             {/* ── Plugins ── */}
             <div className="space-y-4">
@@ -1202,8 +1213,6 @@ def initialize_plugin(registry):
               )}
             </div>
 
-            <div className="border-t" />
-
             {/* ── Data Management ── */}
             <div className="space-y-4">
               <h2 className="text-lg font-semibold">Data Management</h2>
@@ -1244,6 +1253,8 @@ def initialize_plugin(registry):
               </div>
             </div>
 
+            </div>{/* end right column */}
+
             {/* Confirm dialog */}
             {confirmDelete && (
               <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => !deleting && setConfirmDelete(null)}>
@@ -1275,21 +1286,7 @@ def initialize_plugin(registry):
         )}
 
         {section === "news" && (
-          <div className="flex gap-6 h-full min-h-0">
-            <div className="w-80 shrink-0 overflow-y-auto">
-              <NewsFeedsSection />
-            </div>
-            <div className="flex-1 min-w-0 overflow-y-auto border-l pl-6">
-              <NewsDigest
-                digest={digest}
-                isGenerating={isGenerating}
-                lastGenerated={lastGenerated}
-                articleCount={articleCount}
-                error={digestError}
-                onGenerate={generateDigest}
-              />
-            </div>
-          </div>
+          <NewsFeedsSection />
         )}
 
         {section === "about" && (

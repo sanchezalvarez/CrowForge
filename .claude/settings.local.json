@@ -65,7 +65,8 @@
       "Bash(find:*)",
       "Bash(tasklist)",
       "Bash(npm list:*)",
-      "Bash(findstr :8000)"
+      "Bash(findstr :8000)",
+      "Bash(wait:*)"
     ]
   }
 }

@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { Card, CardContent } from "../components/ui/card";
 import {
-  FileText, Table2, MessageSquare, Plus, Sparkles, Cpu,
+  FileText, Table2, MessageSquare, Plus, Sparkles,
   ArrowRight, Loader2, Zap, Clock, RefreshCw, Newspaper, Rss, Workflow,
 } from "lucide-react";
 import axios from "axios";
@@ -81,7 +81,6 @@ function DigestSection() {
             lastGenerated={lastGenerated}
             articleCount={articleCount}
             error={error}
-            onGenerate={generateDigest}
           />
         </CardContent>
       </Card>
@@ -180,39 +179,10 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
       <div className="p-8 max-w-5xl mx-auto space-y-8">
 
         {/* Header */}
-        <header className="flex items-end justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">{greeting()}</h1>
-            <p className="text-sm text-muted-foreground mt-1">Your local-first AI workspace.</p>
-          </div>
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-border/50 bg-orange-500/5 text-xs text-orange-500 font-medium shrink-0">
-            <Cpu className="h-3 w-3" />
-            {data?.ai_engine ?? "mock"}
-          </div>
+        <header>
+          <h1 className="text-2xl font-bold tracking-tight">{greeting()}</h1>
+          <p className="text-sm text-muted-foreground mt-1">Your local-first AI workspace.</p>
         </header>
-
-        {/* Stats */}
-        <div className="grid grid-cols-3 gap-3">
-          {[
-            { label: "Documents", count: counts.documents, icon: FileText, color: "text-purple-500", bg: "bg-purple-500/10", page: "documents" },
-            { label: "Sheets", count: counts.sheets, icon: Table2, color: "text-emerald-500", bg: "bg-emerald-500/10", page: "sheets" },
-            { label: "Chats", count: counts.chats, icon: MessageSquare, color: "text-blue-500", bg: "bg-blue-500/10", page: "chat" },
-          ].map((s) => (
-            <button key={s.label} onClick={() => onNavigate(s.page)} className="group">
-              <Card className="border-border/50 hover:border-border transition-colors text-left">
-                <CardContent className="p-4 flex items-center gap-3">
-                  <div className={`p-2 rounded-lg ${s.bg} shrink-0`}>
-                    <s.icon className={`h-4 w-4 ${s.color}`} />
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">{s.label}</p>
-                    <p className="text-xl font-bold tabular-nums">{s.count}</p>
-                  </div>
-                </CardContent>
-              </Card>
-            </button>
-          ))}
-        </div>
 
         {/* Quick actions */}
         <section>

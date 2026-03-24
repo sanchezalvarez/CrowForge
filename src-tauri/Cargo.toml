@@ -1,6 +1,6 @@
 [package]
 name = "crowforge"
-version = "0.2.1"
+version = "0.3"
 description = "CrowForge - Local AI Workspace"
 authors = ["lubot"]
 edition = "2021"

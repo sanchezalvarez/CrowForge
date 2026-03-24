@@ -12,6 +12,7 @@ import {
   Bot,
   Wrench,
   Workflow,
+  HelpCircle,
 } from "lucide-react";
 import crowforgeLogo from "./assets/crowforge_ico.png";
 import { cn } from "./lib/utils";
@@ -24,6 +25,7 @@ import { SettingsPage } from "./pages/SettingsPage";
 import { AgentPage } from "./pages/AgentPage";
 import { ToolsPage } from "./pages/ToolsPage";
 import { CanvasPage } from "./pages/CanvasPage";
+import { HelpPage } from "./pages/HelpPage";
 import { SplashScreen } from "./components/SplashScreen";
 import { OnboardingPage } from "./pages/OnboardingPage";
 import { Toaster } from "./components/ui/toaster";
@@ -64,7 +66,7 @@ class PageErrorBoundary extends Component<{ children: ReactNode; page: string },
 }
 
 type AppStatus = "loading" | "onboarding" | "ready" | "failed";
-type AppPage = "home" | "chat" | "agent" | "documents" | "sheets" | "tools" | "benchmark" | "settings" | "canvas";
+type AppPage = "home" | "chat" | "agent" | "documents" | "sheets" | "tools" | "benchmark" | "settings" | "canvas" | "help";
 
 export interface DocumentContext {
   title: string;
@@ -256,6 +258,7 @@ export default function App() {
   const bottomNavItems: { page: AppPage; label: string; icon: typeof MessageSquare }[] = [
     { page: "benchmark", label: "Benchmark", icon: Gauge },
     { page: "settings", label: "Settings", icon: Settings },
+    { page: "help", label: "Help", icon: HelpCircle },
   ];
 
   if (appStatus === "loading") return <SplashScreen />;
@@ -267,7 +270,7 @@ export default function App() {
     <div className="flex h-screen w-full overflow-hidden bg-muted/40 text-foreground font-sans antialiased">
       {/* SIDEBAR */}
       <aside className="hidden lg:flex w-[220px] shrink-0 flex-col border-r bg-background">
-        <div className="h-20 flex items-center px-4 border-b gap-2.5">
+        <div className="h-16 flex items-center px-4 border-b gap-2.5">
           <img src={crowforgeLogo} alt="CrowForge" className="h-8 w-8 rounded-md shrink-0" />
           <span className="font-bold text-base tracking-tight truncate">CrowForge</span>
         </div>
@@ -355,6 +358,8 @@ export default function App() {
               baseColor={baseColor}
               setBaseColor={setBaseColor}
             />
+          ) : currentPage === "help" ? (
+            <HelpPage />
           ) : null}
           </PageErrorBoundary>
         </main>

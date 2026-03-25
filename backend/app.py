@@ -66,9 +66,10 @@ def _free_port_if_occupied(port: int = 8000) -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Load plugins from the plugins/ directory
+    # Load plugins from the plugins/ directory (user-writable app-data location)
+    _plugins_dir = os.path.join(get_app_data_dir(), "plugins")
     try:
-        load_plugins()
+        load_plugins(_plugins_dir)
         print("[LIFESPAN] Plugins loaded.")
     except Exception as e:
         print(f"[LIFESPAN] Failed to load plugins: {e}")
@@ -426,8 +427,9 @@ async def list_plugins():
 @app.post("/plugins/reload")
 async def reload_plugins():
     """Reload all plugins from disk and return updated metadata."""
+    _plugins_dir = os.path.join(get_app_data_dir(), "plugins")
     try:
-        load_plugins()
+        load_plugins(_plugins_dir)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Reload failed: {e}")
     return GlobalPluginRegistry().get_records()
@@ -435,7 +437,7 @@ async def reload_plugins():
 @app.get("/plugins/dir")
 async def plugins_dir():
     """Return the absolute path of the plugins directory."""
-    return {"path": os.path.abspath("plugins")}
+    return {"path": os.path.join(get_app_data_dir(), "plugins")}
 
 @app.post("/state")
 async def save_state(data: dict):

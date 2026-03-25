@@ -39,7 +39,7 @@ export function EditorToolbar({
   const imageInputRef = useRef<HTMLInputElement>(null);
 
   return (
-    <div className="border-b px-4 py-[8px] flex items-center gap-1 bg-background">
+    <div className="border-b px-4 pt-[6px] pb-[8.5px] flex items-center gap-1 bg-background">
       {/* Headings */}
       <Button
         variant={editor.isActive("heading", { level: 1 }) ? "secondary" : "ghost"}

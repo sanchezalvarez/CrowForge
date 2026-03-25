@@ -7,8 +7,7 @@ import {
   FileText, 
   Table2, 
   Bot, 
-  Settings, 
-  Sliders, 
+  Sliders,
   Newspaper, 
   Workflow, 
   Gauge,
@@ -45,7 +44,7 @@ export function HelpPage() {
           </div>
 
           <Tabs defaultValue="overview" className="w-full">
-            <ScrollArea orientation="horizontal" className="w-full">
+            <ScrollArea className="w-full">
               <TabsList className="flex w-max min-w-full h-10 mb-8 bg-muted/50 p-1">
                 <TabsTrigger value="overview" className="flex-1 gap-2"><Zap size={14} />Overview</TabsTrigger>
                 <TabsTrigger value="chat" className="flex-1 gap-2"><MessageSquare size={14} />Chat</TabsTrigger>

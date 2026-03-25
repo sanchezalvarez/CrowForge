@@ -66,7 +66,8 @@
       "Bash(tasklist)",
       "Bash(npm list:*)",
       "Bash(findstr :8000)",
-      "Bash(wait:*)"
+      "Bash(wait:*)",
+      "Bash(.build.ps1)"
     ]
   }
 }

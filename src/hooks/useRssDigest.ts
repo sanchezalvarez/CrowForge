@@ -28,6 +28,7 @@ function parseSseBuffer(buf: string): { chunks: string[]; remainder: string } {
 export function useRssDigest() {
   const [digest, setDigest] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isFetching, setIsFetching] = useState(false);
   const [lastGenerated, setLastGenerated] = useState("");
   const [articleCount, setArticleCount] = useState(0);
   const [error, setError] = useState("");
@@ -43,17 +44,22 @@ export function useRssDigest() {
     }
   }, []);
 
-  const generateDigest = useCallback(async () => {
-    setIsGenerating(true);
+  const fetchFeeds = useCallback(async () => {
+    setIsFetching(true);
     setError("");
-    setDigest("");
-
-    // Fetch new articles from all feeds (parallel on backend)
     try {
       await axios.post(`${API_BASE}/rss/fetch`);
     } catch {
       // continue even if fetch partially fails
+    } finally {
+      setIsFetching(false);
     }
+  }, []);
+
+  const generateDigest = useCallback(async () => {
+    setIsGenerating(true);
+    setError("");
+    setDigest("");
 
     // Stream digest via proper SSE POST
     return new Promise<void>((resolve) => {
@@ -108,5 +114,5 @@ export function useRssDigest() {
     });
   }, []);
 
-  return { digest, isGenerating, lastGenerated, articleCount, error, loadCached, generateDigest };
+  return { digest, isGenerating, isFetching, lastGenerated, articleCount, error, loadCached, fetchFeeds, generateDigest };
 }

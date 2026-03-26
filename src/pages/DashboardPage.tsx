@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from "react";
 import { Card, CardContent } from "../components/ui/card";
 import {
   FileText, Table2, MessageSquare, Plus, Sparkles,
-  ArrowRight, Loader2, Zap, Clock, RefreshCw, Newspaper, Rss, Workflow,
+  ArrowRight, Loader2, Zap, Clock, Newspaper, Rss, Workflow,
 } from "lucide-react";
 import axios from "axios";
 import { NewsDigest } from "../components/News/NewsDigest";
@@ -48,13 +48,28 @@ function greeting(): string {
 // ── Isolated digest section — owns all digest state so streaming chunks
 //    never re-render the rest of the Dashboard. ─────────────────────────────
 function DigestSection() {
-  const { digest, isGenerating, lastGenerated, articleCount, error, loadCached, generateDigest } = useRssDigest();
+  const { digest, isGenerating, isFetching, lastGenerated, articleCount, error, loadCached, fetchFeeds, generateDigest } = useRssDigest();
   const [articles, setArticles] = useState<any[]>([]);
+  const [feedCount, setFeedCount] = useState(1);
+
+  const loadArticles = () => {
+    const perFeed = Math.max(1, Math.floor(40 / Math.max(1, feedCount)));
+    axios.get(`${API_BASE}/rss/articles?limit_per_feed=${perFeed}`).then(r => setArticles(r.data)).catch(() => {});
+  };
 
   useEffect(() => {
     loadCached();
-    axios.get(`${API_BASE}/rss/articles?limit=12`).then(r => setArticles(r.data)).catch(() => {});
+    axios.get(`${API_BASE}/rss/feeds`).then(r => {
+      const active = (r.data || []).filter((f: any) => f.is_active).length;
+      setFeedCount(Math.max(1, active));
+    }).catch(() => {});
+    loadArticles();
   }, []);
+
+  const handleFetch = async () => {
+    await fetchFeeds();
+    loadArticles();
+  };
 
   return (
     <section>
@@ -63,14 +78,24 @@ function DigestSection() {
           <Newspaper className="h-5 w-5 text-primary" />
           Today's Digest
         </h2>
-        <button
-          onClick={generateDigest}
-          disabled={isGenerating}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-colors disabled:opacity-50"
-        >
-          {isGenerating ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
-          {isGenerating ? "Generating…" : "Refresh & Generate"}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleFetch}
+            disabled={isFetching || isGenerating}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-muted text-foreground hover:bg-muted/80 transition-colors disabled:opacity-50"
+          >
+            {isFetching ? <Loader2 className="h-3 w-3 animate-spin" /> : <Rss className="h-3 w-3" />}
+            {isFetching ? "Fetching…" : "Fetch"}
+          </button>
+          <button
+            onClick={generateDigest}
+            disabled={isGenerating || isFetching}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-colors disabled:opacity-50"
+          >
+            {isGenerating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+            {isGenerating ? "Summarizing…" : "Summarize"}
+          </button>
+        </div>
       </div>
 
       <Card className="border-border/50">

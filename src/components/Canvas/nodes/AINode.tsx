@@ -92,9 +92,10 @@ export function AINode({ id, data, selected }: NodeProps) {
 
   const currentBehavior = AI_BEHAVIORS.find(b => b.value === (nodeData.behavior ?? "none")) ?? AI_BEHAVIORS[0];
 
+  const isConnecting = useStore((s) => s.connection.inProgress);
   const handleCls = cn(
-    "!bg-primary/70 !w-2.5 !h-2.5 !border-0 transition-opacity duration-150",
-    selected ? "!opacity-100" : "!opacity-0",
+    "transition-all duration-150",
+    (selected || isConnecting) ? "!opacity-100" : "!opacity-0",
   );
 
   return (

@@ -1408,6 +1408,7 @@ export function SheetsPage({ tuningParams, initialSheetId }: SheetsPageProps) {
       columns: activeSheet.columns,
       rows: activeSheet.rows,
       formulas: activeSheet.formulas,
+      formats: activeSheet.formats,
       colWidths,
       rowHeights,
       defaultColWidth: DEFAULT_COL_WIDTH,

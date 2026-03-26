@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Handle, Position, type NodeProps, NodeResizer, useReactFlow } from "@xyflow/react";
+import { Handle, Position, type NodeProps, NodeResizer, useReactFlow, useStore } from "@xyflow/react";
 import {
   Bold, Italic, Underline,
   AlignLeft, AlignCenter, AlignRight,
@@ -206,10 +206,10 @@ export function TextNode({ id, data, selected }: NodeProps) {
     </>
   );
 
-  // Handle classes: hidden by default, visible when selected
+  const isConnecting = useStore((s) => s.connection.inProgress);
   const handleCls = cn(
-    "!bg-primary/70 !w-2.5 !h-2.5 !border-0 transition-opacity duration-150",
-    selected ? "!opacity-100" : "!opacity-0",
+    "transition-all duration-150",
+    (selected || isConnecting) ? "!opacity-100" : "!opacity-0",
   );
 
   return (

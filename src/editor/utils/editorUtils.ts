@@ -29,7 +29,7 @@ export function extractOutline(editor: Editor | null): OutlineItem[] {
     if (node.type.name === "heading") {
       const level = node.attrs.level as number;
       if (level >= 1 && level <= 3) {
-        items.push({ level, text: node.textContent, pos });
+        if (node.textContent.trim()) items.push({ level, text: node.textContent, pos });
       }
     }
   });

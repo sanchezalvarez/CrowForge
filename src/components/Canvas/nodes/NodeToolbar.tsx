@@ -147,9 +147,10 @@ interface CanvasNodeToolbarProps {
   id: string;
   selected?: boolean;
   secondRow?: React.ReactNode;
+  hideShapes?: boolean;
 }
 
-export function CanvasNodeToolbar({ id, selected, secondRow }: CanvasNodeToolbarProps) {
+export function CanvasNodeToolbar({ id, selected, secondRow, hideShapes }: CanvasNodeToolbarProps) {
   const [showIconPicker,  setShowIconPicker]  = useState(false);
   const [showColorPicker, setShowColorPicker] = useState(false);
 
@@ -244,7 +245,7 @@ export function CanvasNodeToolbar({ id, selected, secondRow }: CanvasNodeToolbar
 
               <div className="w-px h-5 bg-border mx-0.5" />
 
-              {SHAPE_OPTIONS.map(({ name, Icon, label }) => (
+              {!hideShapes && SHAPE_OPTIONS.map(({ name, Icon, label }) => (
                 <button
                   key={name}
                   className={toolBtn}
@@ -255,7 +256,7 @@ export function CanvasNodeToolbar({ id, selected, secondRow }: CanvasNodeToolbar
                 </button>
               ))}
 
-              <div className="w-px h-5 bg-border mx-0.5" />
+              {!hideShapes && <div className="w-px h-5 bg-border mx-0.5" />}
 
               {/* Icon picker toggle */}
               <button

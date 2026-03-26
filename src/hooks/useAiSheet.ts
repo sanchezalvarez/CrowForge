@@ -170,6 +170,8 @@ export function useAiSheet({
       es.close();
       aiFillRef.current = null;
       setAiFilling(false);
+      // Clear green highlight after 2.5s so user can apply their own colors
+      setTimeout(() => setAiFilledRows(new Set()), 2500);
     }
 
     es.onmessage = (event) => {

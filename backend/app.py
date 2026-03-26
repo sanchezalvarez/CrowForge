@@ -2542,7 +2542,7 @@ async def canvas_run(body: dict, request: Request):
 
     async def event_generator():
         try:
-            async for chunk in engine_manager.active_engine.generate(
+            async for chunk in engine_manager.get_active().generate(
                 system_prompt=system_prompt,
                 user_prompt=final_prompt,
                 max_tokens=int(os.getenv("LLM_MAX_TOKENS", "1024")),
@@ -2863,7 +2863,7 @@ async def fetch_rss_feeds():
 # ── GET /rss/articles ─────────────────────────────────────────────────────────
 
 @app.get("/rss/articles")
-async def get_rss_articles(limit: int = 50, offset: int = 0, feed_id: Optional[int] = None):
+async def get_rss_articles(limit: int = 50, offset: int = 0, feed_id: Optional[int] = None, limit_per_feed: Optional[int] = None):
     with _rss_db() as conn:
         if feed_id:
             rows = conn.execute(
@@ -2871,6 +2871,18 @@ async def get_rss_articles(limit: int = 50, offset: int = 0, feed_id: Optional[i
                    JOIN rss_feeds f ON f.id=a.feed_id
                    WHERE a.feed_id=? ORDER BY a.fetched_at DESC LIMIT ? OFFSET ?""",
                 (feed_id, limit, offset),
+            ).fetchall()
+        elif limit_per_feed:
+            # Top N articles per active feed using window function
+            rows = conn.execute(
+                """WITH ranked AS (
+                     SELECT a.*, f.title as feed_title,
+                            ROW_NUMBER() OVER (PARTITION BY a.feed_id ORDER BY a.fetched_at DESC) as rn
+                     FROM rss_articles a
+                     JOIN rss_feeds f ON f.id=a.feed_id AND f.is_active=1
+                   )
+                   SELECT * FROM ranked WHERE rn <= ? ORDER BY fetched_at DESC""",
+                (limit_per_feed,),
             ).fetchall()
         else:
             rows = conn.execute(

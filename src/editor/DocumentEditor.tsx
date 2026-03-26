@@ -540,7 +540,7 @@ export function DocumentEditor({
 
         {/* Editor scroll area */}
         <div ref={editorScrollRef} className="flex-1 overflow-auto bg-muted/30">
-          <div className="max-w-[794px] mx-auto bg-background min-h-full shadow-sm px-[95px] py-16">
+          <div className="max-w-[900px] mx-auto bg-background min-h-full shadow-[0_0_24px_rgba(0,0,0,0.12)] px-[95px] py-16">
             <EditorContent editor={editor} />
           </div>
         </div>

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, Component, type ReactNode } from "react";
+import { useState, useEffect, useRef, Component, Fragment, type ReactNode } from "react";
 import axios from "axios";
 import {
   Gauge,
@@ -98,6 +98,16 @@ export default function App() {
   // ... rest of state ...
 
   useEffect(() => { setDocContextLocked(false); }, [docContext]);
+
+  // Disable browser spellcheck globally (no red underlines)
+  useEffect(() => {
+    const disable = (e: Event) => {
+      const el = e.target as HTMLElement;
+      if (el && el.setAttribute) el.setAttribute("spellcheck", "false");
+    };
+    document.addEventListener("focusin", disable);
+    return () => document.removeEventListener("focusin", disable);
+  }, []);
 
   // Theme state — persisted to localStorage
   const [theme, setTheme] = useState<"light" | "dark">(() => {
@@ -267,7 +277,7 @@ export default function App() {
 
   return (
     <ChatStreamProvider>
-    <div className="flex h-screen w-full overflow-hidden bg-muted/40 text-foreground font-sans antialiased">
+    <div className="flex h-screen w-full overflow-hidden bg-muted/40 text-foreground font-sans antialiased" onContextMenu={(e) => e.preventDefault()}>
       {/* SIDEBAR */}
       <aside className="hidden lg:flex w-[220px] shrink-0 flex-col border-r bg-background">
         <div className="h-20 flex items-center px-12 border-b gap-1">
@@ -278,23 +288,25 @@ export default function App() {
         <div className="flex-1 overflow-y-auto">
           <div className="p-3 space-y-0.5">
             {navItems.map(({ page, label, icon: Icon }) => (
-              <button
-                key={page}
-                onClick={() => setCurrentPage(page)}
-                className={cn(
-                  "w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-sm transition-colors",
-                  page === "agent"
-                    ? currentPage === page
-                      ? "bg-violet-500/15 text-violet-600 dark:text-violet-400 font-semibold"
-                      : "text-muted-foreground hover:bg-violet-500/10 hover:text-violet-600 dark:hover:text-violet-400"
-                    : currentPage === page
-                      ? "bg-primary/10 text-primary font-semibold"
-                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                )}
-              >
-                <Icon size={14} />
-                {label}
-              </button>
+              <Fragment key={page}>
+                {page === "documents" && <div className="border-t border-border mx-1 my-1.5" />}
+                <button
+                  onClick={() => setCurrentPage(page)}
+                  className={cn(
+                    "w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-sm transition-colors",
+                    page === "agent"
+                      ? currentPage === page
+                        ? "bg-violet-500/15 text-violet-600 dark:text-violet-400 font-semibold"
+                        : "text-muted-foreground hover:bg-violet-500/10 hover:text-violet-600 dark:hover:text-violet-400"
+                      : currentPage === page
+                        ? "bg-primary/10 text-primary font-semibold"
+                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  )}
+                >
+                  <Icon size={14} />
+                  {label}
+                </button>
+              </Fragment>
             ))}
           </div>
         </div>

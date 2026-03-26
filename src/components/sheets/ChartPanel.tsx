@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 import {
   BarChart, Bar,
   LineChart, Line,
@@ -47,6 +47,30 @@ export function ChartPanel({ sheet, onClose }: ChartPanelProps) {
   const [yCols, setYCols] = useState<number[]>(
     sheet.columns.length >= 2 ? [1] : []
   );
+  const [panelHeight, setPanelHeight] = useState(256); // 256px = h-64
+  const resizingRef = useRef(false);
+  const startYRef = useRef(0);
+  const startHRef = useRef(256);
+
+  const onResizeMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    resizingRef.current = true;
+    startYRef.current = e.clientY;
+    startHRef.current = panelHeight;
+
+    const onMove = (ev: MouseEvent) => {
+      if (!resizingRef.current) return;
+      const delta = startYRef.current - ev.clientY; // drag up = bigger
+      setPanelHeight(Math.max(120, Math.min(600, startHRef.current + delta)));
+    };
+    const onUp = () => {
+      resizingRef.current = false;
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }, [panelHeight]);
 
   const numCols = sheet.columns.length;
   const numRows = sheet.rows.length;
@@ -89,7 +113,12 @@ export function ChartPanel({ sheet, onClose }: ChartPanelProps) {
 
   // ── Render ──────────────────────────────────────────────────────
   return (
-    <div className="h-64 shrink-0 border-t bg-background flex flex-col overflow-hidden">
+    <div className="shrink-0 border-t bg-background flex flex-col overflow-hidden" style={{ height: panelHeight }}>
+      {/* Drag resize handle at the top */}
+      <div
+        className="h-1.5 w-full cursor-row-resize hover:bg-primary/30 transition-colors shrink-0"
+        onMouseDown={onResizeMouseDown}
+      />
       {/* Header */}
       <div className="h-9 shrink-0 flex items-center gap-2 px-3 border-b">
         {/* Chart type tabs */}

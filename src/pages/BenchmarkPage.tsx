@@ -443,10 +443,12 @@ export function BenchmarkPage() {
                 >
                   {running ? (
                     <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      {runningLabel
-                        ? `Running ${runningLabel}`
-                        : "Running..."}
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin shrink-0" />
+                      <span className="truncate">
+                        {runningLabel
+                          ? `Running… (${runningLabel.match(/\((\d+\/\d+)\)/)?.[1] ?? ""})`
+                          : "Running…"}
+                      </span>
                     </>
                   ) : (
                     <>

@@ -107,14 +107,22 @@ export interface SheetGridProps {
 }
 
 // ---- Number format helper ----
+const CURRENCY_SYMBOLS: Record<string, string> = {
+  USD: "$", EUR: "€", GBP: "£", CZK: "Kč", JPY: "¥", CHF: "CHF", PLN: "zł", HUF: "Ft",
+};
 function applyNumFmt(cell: string, fmt: import("../../lib/cellUtils").CellFormat): string {
   if (!fmt.numFmt && fmt.numDecimals === undefined) return cell;
   const num = parseFloat(cell);
   if (isNaN(num)) return cell;
-  const decimals = fmt.numDecimals ?? (fmt.numFmt === "cur" ? 2 : 0);
+  const isCur = fmt.numFmt === "cur" || (fmt.numFmt?.startsWith("cur-") ?? false);
+  const decimals = fmt.numDecimals ?? (isCur ? 2 : 0);
   const fixed = num.toFixed(Math.max(0, Math.min(9, decimals)));
   if (fmt.numFmt === "pct") return fixed + "%";
-  if (fmt.numFmt === "cur") return "$ " + fixed;
+  if (isCur) {
+    const code = fmt.numFmt === "cur" ? "USD" : (fmt.numFmt?.slice(4) ?? "USD");
+    const sym = CURRENCY_SYMBOLS[code] ?? code;
+    return sym + " " + fixed;
+  }
   return fixed;
 }
 
@@ -239,9 +247,6 @@ const SheetRow = React.memo(function SheetRow({
               !isFormulaRef && "border-border",
               isEditing && "ring-2 ring-primary/40 ring-inset",
               isEditing && cellError && "ring-destructive/60",
-              selected && !isFormulaRef && "bg-primary/10",
-              justFilled && "bg-green-500/10",
-              fillError && "bg-destructive/10",
               isAiTarget && "bg-purple-500/10",
               isFindMatch && !isFindCurrent && "bg-yellow-400/20",
               isFindCurrent && "bg-yellow-400/50 ring-1 ring-yellow-500/60 ring-inset",
@@ -387,6 +392,15 @@ const SheetRow = React.memo(function SheetRow({
                   <span>{applyNumFmt(cell, activeSheet.formats?.[`${ri},${ci}`] ?? {}) || <span className="text-muted-foreground/30">&nbsp;</span>}</span>
                 )}
               </div>
+            )}
+            {selected && !isFormulaRef && (
+              <div className="absolute inset-0 pointer-events-none z-[3] ring-1 ring-primary/70 ring-inset" style={{ backgroundColor: 'hsl(var(--primary) / 0.18)' }} />
+            )}
+            {justFilled && (
+              <div className="absolute inset-0 pointer-events-none z-[3] ring-1 ring-green-500/60 ring-inset" style={{ backgroundColor: 'rgba(34,197,94,0.15)' }} />
+            )}
+            {fillError && (
+              <div className="absolute inset-0 pointer-events-none z-[3]" style={{ backgroundColor: 'hsl(var(--destructive) / 0.12)' }} />
             )}
             {isFillHandle && (
               <div

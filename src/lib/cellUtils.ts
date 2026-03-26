@@ -36,7 +36,7 @@ export interface CellFormat {
   bg?: string;   // background color hex
   wrap?: boolean; // false = nowrap (default true = wrap)
   fs?: number;   // font size in px
-  numFmt?: "pct" | "cur"; // percent (%) or currency ($)
+  numFmt?: string; // "pct" = percent, "cur" = USD, "cur-EUR", "cur-GBP", "cur-CZK", "cur-JPY", "cur-CHF", "cur-PLN", "cur-HUF"
   numDecimals?: number;   // fixed decimal places (0-9)
   border?: "thin" | "thick"; // cell border overlay
 }

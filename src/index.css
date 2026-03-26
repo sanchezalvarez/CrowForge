@@ -211,6 +211,22 @@
   }
 }
 
+/* Disable spellcheck red underlines globally */
+input, textarea, [contenteditable] {
+  -webkit-spell-check: false;
+  spell-check: false;
+}
+
+/* TipTap editor — tighter list spacing */
+.tiptap ul li, .tiptap ol li {
+  margin-top: 0.1em;
+  margin-bottom: 0.1em;
+}
+.tiptap ul, .tiptap ol {
+  margin-top: 0.4em;
+  margin-bottom: 0.4em;
+}
+
 /* TipTap editor */
 .tiptap p.is-editor-empty:first-child::before {
   content: "Start writing...";
@@ -223,4 +239,53 @@
 
 @keyframes edge-march {
   to { stroke-dashoffset: -20; }
+}
+
+/* Canvas — connection handles (circles on node sides) */
+.react-flow__handle {
+  width: 14px !important;
+  height: 14px !important;
+  border-radius: 50% !important;
+  background: hsl(var(--background)) !important;
+  border: 2.5px solid hsl(var(--primary)) !important;
+  transition: transform 0.12s ease, background 0.12s ease;
+}
+.react-flow__handle-top:hover,
+.react-flow__handle-left:hover {
+  background: hsl(var(--primary)) !important;
+  transform: translate(-50%, -50%) scale(1.5) !important;
+}
+.react-flow__handle-right:hover {
+  background: hsl(var(--primary)) !important;
+  transform: translate(50%, -50%) scale(1.5) !important;
+}
+.react-flow__handle-bottom:hover {
+  background: hsl(var(--primary)) !important;
+  transform: translate(-50%, 50%) scale(1.5) !important;
+}
+.react-flow__handle-top.react-flow__handle-valid,
+.react-flow__handle-left.react-flow__handle-valid {
+  background: hsl(var(--primary) / 0.25) !important;
+  border-color: hsl(var(--primary)) !important;
+  transform: translate(-50%, -50%) scale(1.4) !important;
+}
+.react-flow__handle-right.react-flow__handle-valid {
+  background: hsl(var(--primary) / 0.25) !important;
+  border-color: hsl(var(--primary)) !important;
+  transform: translate(50%, -50%) scale(1.4) !important;
+}
+.react-flow__handle-bottom.react-flow__handle-valid {
+  background: hsl(var(--primary) / 0.25) !important;
+  border-color: hsl(var(--primary)) !important;
+  transform: translate(-50%, 50%) scale(1.4) !important;
+}
+.react-flow__handle-connecting {
+  background: hsl(var(--primary)) !important;
+}
+
+/* Canvas — resize handles (squares in corners) — visually distinct from connection handles */
+.react-flow__resize-control.handle {
+  width: 8px !important;
+  height: 8px !important;
+  border-radius: 2px !important;
 }

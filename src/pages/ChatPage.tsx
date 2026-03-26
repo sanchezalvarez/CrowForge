@@ -29,6 +29,7 @@ import type { TuningParams } from "../components/AIControlPanel";
 import crowforgeIco from "../assets/crowforge_ico.png";
 
 const API_BASE = "http://127.0.0.1:8000";
+const CTX_SENTINEL = "\n\n[/CONTEXT]\n\n";
 
 const MODE_LABELS: Record<string, string> = {
   general: "General",
@@ -502,15 +503,27 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
   /** Strip the context prefix that was prepended before sending to AI.
    *  The prefix always ends with \n\n before the actual user text.
    *  Returns { text, hasContext, docTitle } */
-  function parseUserMessage(content: string): { text: string; hasContext: boolean; docTitle: string | null; pdfName: string | null } {
-    if (!content.startsWith("[")) return { text: content, hasContext: false, docTitle: null, pdfName: null };
+  function parseUserMessage(content: string): { text: string; hasContext: boolean; docTitle: string | null; pdfName: string | null; docPreview: string | null } {
+    // New format: sentinel-separated
+    const sentinelIdx = content.indexOf(CTX_SENTINEL);
+    if (sentinelIdx !== -1) {
+      const prefix = content.slice(0, sentinelIdx);
+      const text = content.slice(sentinelIdx + CTX_SENTINEL.length);
+      const docMatch = prefix.match(/\[Active Document: "([^"]+)"/);
+      const pdfMatch = prefix.match(/\[Attached PDF: ([^\]]+)\]/);
+      const bodyMatch = prefix.match(/\[Document Content:\n([\s\S]*?)\]$/m);
+      const docPreview = bodyMatch ? bodyMatch[1].split("\n").slice(0, 3).join("\n") : null;
+      return { text, hasContext: true, docTitle: docMatch?.[1] ?? null, pdfName: pdfMatch?.[1] ?? null, docPreview };
+    }
+    // Legacy format: find first [bracket] block
+    if (!content.startsWith("[")) return { text: content, hasContext: false, docTitle: null, pdfName: null, docPreview: null };
     const sep = content.indexOf("\n\n");
-    if (sep === -1) return { text: content, hasContext: false, docTitle: null, pdfName: null };
+    if (sep === -1) return { text: content, hasContext: false, docTitle: null, pdfName: null, docPreview: null };
     const prefix = content.slice(0, sep);
     const text = content.slice(sep + 2);
     const docMatch = prefix.match(/\[Active Document: "([^"]+)"/);
     const pdfMatch = prefix.match(/\[Attached PDF: ([^\]]+)\]/);
-    return { text, hasContext: true, docTitle: docMatch?.[1] ?? null, pdfName: pdfMatch?.[1] ?? null };
+    return { text, hasContext: true, docTitle: docMatch?.[1] ?? null, pdfName: pdfMatch?.[1] ?? null, docPreview: null };
   }
 
   function buildContextPrefix(): string {
@@ -538,7 +551,7 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
     if (attachedFile) {
       parts.push(`[Attached PDF: ${attachedFile.name}]\n${attachedFile.text}`);
     }
-    return parts.length > 0 ? parts.join("\n") + "\n\n" : "";
+    return parts.length > 0 ? parts.join("\n") + CTX_SENTINEL : "";
   }
 
   function sendMessage() {
@@ -859,13 +872,13 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
                       )}
                     >
                       {msg.role === "user" ? (() => {
-                        const { text, docTitle, pdfName } = parseUserMessage(msg.content);
+                        const { text, docTitle, pdfName, docPreview } = parseUserMessage(msg.content);
                         return (
                           <>
                             {(docTitle || pdfName) && (
                               <div className="flex flex-wrap gap-1 mb-1.5 -mt-0.5">
                                 {docTitle && (
-                                  <span className="inline-flex items-center gap-1 text-[10px] bg-primary-foreground/20 text-primary-foreground/80 rounded px-1.5 py-0.5">
+                                  <span className="inline-flex items-center gap-1 text-[10px] bg-primary-foreground/20 text-primary-foreground/80 rounded px-1.5 py-0.5" title={docPreview ? docPreview + "\n..." : undefined}>
                                     <FileText className="h-2.5 w-2.5" />
                                     {docTitle}
                                   </span>

@@ -116,7 +116,7 @@ export function CanvasView({ canvasId }: CanvasViewProps) {
         data,
         ...(type === "image" ? { style: { width: 240, height: 200 } } : {}),
         ...(type === "sticky"     ? { style: { width: 200, height: 160 } } : {}),
-        ...(type === "annotation" ? { style: { width: 200, height: 40 } } : {}),
+        ...(type === "annotation" ? { style: { width: 200, height: 50 } } : {}),
       };
       setNodes((nds) => [...nds, node]);
       scheduleSave();

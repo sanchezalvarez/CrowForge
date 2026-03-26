@@ -1278,12 +1278,7 @@ function renderHeading(s: PdfState, node: TiptapNode): void {
   const cfg   = HEADING_CFG[level] ?? HEADING_CFG[3];
   const lr    = parseFloat(node.attrs?.lineHeight as string) || LINE_RATIO;
 
-  // H1 always starts a new page (except when already at the top of a fresh page)
-  if (level === 1 && s.y > s.margin + 40) {
-    pdfNewPage(s);
-  } else {
-    s.y += cfg.spaceBefore;
-  }
+  s.y += cfg.spaceBefore;
 
   const text  = (node.content ?? []).map((n) => n.text ?? "").join("");
   const lineH = cfg.size * lr;
@@ -1556,10 +1551,16 @@ export interface SheetExportDeps {
   columns: { name: string; type: string }[];
   rows: string[][];
   formulas?: Record<string, string>;
+  formats?: Record<string, { b?: boolean; i?: boolean; tc?: string; bg?: string }>;
   colWidths: Record<number, number>;
   rowHeights: Record<number, number>;
   defaultColWidth: number;
   defaultRowHeight: number;
+}
+
+function hexToRgb(hex: string): [number, number, number] | null {
+  const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return m ? [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)] : null;
 }
 
 /**
@@ -1567,7 +1568,7 @@ export interface SheetExportDeps {
  * Emits a success or error toast when done.
  */
 export async function exportSheetAs(format: SheetExportFormat, deps: SheetExportDeps): Promise<void> {
-  const { title, columns, rows, formulas, colWidths, rowHeights, defaultColWidth, defaultRowHeight } =
+  const { title, columns, rows, formulas, formats, colWidths, rowHeights, defaultColWidth, defaultRowHeight } =
     deps;
   try {
     if (format === "xlsx") {
@@ -1633,9 +1634,26 @@ export async function exportSheetAs(format: SheetExportFormat, deps: SheetExport
         columnStyles,
         styles: { fontSize: 8, cellPadding: 3, overflow: "linebreak", minCellHeight: 14 },
         headStyles: { fillColor: [40, 40, 40], textColor: 255, fontStyle: "bold", minCellHeight: 16 },
-        alternateRowStyles: { fillColor: [248, 248, 248] },
+        alternateRowStyles: {},
         tableLineColor: [180, 180, 180],
         tableLineWidth: 0.4,
+        didParseCell: (data) => {
+          if (data.section !== "body" || !formats) return;
+          const ri = data.row.index;
+          const ci = data.column.index;
+          const fmt = formats[`${ri},${ci}`];
+          if (!fmt) return;
+          if (fmt.bg) {
+            const rgb = hexToRgb(fmt.bg);
+            if (rgb) data.cell.styles.fillColor = rgb;
+          }
+          if (fmt.tc) {
+            const rgb = hexToRgb(fmt.tc);
+            if (rgb) data.cell.styles.textColor = rgb;
+          }
+          if (fmt.b) data.cell.styles.fontStyle = fmt.i ? "bolditalic" : "bold";
+          else if (fmt.i) data.cell.styles.fontStyle = "italic";
+        },
         // Keep each data row on one page — never slice a row across pages
         rowPageBreak: "avoid",
         didDrawPage: (data) => {

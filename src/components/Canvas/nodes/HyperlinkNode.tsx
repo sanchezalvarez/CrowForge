@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { Handle, Position, type NodeProps, useReactFlow, NodeResizer } from "@xyflow/react";
+import { Handle, Position, type NodeProps, useReactFlow, NodeResizer, useStore } from "@xyflow/react";
 import { ExternalLink, Link2, Pencil } from "lucide-react";
 import { cn } from "../../../lib/utils";
 import { getNodeShadow } from "./NodeToolbar";
@@ -41,9 +41,10 @@ export function HyperlinkNode({ id, data, selected }: NodeProps) {
     window.open(url, "_blank", "noopener,noreferrer");
   }, [nodeData.url]);
 
+  const isConnecting = useStore((s) => s.connection.inProgress);
   const handleCls = cn(
-    "!bg-primary/70 !w-2.5 !h-2.5 !border-0 transition-opacity duration-150",
-    selected ? "!opacity-100" : "!opacity-0",
+    "transition-all duration-150",
+    (selected || isConnecting) ? "!opacity-100" : "!opacity-0",
   );
 
   const bg = nodeData.color || "hsl(var(--card))";

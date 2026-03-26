@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { Handle, Position, type NodeProps, useReactFlow, NodeResizer } from "@xyflow/react";
+import { Handle, Position, type NodeProps, useReactFlow, NodeResizer, useStore } from "@xyflow/react";
 import { Image as ImageIcon, FolderOpen } from "lucide-react";
 import { cn } from "../../../lib/utils";
 import { CanvasNodeToolbar, getShapeStyle, getNodeShadow, NodeIcon } from "./NodeToolbar";
@@ -55,9 +55,10 @@ export function ImageNode({ id, data, selected }: NodeProps) {
   const shapeStyle = getShapeStyle(shape, nodeData.color);
   const showBorder = shape === "rectangle" || shape === "circle";
 
+  const isConnecting = useStore((s) => s.connection.inProgress);
   const handleCls = cn(
-    "!bg-primary/70 !w-2.5 !h-2.5 !border-0 transition-opacity duration-150",
-    selected ? "!opacity-100" : "!opacity-0",
+    "transition-all duration-150",
+    (selected || isConnecting) ? "!opacity-100" : "!opacity-0",
   );
 
   return (
@@ -69,7 +70,7 @@ export function ImageNode({ id, data, selected }: NodeProps) {
         lineClassName="!border-primary/60"
         handleClassName="!bg-primary !border-background !w-2 !h-2 !rounded-sm"
       />
-      <CanvasNodeToolbar id={id} selected={selected} />
+      <CanvasNodeToolbar id={id} selected={selected} hideShapes />
 
       {/* 4 handles — all sides */}
       <Handle type="target"  position={Position.Top}    className={handleCls} />

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   Plus, Undo2, Redo2, Bold, Italic, Strikethrough, Type, Paintbrush, WrapText,
   AlignLeft, AlignCenter, AlignRight, AlignVerticalJustifyStart,
@@ -8,6 +9,33 @@ import {
 import { Button } from "../ui/button";
 import { idxToCol, ROW_AI_LIMIT, type CellFormat, type Sheet } from "../../lib/cellUtils";
 import { SHEET_EXPORT_FORMATS, type SheetExportFormat } from "../../lib/fileService";
+
+const CURRENCIES = [
+  { code: "USD", label: "$ USD", fmt: "cur" },
+  { code: "EUR", label: "€ EUR", fmt: "cur-EUR" },
+  { code: "GBP", label: "£ GBP", fmt: "cur-GBP" },
+  { code: "CZK", label: "Kč CZK", fmt: "cur-CZK" },
+  { code: "JPY", label: "¥ JPY", fmt: "cur-JPY" },
+  { code: "CHF", label: "CHF", fmt: "cur-CHF" },
+  { code: "PLN", label: "zł PLN", fmt: "cur-PLN" },
+  { code: "HUF", label: "Ft HUF", fmt: "cur-HUF" },
+];
+
+const TC_COLORS = [
+  '#000000','#1a1a2e','#16213e','#e63946','#f4a261','#e9c46a','#2a9d8f','#457b9d',
+  '#6d6875','#c77dff','#ef4444','#f97316','#eab308','#22c55e','#3b82f6','#8b5cf6',
+  '#ec4899','#14b8a6','#f43f5e','#84cc16','#06b6d4','#a855f7','#6b7280','#ffffff',
+  '#991b1b','#9a3412','#854d0e','#166534','#1e40af','#5b21b6',
+];
+
+const BG_COLORS = [
+  '#ffffff','#f8fafc','#f1f5f9','#fef2f2','#fff7ed','#fefce8','#f0fdf4','#eff6ff','#f5f3ff','#fdf2f8',
+  '#fecaca','#fed7aa','#fde68a','#bbf7d0','#bfdbfe','#ddd6fe','#fbcfe8','#a7f3d0',
+  '#f87171','#fb923c','#fbbf24','#4ade80','#60a5fa','#a78bfa','#f472b6','#34d399',
+  '#ef4444','#f97316','#eab308','#22c55e','#3b82f6','#8b5cf6','#ec4899','#10b981',
+  '#b91c1c','#c2410c','#a16207','#15803d','#1d4ed8','#7c3aed','#be185d','#065f46',
+  '#000000','#1e293b','#374151','#6b7280',
+];
 
 export interface SheetToolbarProps {
   activeSheet: Sheet;
@@ -95,6 +123,7 @@ export function SheetToolbar({
   autoFitAllCols, onOpenMultiSort, onOpenCondFormat, hasCondRules, copyAsMarkdown,
   onOpenSheetChat, sheetChatOpen, onToggleChart, chartOpen,
 }: SheetToolbarProps) {
+  const [currencyOpen, setCurrencyOpen] = useState(false);
   return (
     <>
       {/* Toolbar */}
@@ -161,8 +190,8 @@ export function SheetToolbar({
                 {getSelectionFormat().tc && <div className="absolute bottom-0.5 left-1 right-1 h-0.5 rounded" style={{ backgroundColor: getSelectionFormat().tc }} />}
               </Button>
               {colorPickerOpen === 'tc' && (
-                <div className="absolute top-full left-0 mt-1 z-50 bg-background border border-border rounded-md shadow-lg p-2 grid grid-cols-6 gap-1 w-[156px]" onMouseDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
-                  {['#000000','#ef4444','#f97316','#eab308','#22c55e','#3b82f6','#8b5cf6','#ec4899','#6b7280','#ffffff','#991b1b','#9a3412'].map(c => (
+                <div className="absolute top-full left-0 mt-1 z-50 bg-background border border-border rounded-md shadow-lg p-2 grid grid-cols-6 gap-1 w-[186px]" onMouseDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
+                  {TC_COLORS.map(c => (
                     <button key={c} className="w-5 h-5 rounded border border-border hover:scale-110 transition-transform" style={{ backgroundColor: c }} onClick={() => { applyFormat({ tc: c }); setColorPickerOpen(null); }} />
                   ))}
                   <button className="col-span-6 text-[10px] text-muted-foreground hover:text-foreground mt-0.5" onClick={() => { applyFormat({ tc: undefined }); setColorPickerOpen(null); }}>Reset</button>
@@ -175,8 +204,8 @@ export function SheetToolbar({
                 {getSelectionFormat().bg && <div className="absolute bottom-0.5 left-1 right-1 h-0.5 rounded" style={{ backgroundColor: getSelectionFormat().bg }} />}
               </Button>
               {colorPickerOpen === 'bg' && (
-                <div className="absolute top-full left-0 mt-1 z-50 bg-background border border-border rounded-md shadow-lg p-2 grid grid-cols-6 gap-1 w-[156px]" onMouseDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
-                  {['#fef2f2','#fff7ed','#fefce8','#f0fdf4','#eff6ff','#f5f3ff','#fdf2f8','#f9fafb','#fecaca','#fed7aa','#fde68a','#bbf7d0'].map(c => (
+                <div className="absolute top-full left-0 mt-1 z-50 bg-background border border-border rounded-md shadow-lg p-2 grid grid-cols-6 gap-1 w-[186px]" onMouseDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
+                  {BG_COLORS.map(c => (
                     <button key={c} className="w-5 h-5 rounded border border-border hover:scale-110 transition-transform" style={{ backgroundColor: c }} onClick={() => { applyFormat({ bg: c }); setColorPickerOpen(null); }} />
                   ))}
                   <button className="col-span-6 text-[10px] text-muted-foreground hover:text-foreground mt-0.5" onClick={() => { applyFormat({ bg: undefined }); setColorPickerOpen(null); }}>Reset</button>
@@ -193,12 +222,22 @@ export function SheetToolbar({
               onClick={() => applyFormat({ numFmt: getSelectionFormat().numFmt === "pct" ? undefined : "pct" })}
               title="Format as percent"
             >%</Button>
-            <Button
-              variant={getSelectionFormat().numFmt === "cur" ? "default" : "outline"}
-              size="sm" className="h-7 w-7 p-0 font-medium text-xs"
-              onClick={() => applyFormat({ numFmt: getSelectionFormat().numFmt === "cur" ? undefined : "cur" })}
-              title="Format as currency ($)"
-            >$</Button>
+            <div className="relative">
+              <Button
+                variant={getSelectionFormat().numFmt?.startsWith("cur") ? "default" : "outline"}
+                size="sm" className="h-7 px-1.5 font-medium text-xs gap-0.5"
+                onClick={() => setCurrencyOpen(v => !v)}
+                title="Format as currency"
+              >$ <ChevronDown className="h-2.5 w-2.5" /></Button>
+              {currencyOpen && (
+                <div className="absolute top-full left-0 mt-1 z-50 bg-background border border-border rounded-md shadow-lg py-1 w-[110px]" onMouseDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
+                  <button className="w-full text-left px-3 py-1 text-xs text-muted-foreground hover:bg-muted" onClick={() => { applyFormat({ numFmt: undefined }); setCurrencyOpen(false); }}>— None</button>
+                  {CURRENCIES.map(c => (
+                    <button key={c.fmt} className={`w-full text-left px-3 py-1 text-xs hover:bg-muted ${getSelectionFormat().numFmt === c.fmt ? "text-primary font-semibold" : ""}`} onClick={() => { applyFormat({ numFmt: c.fmt }); setCurrencyOpen(false); }}>{c.label}</button>
+                  ))}
+                </div>
+              )}
+            </div>
             <Button
               variant="outline" size="sm" className="h-7 w-7 p-0 text-xs font-mono"
               onClick={() => applyFormat({ numDecimals: Math.max(0, (getSelectionFormat().numDecimals ?? 2) - 1) })}

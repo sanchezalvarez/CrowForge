@@ -29,8 +29,8 @@ export function AnnotationNode({ id, data, selected }: NodeProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    if (!editing) setLabel(nodeData.label ?? "");
-  }, [nodeData.label, editing]);
+    setLabel(nodeData.label ?? "");
+  }, [nodeData.label]);
 
   useEffect(() => {
     if (editing) textareaRef.current?.focus();
@@ -56,6 +56,8 @@ export function AnnotationNode({ id, data, selected }: NodeProps) {
     fontWeight: bold ? "bold" : "normal",
     color: color || "hsl(var(--foreground))",
   };
+
+  const isEmpty = !label.trim();
 
   return (
     <>
@@ -108,15 +110,16 @@ export function AnnotationNode({ id, data, selected }: NodeProps) {
         </div>
       )}
 
-      {/* Text content — no background, no border */}
+      {/* Text content — no background, no border (dashed outline when empty) */}
       <div
         className="w-full h-full"
+        style={isEmpty && !editing ? { border: "1.5px dashed hsl(var(--muted-foreground) / 0.4)", borderRadius: 4 } : undefined}
         onDoubleClick={() => setEditing(true)}
       >
         {editing ? (
           <textarea
             ref={textareaRef}
-            className="w-full h-full resize-none bg-transparent outline-none leading-snug"
+            className="w-full h-full resize-none bg-transparent outline-none leading-snug px-1"
             style={textStyle}
             value={label}
             onChange={(e) => setLabel(e.target.value)}
@@ -128,10 +131,12 @@ export function AnnotationNode({ id, data, selected }: NodeProps) {
           />
         ) : (
           <p
-            className="whitespace-pre-wrap select-none leading-snug"
+            className="whitespace-pre-wrap select-none leading-snug px-1"
             style={{ ...textStyle, minHeight: "1em" }}
           >
-            {label || (selected ? <span className="opacity-30 text-sm">Double-click to edit…</span> : null)}
+            {isEmpty
+              ? <span className="opacity-30 text-sm">Double-click to edit…</span>
+              : label}
           </p>
         )}
       </div>

@@ -48,6 +48,7 @@ interface GalleryModel {
   tags?: string[];
   vram?: string;
   ram?: string;
+  recommended?: boolean;
 }
 
 interface SystemSpecs {
@@ -65,18 +66,6 @@ interface SystemSpecs {
 const GALLERY_MODELS: GalleryModel[] = [
   // ── Agent-capable models (tool calling / function calling) ──
   {
-    name: "Qwen3.5 9B Q4_K_M",
-    size: "~5.7 GB",
-    license: "Apache 2.0",
-    description: "Latest Qwen 3.5 — top-tier reasoning, coding, and multilingual. Best 9B-class model.",
-    filename: "Qwen3.5-9B-Q4_K_M.gguf",
-    url: "https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/resolve/main/Qwen3.5-9B-Q4_K_M.gguf",
-    infoUrl: "https://huggingface.co/unsloth/Qwen3.5-9B-GGUF",
-    tags: ["agent", "coding", "math", "multilingual", "reasoning"],
-    vram: "6 GB",
-    ram: "10 GB",
-  },
-  {
     name: "Qwen2.5 7B Instruct Q4_K_M",
     size: "~4.7 GB",
     license: "Apache 2.0",
@@ -87,6 +76,31 @@ const GALLERY_MODELS: GalleryModel[] = [
     tags: ["agent", "coding", "math", "multilingual"],
     vram: "5 GB",
     ram: "8 GB",
+    recommended: true,
+  },
+  {
+    name: "Qwen2.5 14B Instruct Q4_K_M",
+    size: "~8.9 GB",
+    license: "Apache 2.0",
+    description: "Larger Qwen2.5 with stronger reasoning and coding — ideal for RTX 5070 with 16 GB VRAM.",
+    filename: "Qwen2.5-14B-Instruct-Q4_K_M.gguf",
+    url: "https://huggingface.co/bartowski/Qwen2.5-14B-Instruct-GGUF/resolve/main/Qwen2.5-14B-Instruct-Q4_K_M.gguf",
+    infoUrl: "https://huggingface.co/Qwen/Qwen2.5-14B-Instruct",
+    tags: ["agent", "coding", "math", "multilingual", "reasoning"],
+    vram: "10 GB",
+    ram: "16 GB",
+  },
+  {
+    name: "Qwen2.5 32B Instruct Q4_K_M",
+    size: "~19.8 GB",
+    license: "Apache 2.0",
+    description: "High-end Qwen2.5 32B — exceptional quality for all tasks. Runs on 16 GB VRAM with offloading.",
+    filename: "Qwen2.5-32B-Instruct-Q4_K_M.gguf",
+    url: "https://huggingface.co/bartowski/Qwen2.5-32B-Instruct-GGUF/resolve/main/Qwen2.5-32B-Instruct-Q4_K_M.gguf",
+    infoUrl: "https://huggingface.co/Qwen/Qwen2.5-32B-Instruct",
+    tags: ["agent", "coding", "math", "multilingual", "reasoning"],
+    vram: "16 GB+",
+    ram: "32 GB",
   },
   {
     name: "Qwen2.5 3B Instruct Q4_K_M",
@@ -101,6 +115,30 @@ const GALLERY_MODELS: GalleryModel[] = [
     ram: "4 GB",
   },
   {
+    name: "Mistral Small 3.1 24B Q4_K_M",
+    size: "~14.3 GB",
+    license: "Apache 2.0",
+    description: "Mistral Small 3.1 — state-of-the-art 24B with native tool calling and 128k context. Perfect for RTX 5070.",
+    filename: "Mistral-Small-3.1-24B-Instruct-2503-Q4_K_M.gguf",
+    url: "https://huggingface.co/bartowski/Mistral-Small-3.1-24B-Instruct-2503-GGUF/resolve/main/Mistral-Small-3.1-24B-Instruct-2503-Q4_K_M.gguf",
+    infoUrl: "https://huggingface.co/mistralai/Mistral-Small-3.1-24B-Instruct-2503",
+    tags: ["agent", "chat", "reasoning", "coding"],
+    vram: "14 GB",
+    ram: "24 GB",
+  },
+  {
+    name: "Mistral Nemo 12B Instruct Q4_K_M",
+    size: "~7.1 GB",
+    license: "Apache 2.0",
+    description: "Mistral + NVIDIA 12B — native function calling, strong reasoning.",
+    filename: "Mistral-Nemo-Instruct-2407-Q4_K_M.gguf",
+    url: "https://huggingface.co/bartowski/Mistral-Nemo-Instruct-2407-GGUF/resolve/main/Mistral-Nemo-Instruct-2407-Q4_K_M.gguf",
+    infoUrl: "https://huggingface.co/mistralai/Mistral-Nemo-Instruct-2407",
+    tags: ["agent", "chat", "reasoning"],
+    vram: "8 GB",
+    ram: "12 GB",
+  },
+  {
     name: "Hermes 3 Llama 3.1 8B Q4_K_M",
     size: "~4.9 GB",
     license: "Meta Llama 3.1",
@@ -112,42 +150,18 @@ const GALLERY_MODELS: GalleryModel[] = [
     vram: "6 GB",
     ram: "8 GB",
   },
+  // ── General-purpose / large models ──
   {
-    name: "Mistral Nemo 12B Instruct Q4_K_M",
-    size: "~7.1 GB",
-    license: "Apache 2.0",
-    description: "Mistral + NVIDIA 12B — native function calling, strong reasoning. Needs 12 GB+ RAM.",
-    filename: "Mistral-Nemo-Instruct-2407-Q4_K_M.gguf",
-    url: "https://huggingface.co/bartowski/Mistral-Nemo-Instruct-2407-GGUF/resolve/main/Mistral-Nemo-Instruct-2407-Q4_K_M.gguf",
-    infoUrl: "https://huggingface.co/mistralai/Mistral-Nemo-Instruct-2407",
-    tags: ["agent", "chat", "reasoning"],
-    vram: "8 GB",
-    ram: "12 GB",
-  },
-  {
-    name: "Functionary Small v3.2 Q4_K_M",
-    size: "~4.9 GB",
-    license: "Meta Llama 3.1",
-    description: "Purpose-built for function/tool calling — top accuracy for agent workflows.",
-    filename: "functionary-small-v3.2-Q4_K_M.gguf",
-    url: "https://huggingface.co/meetkai/functionary-small-v3.2-GGUF/resolve/main/functionary-small-v3.2.Q4_K_M.gguf",
-    infoUrl: "https://huggingface.co/meetkai/functionary-small-v3.2",
-    tags: ["agent"],
-    vram: "6 GB",
-    ram: "8 GB",
-  },
-  // ── General-purpose models (no tool calling) ──
-  {
-    name: "Llama 3.2 3B Instruct Q4_K_M",
-    size: "~2.0 GB",
-    license: "Meta Llama 3.2",
-    description: "Compact and capable general-purpose model from Meta. Great for chat and writing.",
-    filename: "Llama-3.2-3B-Instruct-Q4_K_M.gguf",
-    url: "https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF/resolve/main/Llama-3.2-3B-Instruct-Q4_K_M.gguf",
-    infoUrl: "https://huggingface.co/meta-llama/Llama-3.2-3B-Instruct",
-    tags: ["chat", "general"],
-    vram: "2 GB",
-    ram: "4 GB",
+    name: "Llama 3.3 70B Instruct Q2_K",
+    size: "~26.5 GB",
+    license: "Meta Llama 3.3",
+    description: "Meta's flagship 70B in aggressive Q2_K quantization — fits in 16 GB VRAM with CPU offloading.",
+    filename: "Llama-3.3-70B-Instruct-Q2_K.gguf",
+    url: "https://huggingface.co/bartowski/Llama-3.3-70B-Instruct-GGUF/resolve/main/Llama-3.3-70B-Instruct-Q2_K.gguf",
+    infoUrl: "https://huggingface.co/meta-llama/Llama-3.3-70B-Instruct",
+    tags: ["chat", "reasoning", "coding"],
+    vram: "16 GB+",
+    ram: "48 GB",
   },
   {
     name: "Llama 3.1 8B Instruct Q4_K_M",
@@ -162,51 +176,75 @@ const GALLERY_MODELS: GalleryModel[] = [
     ram: "8 GB",
   },
   {
-    name: "Gemma 2 2B Instruct Q4_K_M",
-    size: "~1.6 GB",
-    license: "Google Gemma",
-    description: "Google's lightweight Gemma 2 — fast, multilingual, good for translation.",
-    filename: "gemma-2-2b-it-Q4_K_M.gguf",
-    url: "https://huggingface.co/bartowski/gemma-2-2b-it-GGUF/resolve/main/gemma-2-2b-it-Q4_K_M.gguf",
-    infoUrl: "https://huggingface.co/google/gemma-2-2b-it",
-    tags: ["translate", "multilingual", "fast"],
+    name: "Llama 3.2 3B Instruct Q4_K_M",
+    size: "~2.0 GB",
+    license: "Meta Llama 3.2",
+    description: "Compact and capable general-purpose model from Meta. Great for chat and writing.",
+    filename: "Llama-3.2-3B-Instruct-Q4_K_M.gguf",
+    url: "https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF/resolve/main/Llama-3.2-3B-Instruct-Q4_K_M.gguf",
+    infoUrl: "https://huggingface.co/meta-llama/Llama-3.2-3B-Instruct",
+    tags: ["chat", "general", "fast"],
     vram: "2 GB",
     ram: "4 GB",
   },
   {
-    name: "Gemma 2 9B Instruct Q4_K_M",
-    size: "~5.4 GB",
-    license: "Google Gemma",
-    description: "Google's full Gemma 2 9B — excellent multilingual, translation and reasoning.",
-    filename: "gemma-2-9b-it-Q4_K_M.gguf",
-    url: "https://huggingface.co/bartowski/gemma-2-9b-it-GGUF/resolve/main/gemma-2-9b-it-Q4_K_M.gguf",
-    infoUrl: "https://huggingface.co/google/gemma-2-9b-it",
-    tags: ["translate", "multilingual", "reasoning"],
-    vram: "6 GB",
-    ram: "10 GB",
-  },
-  {
-    name: "Phi-3.5 mini Instruct Q4_K_M",
-    size: "~2.2 GB",
+    name: "Phi-4 14B Q4_K_M",
+    size: "~8.9 GB",
     license: "MIT",
-    description: "Microsoft's efficient small model, great for coding and reasoning.",
-    filename: "Phi-3.5-mini-instruct-Q4_K_M.gguf",
-    url: "https://huggingface.co/bartowski/Phi-3.5-mini-instruct-GGUF/resolve/main/Phi-3.5-mini-instruct-Q4_K_M.gguf",
-    infoUrl: "https://huggingface.co/microsoft/Phi-3.5-mini-instruct",
-    tags: ["coding", "reasoning"],
-    vram: "3 GB",
-    ram: "4 GB",
+    description: "Microsoft Phi-4 — punches well above its weight in reasoning and coding. Great for RTX 5070.",
+    filename: "phi-4-Q4_K_M.gguf",
+    url: "https://huggingface.co/bartowski/phi-4-GGUF/resolve/main/phi-4-Q4_K_M.gguf",
+    infoUrl: "https://huggingface.co/microsoft/phi-4",
+    tags: ["coding", "reasoning", "math"],
+    vram: "10 GB",
+    ram: "16 GB",
   },
   {
-    name: "Mistral 7B Instruct v0.3 Q4_K_M",
-    size: "~4.1 GB",
-    license: "Apache 2.0",
-    description: "Mistral's flagship 7B instruction model — high quality output.",
-    filename: "Mistral-7B-Instruct-v0.3-Q4_K_M.gguf",
-    url: "https://huggingface.co/bartowski/Mistral-7B-Instruct-v0.3-GGUF/resolve/main/Mistral-7B-Instruct-v0.3-Q4_K_M.gguf",
-    infoUrl: "https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.3",
-    tags: ["chat", "general"],
-    vram: "5 GB",
+    name: "Gemma 3 12B Instruct Q4_K_M",
+    size: "~7.8 GB",
+    license: "Google Gemma",
+    description: "Google Gemma 3 12B — multimodal-trained, strong reasoning and multilingual.",
+    filename: "gemma-3-12b-it-Q4_K_M.gguf",
+    url: "https://huggingface.co/bartowski/gemma-3-12b-it-GGUF/resolve/main/gemma-3-12b-it-Q4_K_M.gguf",
+    infoUrl: "https://huggingface.co/google/gemma-3-12b-it",
+    tags: ["chat", "multilingual", "reasoning"],
+    vram: "9 GB",
+    ram: "14 GB",
+  },
+  {
+    name: "Gemma 3 4B Instruct Q4_K_M",
+    size: "~2.6 GB",
+    license: "Google Gemma",
+    description: "Compact Gemma 3 — fast, multilingual, excellent for translation and general chat.",
+    filename: "gemma-3-4b-it-Q4_K_M.gguf",
+    url: "https://huggingface.co/bartowski/gemma-3-4b-it-GGUF/resolve/main/gemma-3-4b-it-Q4_K_M.gguf",
+    infoUrl: "https://huggingface.co/google/gemma-3-4b-it",
+    tags: ["translate", "multilingual", "fast"],
+    vram: "3 GB",
+    ram: "6 GB",
+  },
+  {
+    name: "DeepSeek-R1 Distill Qwen 14B Q4_K_M",
+    size: "~9.0 GB",
+    license: "MIT",
+    description: "DeepSeek-R1 reasoning distilled into Qwen 14B — strong math and chain-of-thought.",
+    filename: "DeepSeek-R1-Distill-Qwen-14B-Q4_K_M.gguf",
+    url: "https://huggingface.co/bartowski/DeepSeek-R1-Distill-Qwen-14B-GGUF/resolve/main/DeepSeek-R1-Distill-Qwen-14B-Q4_K_M.gguf",
+    infoUrl: "https://huggingface.co/deepseek-ai/DeepSeek-R1-Distill-Qwen-14B",
+    tags: ["reasoning", "math", "coding"],
+    vram: "10 GB",
+    ram: "16 GB",
+  },
+  {
+    name: "DeepSeek-R1 Distill Qwen 7B Q4_K_M",
+    size: "~4.7 GB",
+    license: "MIT",
+    description: "DeepSeek-R1 reasoning distilled into Qwen 7B — great reasoning at low resource cost.",
+    filename: "DeepSeek-R1-Distill-Qwen-7B-Q4_K_M.gguf",
+    url: "https://huggingface.co/bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF/resolve/main/DeepSeek-R1-Distill-Qwen-7B-Q4_K_M.gguf",
+    infoUrl: "https://huggingface.co/deepseek-ai/DeepSeek-R1-Distill-Qwen-7B",
+    tags: ["reasoning", "math", "coding"],
+    vram: "6 GB",
     ram: "8 GB",
   },
   {
@@ -220,18 +258,6 @@ const GALLERY_MODELS: GalleryModel[] = [
     tags: ["translate", "multilingual"],
     vram: "6 GB",
     ram: "8 GB",
-  },
-  {
-    name: "DeepSeek-R1 Distill Qwen 1.5B Q4_K_M",
-    size: "~1.1 GB",
-    license: "MIT",
-    description: "Tiny but surprisingly capable reasoning model distilled from DeepSeek-R1.",
-    filename: "DeepSeek-R1-Distill-Qwen-1.5B-Q4_K_M.gguf",
-    url: "https://huggingface.co/bartowski/DeepSeek-R1-Distill-Qwen-1.5B-GGUF/resolve/main/DeepSeek-R1-Distill-Qwen-1.5B-Q4_K_M.gguf",
-    infoUrl: "https://huggingface.co/deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B",
-    tags: ["reasoning", "fast"],
-    vram: "2 GB",
-    ram: "3 GB",
   },
 ];
 
@@ -816,7 +842,7 @@ export function SettingsPage({ theme, setTheme, baseColor, setBaseColor }: Setti
       <div className={`flex-1 overflow-y-auto p-6 ${["ai", "news", "preferences"].includes(section) ? "" : "max-w-2xl"} space-y-6`}>
         {section === "ai" && (
           <>
-            <div className="grid grid-cols-2 gap-8 items-start">
+            <div className="grid gap-8 items-start" style={{ gridTemplateColumns: "360px 1fr" }}>
             {/* Left: AI Configuration */}
             <div className="space-y-6">
             <h2 className="text-lg font-semibold">AI Configuration</h2>
@@ -939,12 +965,27 @@ export function SettingsPage({ theme, setTheme, baseColor, setBaseColor }: Setti
             >
               {saving ? "Saving…" : "Save Changes"}
             </button>
+            {/* PC Specs */}
+            <div className="rounded-lg border bg-muted/30 p-4 space-y-4">
+              <h3 className="text-sm font-semibold">Your PC Specs</h3>
+              {!specs ? (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground"><Loader2 size={12} className="animate-spin" />Detecting hardware…</div>
+              ) : (
+                <div className="grid grid-cols-2 gap-4 text-xs">
+                  <div className="flex items-start gap-2"><Monitor size={14} className="shrink-0 mt-0.5 text-muted-foreground" /><div><p className="font-medium">OS</p><p className="text-muted-foreground">{specs.os}</p></div></div>
+                  <div className="flex items-start gap-2"><Cpu size={14} className="shrink-0 mt-0.5 text-muted-foreground" /><div><p className="font-medium">CPU</p><p className="text-muted-foreground">{specs.cpu}</p><p className="text-muted-foreground">{specs.cpu_cores} cores</p></div></div>
+                  <div className="flex items-start gap-2"><MemoryStick size={14} className="shrink-0 mt-0.5 text-muted-foreground" /><div><p className="font-medium">RAM</p><p className="text-muted-foreground">{specs.ram_total_gb} GB total · {specs.ram_available_gb} GB free</p></div></div>
+                  {specs.gpu && <div className="flex items-start gap-2"><Monitor size={14} className="shrink-0 mt-0.5 text-muted-foreground" /><div><p className="font-medium">GPU</p><p className="text-muted-foreground">{specs.gpu}{specs.gpu_vram_gb != null ? ` · ${specs.gpu_vram_gb} GB VRAM` : ""}</p></div></div>}
+                  <div className="flex items-start gap-2"><HardDrive size={14} className="shrink-0 mt-0.5 text-muted-foreground" /><div><p className="font-medium">Disk</p><p className="text-muted-foreground">{specs.disk_free_gb} GB free / {specs.disk_total_gb} GB</p></div></div>
+                </div>
+              )}
+            </div>
             </div>{/* end left AI config */}
 
             {/* Right: Model Gallery */}
             <div className="space-y-6">
-              <div className="flex gap-4 items-start">
-                <div className="flex-1 space-y-6">
+              <div className="space-y-6">
+                <div className="space-y-6">
                   <div className="space-y-1">
                     <h2 className="text-lg font-semibold">Free GGUF Models</h2>
                     <p className="text-xs text-muted-foreground">
@@ -970,8 +1011,11 @@ export function SettingsPage({ theme, setTheme, baseColor, setBaseColor }: Setti
                         <div key={m.filename} className="rounded-lg border p-4 space-y-2">
                           <div className="flex items-start justify-between gap-4">
                             <div className="space-y-0.5 min-w-0">
-                              <div className="flex items-center gap-1.5">
+                              <div className="flex items-center gap-1.5 flex-wrap">
                                 <p className="text-sm font-medium">{m.name}</p>
+                                {m.recommended && (
+                                  <span className="px-1.5 py-0 rounded-full text-[10px] font-semibold bg-primary/15 text-primary border border-primary/25">Recommended</span>
+                                )}
                                 {m.infoUrl && (
                                   <button onClick={() => openUrl(m.infoUrl!)} className="text-muted-foreground hover:text-foreground transition-colors" title="More info on HuggingFace">
                                     <ExternalLink size={12} />
@@ -1019,23 +1063,6 @@ export function SettingsPage({ theme, setTheme, baseColor, setBaseColor }: Setti
                         </div>
                       );
                     })}
-                  </div>
-                </div>
-                <div className="w-64 shrink-0">
-                  <div className="sticky top-0 rounded-lg border bg-muted/30 p-4 space-y-4">
-                    <h3 className="text-sm font-semibold">Your PC Specs</h3>
-                    {!specs ? (
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground"><Loader2 size={12} className="animate-spin" />Detecting hardware…</div>
-                    ) : (
-                      <div className="space-y-3 text-xs">
-                        <div className="flex items-start gap-2"><Monitor size={14} className="shrink-0 mt-0.5 text-muted-foreground" /><div><p className="font-medium">OS</p><p className="text-muted-foreground">{specs.os}</p></div></div>
-                        <div className="flex items-start gap-2"><Cpu size={14} className="shrink-0 mt-0.5 text-muted-foreground" /><div><p className="font-medium">CPU</p><p className="text-muted-foreground">{specs.cpu}</p><p className="text-muted-foreground">{specs.cpu_cores} cores</p></div></div>
-                        <div className="flex items-start gap-2"><MemoryStick size={14} className="shrink-0 mt-0.5 text-muted-foreground" /><div><p className="font-medium">RAM</p><p className="text-muted-foreground">{specs.ram_total_gb} GB total</p><p className="text-muted-foreground">{specs.ram_available_gb} GB available</p></div></div>
-                        {specs.gpu && <div className="flex items-start gap-2"><Monitor size={14} className="shrink-0 mt-0.5 text-muted-foreground" /><div><p className="font-medium">GPU</p><p className="text-muted-foreground">{specs.gpu}</p>{specs.gpu_vram_gb != null && <p className="text-muted-foreground">{specs.gpu_vram_gb} GB VRAM</p>}</div></div>}
-                        <div className="flex items-start gap-2"><HardDrive size={14} className="shrink-0 mt-0.5 text-muted-foreground" /><div><p className="font-medium">Disk</p><p className="text-muted-foreground">{specs.disk_free_gb} GB free / {specs.disk_total_gb} GB</p></div></div>
-                        <div className="border-t pt-3 mt-3"><p className="text-[10px] text-muted-foreground leading-relaxed">Models run on CPU if no GPU is available. Check the GPU VRAM and RAM requirements on each model to see what fits your system.</p></div>
-                      </div>
-                    )}
                   </div>
                 </div>
               </div>

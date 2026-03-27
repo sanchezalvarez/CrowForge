@@ -5,192 +5,160 @@
 /* ── Multilingual fonts ─────────────────────────────────────────────────────
  * Noto Sans Variable — Latin, Latin-Ext (SK, PL, DE, TR, etc.), Cyrillic, Greek
  * Noto Sans SC — Simplified Chinese
- * Loaded as @font-face via index.css / 400.css from fontsource packages.
- * All subsets use unicode-range so only needed glyphs are downloaded.
  * ─────────────────────────────────────────────────────────────────────────── */
 @import "@fontsource-variable/noto-sans";
 @import "@fontsource/noto-sans-sc/400.css";
 @import "@fontsource/noto-sans-sc/500.css";
 @import "@fontsource/noto-sans-sc/700.css";
 
+/* ── Riso design system fonts ──────────────────────────────────────────────
+ * Syne Variable — headings, app name, display text
+ * IBM Plex Mono — labels, tags, formula bar, toolbar mono buttons
+ * ─────────────────────────────────────────────────────────────────────────── */
+@import "@fontsource-variable/syne";
+@import "@fontsource/ibm-plex-mono/400.css";
+@import "@fontsource/ibm-plex-mono/500.css";
+@import "@fontsource/ibm-plex-mono/700.css";
+
 @custom-variant dark (&:is(.dark *));
 
-/*
- * shadcn/ui design tokens — light theme only.
- * CSS variables define the HSL channels; @theme wires them to Tailwind utilities.
- */
+/* ── Risograph Design Tokens — light (Warm Paper) ──────────────────────── */
 :root {
-  --background: 0 0% 100%;
-  --foreground: 222.2 84% 4.9%;
+  --background:          #F0E8DC;
+  --background-2:        #E6DDD0;
+  --background-3:        #D8CFC0;
+  --foreground:          #14100A;
+  --card:                #E6DDD0;
+  --card-foreground:     #14100A;
+  --popover:             #E6DDD0;
+  --popover-foreground:  #14100A;
+  --primary:             #E04E0E;
+  --primary-foreground:  #FFFFFF;
+  --secondary:           #D0C8B8;
+  --secondary-foreground:#2A2018;
+  --muted:               #E6DDD0;
+  --muted-foreground:    #7A6E5E;
+  --accent:              #E04E0E;
+  --accent-foreground:   #FFFFFF;
+  --destructive:         #DC2626;
+  --destructive-foreground: #F0E8DC;
+  --border:              rgba(20,16,10,0.10);
+  --border-strong:       rgba(20,16,10,0.20);
+  --input:               #D8CFC0;
+  --ring:                #E04E0E;
+  --radius:              0.5rem;
 
-  --card: 0 0% 100%;
-  --card-foreground: 222.2 84% 4.9%;
+  /* Accent palette */
+  --accent-orange:       #E04E0E;
+  --accent-teal:         #0B7268;
+  --accent-violet:       #5C3A9C;
+  --accent-gold:         #C8902A;
 
-  --popover: 0 0% 100%;
-  --popover-foreground: 222.2 84% 4.9%;
+  /* Sidebar — warm dark brown */
+  --topbar-bg:           #2E2518;
+  --topbar-fg:           #F0E8DC;
+  --topbar-border:       rgba(255,255,255,0.08);
+  --topbar-muted:        rgba(255,255,255,0.35);
 
-  --primary: 221.2 83.2% 53.3%;
-  --primary-foreground: 210 40% 98%;
+  /* Buttons */
+  --btn-neutral-bg:      #D0C8B8;
+  --btn-neutral-fg:      #2A2018;
+  --btn-neutral-border:  rgba(20,16,10,0.22);
 
-  --secondary: 210 40% 96.1%;
-  --secondary-foreground: 222.2 47.4% 11.2%;
+  /* Riso offset shadows */
+  --riso-teal:           rgba(11,114,104,0.22);
+  --riso-orange:         rgba(224,78,14,0.22);
+  --riso-violet:         rgba(92,58,156,0.18);
 
-  --muted: 210 40% 96.1%;
-  --muted-foreground: 215.4 16.3% 46.9%;
+  /* Noise textures */
+  --noise-subtle: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+  --noise-medium: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.07'/%3E%3C/svg%3E");
+  --noise-btn: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100' height='100' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E");
 
-  --accent: 210 40% 96.1%;
-  --accent-foreground: 222.2 47.4% 11.2%;
+  /* Canvas background */
+  --canvas-bg:  #F0E8DC;
 
-  --destructive: 0 84.2% 60.2%;
-  --destructive-foreground: 210 40% 98%;
-
-  --border: 214.3 31.8% 91.4%;
-  --input: 214.3 31.8% 91.4%;
-  --ring: 221.2 83.2% 53.3%;
-
-  --radius: 0.5rem;
+  /* Riso strip */
+  --riso-strip: linear-gradient(to right, #E04E0E 0%, #E04E0E 33%, #0B7268 33%, #0B7268 66%, #5C3A9C 66%, #5C3A9C 100%);
 }
 
-/* Base Themes (light) */
-:root, .theme-zinc {
-  --background: 0 0% 100%;
-  --foreground: 240 10% 3.9%;
-  --card: 0 0% 100%;
-  --card-foreground: 240 10% 3.9%;
-  --popover: 0 0% 100%;
-  --popover-foreground: 240 10% 3.9%;
-  --primary: 240 5.9% 10%;
-  --primary-foreground: 0 0% 98%;
-  --secondary: 240 4.8% 95.9%;
-  --secondary-foreground: 240 5.9% 10%;
-  --muted: 240 4.8% 95.9%;
-  --muted-foreground: 240 3.8% 46.1%;
-  --accent: 240 4.8% 95.9%;
-  --accent-foreground: 240 5.9% 10%;
-  --destructive: 0 84.2% 60.2%;
-  --destructive-foreground: 0 0% 98%;
-  --border: 240 5.9% 90%;
-  --input: 240 5.9% 90%;
-  --ring: 240 5.9% 10%;
+/* ── Risograph Design Tokens — dark ─────────────────────────────────────── */
+.dark {
+  /* Page background — dark */
+  --background:          #2C2418;
+  --background-2:        #362D1F;
+  --background-3:        #403626;
+  --foreground:          #F0E8DC;
+  --card:                #362D1F;
+  --card-foreground:     #F0E8DC;
+  --popover:             #362D1F;
+  --popover-foreground:  #F0E8DC;
+  --secondary:           #403626;
+  --secondary-foreground:#C8BEA8;
+  --muted:               #362D1F;
+  --muted-foreground:    #A09080;
+  --border:              rgba(240,232,220,0.12);
+  --border-strong:       rgba(240,232,220,0.22);
+  --input:               #403626;
+  --destructive-foreground: #F0E8DC;
+
+  --primary:             #FF5A1A;
+  --primary-foreground:  #FFFFFF;
+  --accent:              #FF5A1A;
+  --accent-foreground:   #FFFFFF;
+  --destructive:         #EF4444;
+  --ring:                #FF5A1A;
+
+  --accent-orange:       #FF5A1A;
+  --accent-teal:         #14B8A6;
+  --accent-violet:       #8B62D4;
+  --accent-gold:         #E8A830;
+
+  --topbar-bg:           #080705;
+  --topbar-fg:           #F0E8DC;
+  --topbar-border:       rgba(255,255,255,0.06);
+  --topbar-muted:        rgba(255,255,255,0.30);
+
+  --btn-neutral-bg:      #2A2620;
+  --btn-neutral-fg:      #C8BEA8;
+  --btn-neutral-border:  rgba(240,232,220,0.15);
+
+  --riso-teal:           rgba(20,184,166,0.18);
+  --riso-orange:         rgba(255,90,26,0.18);
+  --riso-violet:         rgba(139,98,212,0.15);
+
+  --canvas-bg:           #403626;
+
+  --noise-subtle: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.06'/%3E%3C/svg%3E");
 }
 
-.theme-slate {
-  --background: 0 0% 100%;
-  --foreground: 222.2 84% 4.9%;
-  --primary: 222.2 47.4% 11.2%;
-  --border: 214.3 31.8% 91.4%;
-  --input: 214.3 31.8% 91.4%;
-  --ring: 221.2 83.2% 53.3%;
-}
-
-.theme-stone {
-  --background: 0 0% 100%;
-  --foreground: 20 14.3% 4.1%;
-  --primary: 24 9.8% 10%;
-  --border: 20 5.9% 90%;
-  --input: 20 5.9% 90%;
-  --ring: 20 14.3% 4.1%;
-}
-
-.theme-rose {
-  --primary: 346.8 77.2% 49.8%;
-  --ring: 346.8 77.2% 49.8%;
-}
-
-.theme-orange {
-  --primary: 24.6 95% 53.1%;
-  --ring: 24.6 95% 53.1%;
-}
-
-/* Base Themes (dark) */
-.dark, .dark.theme-zinc {
-  --background: 240 10% 3.9%;
-  --foreground: 0 0% 98%;
-  --card: 240 10% 3.9%;
-  --card-foreground: 0 0% 98%;
-  --popover: 240 10% 3.9%;
-  --popover-foreground: 0 0% 98%;
-  --primary: 0 0% 98%;
-  --primary-foreground: 240 5.9% 10%;
-  --secondary: 240 3.7% 15.9%;
-  --secondary-foreground: 0 0% 98%;
-  --muted: 240 3.7% 15.9%;
-  --muted-foreground: 240 5% 64.9%;
-  --accent: 240 3.7% 15.9%;
-  --accent-foreground: 0 0% 98%;
-  --destructive: 0 62.8% 30.6%;
-  --destructive-foreground: 0 0% 98%;
-  --border: 240 3.7% 15.9%;
-  --input: 240 3.7% 15.9%;
-  --ring: 240 4.9% 83.9%;
-}
-
-.dark.theme-slate {
-  --background: 222.2 84% 4.9%;
-  --foreground: 210 40% 98%;
-  --primary: 210 40% 98%;
-  --border: 217.2 32.6% 17.5%;
-  --input: 217.2 32.6% 17.5%;
-  --ring: 212.7 26.8% 83.9%;
-}
-
-.dark.theme-stone {
-  --background: 20 14.3% 4.1%;
-  --foreground: 60 9.1% 97.8%;
-  --primary: 60 9.1% 97.8%;
-  --border: 12 6.5% 15.1%;
-  --input: 12 6.5% 15.1%;
-  --ring: 24 5.7% 82.9%;
-}
-
-.dark.theme-rose {
-  --primary: 346.8 77.2% 49.8%;
-  --ring: 346.8 77.2% 49.8%;
-}
-
-.dark.theme-orange {
-  --primary: 20.5 90.2% 48.2%;
-  --ring: 20.5 90.2% 48.2%;
-}
-
-/*
- * @theme tells Tailwind v4 about custom utility values.
- * e.g. bg-background → background-color: hsl(var(--background))
- */
-/* Override default Tailwind sans-serif stack with multilingual Noto fonts */
+/* ── @theme ─────────────────────────────────────────────────────────────── */
 @theme {
-  --font-sans: "Noto Sans Variable", "Noto Sans SC", ui-sans-serif, system-ui, sans-serif;
+  --font-sans:    "Noto Sans Variable", "Noto Sans SC", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Syne Variable", system-ui, sans-serif;
+  --font-mono:    "IBM Plex Mono", ui-monospace, monospace;
 }
 
 @theme inline {
-  --color-background: hsl(var(--background));
-  --color-foreground: hsl(var(--foreground));
-
-  --color-card: hsl(var(--card));
-  --color-card-foreground: hsl(var(--card-foreground));
-
-  --color-popover: hsl(var(--popover));
-  --color-popover-foreground: hsl(var(--popover-foreground));
-
-  --color-primary: hsl(var(--primary));
-  --color-primary-foreground: hsl(var(--primary-foreground));
-
-  --color-secondary: hsl(var(--secondary));
-  --color-secondary-foreground: hsl(var(--secondary-foreground));
-
-  --color-muted: hsl(var(--muted));
-  --color-muted-foreground: hsl(var(--muted-foreground));
-
-  --color-accent: hsl(var(--accent));
-  --color-accent-foreground: hsl(var(--accent-foreground));
-
-  --color-destructive: hsl(var(--destructive));
-  --color-destructive-foreground: hsl(var(--destructive-foreground));
-
-  --color-border: hsl(var(--border));
-  --color-input: hsl(var(--input));
-  --color-ring: hsl(var(--ring));
-
+  --color-background:         var(--background);
+  --color-foreground:         var(--foreground);
+  --color-card:               var(--card);
+  --color-card-foreground:    var(--card-foreground);
+  --color-popover:            var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary:            var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary:          var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted:              var(--muted);
+  --color-muted-foreground:   var(--muted-foreground);
+  --color-accent:             var(--accent);
+  --color-accent-foreground:  var(--accent-foreground);
+  --color-destructive:        var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border:             var(--border);
+  --color-input:              var(--input);
+  --color-ring:               var(--ring);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -198,17 +166,27 @@
 }
 
 @layer base {
-  * {
-    @apply border-border;
-  }
-  html, body, #root {
-    height: 100%;
-    overflow: hidden;
-  }
+  * { @apply border-border; }
+  html, body, #root { height: 100%; overflow: hidden; }
   body {
-    @apply bg-background text-foreground;
+    font-family: "Noto Sans Variable", "Noto Sans SC", system-ui, sans-serif;
+    background: var(--background);
+    color: var(--foreground);
     font-feature-settings: "rlig" 1, "calt" 1;
   }
+}
+
+/* ── Paper surface — warm cream regardless of color scheme ──────────────── */
+/* Applied to the document editor page. Locally overrides CSS vars so that  */
+/* TipTap content, placeholder, and selection colors stay light-mode.       */
+.paper-surface {
+  --background:       #F0E8DC;
+  --foreground:       #14100A;
+  --muted:            #E6DDD0;
+  --muted-foreground: #7A6E5E;
+  --border:           rgba(20,16,10,0.10);
+  background: #F0E8DC !important;
+  color: #14100A;
 }
 
 /* Disable spellcheck red underlines globally */
@@ -227,15 +205,14 @@ input, textarea, [contenteditable] {
   margin-bottom: 0.4em;
 }
 
-/* TipTap editor */
+/* TipTap editor placeholder */
 .tiptap p.is-editor-empty:first-child::before {
   content: "Start writing...";
-  color: hsl(var(--muted-foreground));
+  color: var(--muted-foreground);
   float: left;
   height: 0;
   pointer-events: none;
 }
-
 
 @keyframes edge-march {
   to { stroke-dashoffset: -20; }
@@ -246,46 +223,318 @@ input, textarea, [contenteditable] {
   width: 14px !important;
   height: 14px !important;
   border-radius: 50% !important;
-  background: hsl(var(--background)) !important;
-  border: 2.5px solid hsl(var(--primary)) !important;
+  background: var(--background) !important;
+  border: 2.5px solid var(--primary) !important;
   transition: transform 0.12s ease, background 0.12s ease;
 }
 .react-flow__handle-top:hover,
 .react-flow__handle-left:hover {
-  background: hsl(var(--primary)) !important;
+  background: var(--primary) !important;
   transform: translate(-50%, -50%) scale(1.5) !important;
 }
 .react-flow__handle-right:hover {
-  background: hsl(var(--primary)) !important;
+  background: var(--primary) !important;
   transform: translate(50%, -50%) scale(1.5) !important;
 }
 .react-flow__handle-bottom:hover {
-  background: hsl(var(--primary)) !important;
+  background: var(--primary) !important;
   transform: translate(-50%, 50%) scale(1.5) !important;
 }
 .react-flow__handle-top.react-flow__handle-valid,
 .react-flow__handle-left.react-flow__handle-valid {
-  background: hsl(var(--primary) / 0.25) !important;
-  border-color: hsl(var(--primary)) !important;
+  background: color-mix(in srgb, var(--primary) 25%, transparent) !important;
+  border-color: var(--primary) !important;
   transform: translate(-50%, -50%) scale(1.4) !important;
 }
 .react-flow__handle-right.react-flow__handle-valid {
-  background: hsl(var(--primary) / 0.25) !important;
-  border-color: hsl(var(--primary)) !important;
+  background: color-mix(in srgb, var(--primary) 25%, transparent) !important;
+  border-color: var(--primary) !important;
   transform: translate(50%, -50%) scale(1.4) !important;
 }
 .react-flow__handle-bottom.react-flow__handle-valid {
-  background: hsl(var(--primary) / 0.25) !important;
-  border-color: hsl(var(--primary)) !important;
+  background: color-mix(in srgb, var(--primary) 25%, transparent) !important;
+  border-color: var(--primary) !important;
   transform: translate(-50%, 50%) scale(1.4) !important;
 }
 .react-flow__handle-connecting {
-  background: hsl(var(--primary)) !important;
+  background: var(--primary) !important;
 }
 
-/* Canvas — resize handles (squares in corners) — visually distinct from connection handles */
+/* Canvas — resize handles (squares) — visually distinct from connection handles */
 .react-flow__resize-control.handle {
   width: 8px !important;
   height: 8px !important;
   border-radius: 2px !important;
+}
+
+/* ── Riso strip ─────────────────────────────────────────────────────────── */
+.riso-strip {
+  height: 3px;
+  width: 100%;
+  background: var(--riso-strip);
+  flex-shrink: 0;
+}
+
+/* ── Sidebar / topbar dark treatment ────────────────────────────────────── */
+.topbar-riso {
+  background: var(--topbar-bg);
+  color: var(--topbar-fg);
+}
+
+/* ── Surface noise ──────────────────────────────────────────────────────── */
+.surface-noise {
+  background-image: var(--noise-subtle);
+  background-repeat: repeat;
+}
+.surface-noise-flat {
+  background-image: var(--noise-medium);
+  background-repeat: repeat;
+}
+
+/* ── Tactile buttons ────────────────────────────────────────────────────── */
+.btn-tactile {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-weight: 500;
+  border-radius: 4px;
+  border: 1.5px solid var(--btn-neutral-border);
+  background: var(--btn-neutral-bg);
+  background-image: var(--noise-btn);
+  background-repeat: repeat;
+  color: var(--btn-neutral-fg);
+  cursor: pointer;
+  transition: filter 0.1s ease, transform 0.1s ease, box-shadow 0.1s ease;
+  box-shadow: 0 1px 0 rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.06);
+  user-select: none;
+}
+.btn-tactile:hover:not(:disabled) {
+  filter: brightness(0.96);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.10);
+}
+.btn-tactile:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow: 0 0px 0 rgba(0,0,0,0.10);
+}
+.btn-tactile:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn-tactile-orange {
+  background: var(--accent-orange);
+  background-image: var(--noise-btn);
+  border-color: rgba(0,0,0,0.15);
+  color: #fff;
+}
+.btn-tactile-dark {
+  background: var(--topbar-bg);
+  background-image: var(--noise-btn);
+  border-color: rgba(255,255,255,0.08);
+  color: var(--topbar-fg);
+}
+.btn-tactile-teal {
+  background: var(--accent-teal);
+  background-image: var(--noise-btn);
+  border-color: rgba(0,0,0,0.15);
+  color: #fff;
+}
+.btn-tactile-outline {
+  background: transparent;
+  background-image: none;
+  border-color: var(--border-strong, rgba(20,16,10,0.20));
+  color: var(--foreground);
+  box-shadow: none;
+}
+.btn-tactile-outline:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--foreground) 6%, transparent);
+  filter: none;
+}
+
+/* ── Riso cards ─────────────────────────────────────────────────────────── */
+.card-riso {
+  background-image: var(--noise-subtle);
+  background-repeat: repeat;
+  position: relative;
+}
+.card-riso::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: 3px 3px 0 var(--riso-teal);
+  pointer-events: none;
+}
+.card-riso-orange::after {
+  box-shadow: 3px 3px 0 var(--riso-orange);
+}
+.card-riso-violet::after {
+  box-shadow: 3px 3px 0 var(--riso-violet);
+}
+
+/* ── Halftone patch ─────────────────────────────────────────────────────── */
+.halftone-patch {
+  position: absolute;
+  background-image: radial-gradient(circle, var(--riso-teal) 1px, transparent 1px);
+  background-size: 8px 8px;
+  border-radius: 50%;
+  opacity: 0.4;
+  pointer-events: none;
+  z-index: 0;
+}
+.halftone-patch-white {
+  background-image: radial-gradient(circle, rgba(255,255,255,0.3) 1px, transparent 1px);
+}
+
+/* ── Node tags ──────────────────────────────────────────────────────────── */
+.node-tag {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--muted-foreground) 10%, transparent);
+}
+.node-tag-orange {
+  color: var(--accent-orange);
+  background: color-mix(in srgb, var(--accent-orange) 12%, transparent);
+}
+.node-tag-teal {
+  color: var(--accent-teal);
+  background: color-mix(in srgb, var(--accent-teal) 12%, transparent);
+}
+.node-tag-violet {
+  color: var(--accent-violet);
+  background: color-mix(in srgb, var(--accent-violet) 12%, transparent);
+}
+
+/* ── Tag pills ──────────────────────────────────────────────────────────── */
+.tag-riso {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  font-weight: 500;
+  padding: 1px 7px;
+  border-radius: 9999px;
+  border: 1px solid var(--border);
+  background: var(--background-2);
+  color: var(--muted-foreground);
+}
+.tag-riso-orange { background: color-mix(in srgb, var(--accent-orange) 12%, transparent); color: var(--accent-orange); border-color: color-mix(in srgb, var(--accent-orange) 25%, transparent); }
+.tag-riso-teal   { background: color-mix(in srgb, var(--accent-teal)   12%, transparent); color: var(--accent-teal);   border-color: color-mix(in srgb, var(--accent-teal)   25%, transparent); }
+.tag-riso-violet { background: color-mix(in srgb, var(--accent-violet) 12%, transparent); color: var(--accent-violet); border-color: color-mix(in srgb, var(--accent-violet) 25%, transparent); }
+.tag-riso-muted  { background: var(--background-3); color: var(--muted-foreground); }
+
+/* ── Statusbar ──────────────────────────────────────────────────────────── */
+.statusbar-riso {
+  background: var(--topbar-bg);
+  color: var(--topbar-muted);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+}
+
+/* ── Typography helpers ─────────────────────────────────────────────────── */
+.font-display {
+  font-family: 'Syne Variable', system-ui, sans-serif;
+  font-weight: 700;
+}
+.font-mono-ui {
+  font-family: 'IBM Plex Mono', monospace;
+}
+
+/* ── Range slider — global riso style ──────────────────────────────────── */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  border-radius: 9999px;
+  background: var(--background-3);
+  outline: none;
+  cursor: pointer;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 9999px;
+  background: var(--primary);
+  border: 2px solid var(--background);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.18);
+  cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+input[type="range"]::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 9999px;
+  background: var(--primary);
+  border: 2px solid var(--background);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.18);
+  cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 9999px;
+}
+input[type="range"]::-moz-range-track {
+  height: 4px;
+  border-radius: 9999px;
+  background: var(--background-3);
+}
+input[type="range"]:hover::-webkit-slider-thumb {
+  transform: scale(1.2);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.22);
+}
+input[type="range"]:hover::-moz-range-thumb {
+  transform: scale(1.2);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.22);
+}
+input[type="range"]:focus-visible::-webkit-slider-thumb {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/* ── Animations ─────────────────────────────────────────────────────────── */
+@keyframes riso-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: .55; }
+}
+.animate-riso-pulse { animation: riso-pulse 1.2s ease-in-out infinite; }
+
+@keyframes riso-blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: .2; }
+}
+.animate-riso-blink { animation: riso-blink 1.6s ease-in-out infinite; }
+
+/* ── Scrollbars ─────────────────────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--background-3);
+  border-radius: 9999px;
+  border: 1px solid var(--border);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted-foreground);
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--background-3) transparent;
 }

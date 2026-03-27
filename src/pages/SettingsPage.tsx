@@ -567,11 +567,10 @@ function fmt_bytes(b: number) {
 interface SettingsPageProps {
   theme: "light" | "dark";
   setTheme: (t: "light" | "dark") => void;
-  baseColor: string;
-  setBaseColor: (c: string) => void;
+
 }
 
-export function SettingsPage({ theme, setTheme, baseColor, setBaseColor }: SettingsPageProps) {
+export function SettingsPage({ theme, setTheme }: SettingsPageProps) {
   const [section, setSection] = useState<Section>("ai");
 
   const [avatarIndex, setAvatarIndex] = useState(() =>
@@ -1080,45 +1079,58 @@ export function SettingsPage({ theme, setTheme, baseColor, setBaseColor }: Setti
                 <div>
                   <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Theme</label>
                   <div className="mt-2 grid grid-cols-2 gap-4">
+                    {/* Light mode preview */}
                     <button
                       onClick={() => setTheme("light")}
                       className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${theme === "light" ? "border-primary bg-primary/5 shadow-sm" : "border-transparent bg-muted/30 hover:bg-muted/50"}`}
                     >
-                      <div className="w-full aspect-video rounded-md bg-white border shadow-sm flex items-center justify-center">
-                        <div className="w-3/4 h-2 bg-slate-100 rounded-full" />
+                      <div className="w-full aspect-video rounded-md overflow-hidden shadow-sm border" style={{ borderColor: "rgba(20,16,10,0.12)" }}>
+                        <div className="w-full h-full flex" style={{ background: "#F0E8DC" }}>
+                          {/* Sidebar */}
+                          <div className="h-full flex flex-col gap-1 p-1" style={{ width: "28%", background: "#2E2518" }}>
+                            <div className="w-full h-1.5 rounded-sm" style={{ background: "#E04E0E", opacity: 0.9 }} />
+                            <div className="w-3/4 h-1 rounded-sm" style={{ background: "rgba(240,232,220,0.25)" }} />
+                            <div className="w-1/2 h-1 rounded-sm mt-0.5" style={{ background: "rgba(240,232,220,0.15)" }} />
+                            <div className="w-2/3 h-1 rounded-sm" style={{ background: "rgba(240,232,220,0.15)" }} />
+                          </div>
+                          {/* Content */}
+                          <div className="flex-1 flex flex-col gap-1 p-1.5">
+                            <div className="w-1/2 h-1.5 rounded-sm" style={{ background: "#14100A", opacity: 0.55 }} />
+                            <div className="w-full h-1 rounded-sm" style={{ background: "#E6DDD0" }} />
+                            <div className="w-5/6 h-1 rounded-sm" style={{ background: "#E6DDD0" }} />
+                            <div className="w-3/4 h-1 rounded-sm" style={{ background: "#E6DDD0" }} />
+                            <div className="mt-1 w-1/3 h-2 rounded-sm" style={{ background: "#E04E0E", opacity: 0.85 }} />
+                          </div>
+                        </div>
                       </div>
                       <span className="text-sm font-medium">Light</span>
                     </button>
+                    {/* Dark mode preview */}
                     <button
                       onClick={() => setTheme("dark")}
                       className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${theme === "dark" ? "border-primary bg-primary/5 shadow-sm" : "border-transparent bg-muted/30 hover:bg-muted/50"}`}
                     >
-                      <div className="w-full aspect-video rounded-md bg-slate-950 border border-slate-800 shadow-sm flex items-center justify-center">
-                        <div className="w-3/4 h-2 bg-slate-800 rounded-full" />
+                      <div className="w-full aspect-video rounded-md overflow-hidden shadow-sm border" style={{ borderColor: "rgba(240,232,220,0.10)" }}>
+                        <div className="w-full h-full flex" style={{ background: "#2C2418" }}>
+                          {/* Sidebar */}
+                          <div className="h-full flex flex-col gap-1 p-1" style={{ width: "28%", background: "#080705" }}>
+                            <div className="w-full h-1.5 rounded-sm" style={{ background: "#FF5A1A", opacity: 0.9 }} />
+                            <div className="w-3/4 h-1 rounded-sm" style={{ background: "rgba(240,232,220,0.20)" }} />
+                            <div className="w-1/2 h-1 rounded-sm mt-0.5" style={{ background: "rgba(240,232,220,0.12)" }} />
+                            <div className="w-2/3 h-1 rounded-sm" style={{ background: "rgba(240,232,220,0.12)" }} />
+                          </div>
+                          {/* Content */}
+                          <div className="flex-1 flex flex-col gap-1 p-1.5">
+                            <div className="w-1/2 h-1.5 rounded-sm" style={{ background: "#F0E8DC", opacity: 0.55 }} />
+                            <div className="w-full h-1 rounded-sm" style={{ background: "#362D1F" }} />
+                            <div className="w-5/6 h-1 rounded-sm" style={{ background: "#362D1F" }} />
+                            <div className="w-3/4 h-1 rounded-sm" style={{ background: "#362D1F" }} />
+                            <div className="mt-1 w-1/3 h-2 rounded-sm" style={{ background: "#FF5A1A", opacity: 0.85 }} />
+                          </div>
+                        </div>
                       </div>
                       <span className="text-sm font-medium">Dark</span>
                     </button>
-                  </div>
-                </div>
-                <div className="pt-4">
-                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Color Preset</label>
-                  <div className="mt-3 grid grid-cols-3 gap-2">
-                    {[
-                      { id: "zinc", label: "Zinc", color: "bg-zinc-500" },
-                      { id: "slate", label: "Slate", color: "bg-slate-500" },
-                      { id: "stone", label: "Stone", color: "bg-stone-500" },
-                      { id: "rose", label: "Rose", color: "bg-rose-500" },
-                      { id: "orange", label: "Orange", color: "bg-orange-500" },
-                    ].map((preset) => (
-                      <button
-                        key={preset.id}
-                        onClick={() => setBaseColor(preset.id)}
-                        className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-all ${baseColor === preset.id ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-border bg-background hover:bg-muted"}`}
-                      >
-                        <div className={`h-3 w-3 rounded-full ${preset.color}`} />
-                        <span className="text-xs font-medium">{preset.label}</span>
-                      </button>
-                    ))}
                   </div>
                 </div>
                 <div className="pt-4">

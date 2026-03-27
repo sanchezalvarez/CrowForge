@@ -216,7 +216,7 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
             {quickActions.map((a) => (
               <button
                 key={a.title}
-                className={`group flex items-center gap-3 rounded-xl border border-border/50 p-4 text-left transition-all hover:border-border hover:shadow-sm hover:ring-2 ${a.ring} active:scale-[0.98]`}
+                className={`card-riso group flex items-center gap-3 rounded-xl border border-border/50 p-4 text-left transition-all hover:border-border hover:shadow-sm hover:ring-2 ${a.ring} active:scale-[0.98]`}
                 onClick={a.onClick}
               >
                 <div className={`p-2.5 rounded-lg ${a.bg} shrink-0 transition-transform group-hover:scale-110`}>

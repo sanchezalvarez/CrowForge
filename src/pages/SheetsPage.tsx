@@ -1570,6 +1570,7 @@ export function SheetsPage({ tuningParams, initialSheetId }: SheetsPageProps) {
               sheetChatOpen={sheetChatOpen}
               onToggleChart={() => setChartOpen((o) => !o)}
               chartOpen={chartOpen}
+              onOpenFormulaWizard={() => setFormulaWizardOpen(true)}
             />
 
             <FormulaBar
@@ -1583,11 +1584,6 @@ export function SheetsPage({ tuningParams, initialSheetId }: SheetsPageProps) {
               commitEdit={commitEdit}
               cancelEdit={cancelEdit}
               startEditing={startEditing}
-              setAiOpTargetStr={setAiOpTargetStr}
-              setAiOpMode={setAiOpMode}
-              setAiOpSourceStr={setAiOpSourceStr}
-              setAiOpOpen={setAiOpOpen}
-              onOpenFormulaWizard={() => setFormulaWizardOpen(true)}
             />
 
             <SheetGrid

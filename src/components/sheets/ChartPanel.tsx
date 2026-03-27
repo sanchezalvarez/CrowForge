@@ -21,7 +21,7 @@ interface ChartPanelProps {
 // ─── Constants ────────────────────────────────────────────────────
 
 const SERIES_COLORS = [
-  "hsl(var(--primary))",
+  "var(--primary)",
   "#8b5cf6",
   "#10b981",
   "#f59e0b",
@@ -236,12 +236,12 @@ export function ChartPanel({ sheet, onClose }: ChartPanelProps) {
         ) : chartType === "bar" ? (
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={barLineData} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
               <XAxis dataKey="name" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
               <YAxis tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
               <Tooltip
-                contentStyle={{ fontSize: 11, border: "1px solid hsl(var(--border))", borderRadius: 6, background: "hsl(var(--background))", color: "hsl(var(--foreground))" }}
-                cursor={{ fill: "hsl(var(--muted))" }}
+                contentStyle={{ fontSize: 11, border: "1px solid var(--border)", borderRadius: 6, background: "var(--background)", color: "var(--foreground)" }}
+                cursor={{ fill: "var(--muted)" }}
               />
               {yCols.length > 1 && <Legend wrapperStyle={{ fontSize: 10 }} />}
               {yCols.map((col, idx) => (
@@ -257,11 +257,11 @@ export function ChartPanel({ sheet, onClose }: ChartPanelProps) {
         ) : chartType === "line" ? (
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={barLineData} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
               <XAxis dataKey="name" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
               <YAxis tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
               <Tooltip
-                contentStyle={{ fontSize: 11, border: "1px solid hsl(var(--border))", borderRadius: 6, background: "hsl(var(--background))", color: "hsl(var(--foreground))" }}
+                contentStyle={{ fontSize: 11, border: "1px solid var(--border)", borderRadius: 6, background: "var(--background)", color: "var(--foreground)" }}
               />
               {yCols.length > 1 && <Legend wrapperStyle={{ fontSize: 10 }} />}
               {yCols.map((col, idx) => (
@@ -295,7 +295,7 @@ export function ChartPanel({ sheet, onClose }: ChartPanelProps) {
                 ))}
               </Pie>
               <Tooltip
-                contentStyle={{ fontSize: 11, border: "1px solid hsl(var(--border))", borderRadius: 6, background: "hsl(var(--background))", color: "hsl(var(--foreground))" }}
+                contentStyle={{ fontSize: 11, border: "1px solid var(--border)", borderRadius: 6, background: "var(--background)", color: "var(--foreground)" }}
               />
               <Legend wrapperStyle={{ fontSize: 10 }} />
             </PieChart>

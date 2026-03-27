@@ -242,11 +242,11 @@ export function WorldClock() {
                         key={geo.rsmKey}
                         geography={geo}
                         fill={offsetToColor(offset)}
-                        stroke="hsl(var(--border))"
+                        stroke="var(--border)"
                         strokeWidth={0.4}
                         style={{
                           default:  { outline: "none" },
-                          hover:    { outline: "none", fill: "hsl(var(--primary) / 0.25)" },
+                          hover:    { outline: "none", fill: "color-mix(in srgb, var(--primary) 25%, transparent)" },
                           pressed:  { outline: "none" },
                         }}
                       />
@@ -272,14 +272,14 @@ export function WorldClock() {
                       r={isUser ? 5 : isPinned ? 4.5 : 3.5}
                       fill={
                         isUser
-                          ? "hsl(var(--primary))"
+                          ? "var(--primary)"
                           : isPinned
                             ? "#f59e0b"
                             : day
-                              ? "hsl(var(--foreground) / 0.7)"
-                              : "hsl(var(--foreground) / 0.25)"
+                              ? "color-mix(in srgb, var(--foreground) 70%, transparent)"
+                              : "color-mix(in srgb, var(--foreground) 25%, transparent)"
                       }
-                      stroke="hsl(var(--background))"
+                      stroke="var(--background)"
                       strokeWidth={1.5}
                       style={{ cursor: "pointer", transition: "r 0.15s" }}
                     />
@@ -289,7 +289,7 @@ export function WorldClock() {
                         y={-8}
                         style={{
                           fontSize: "5px",
-                          fill: "hsl(var(--foreground))",
+                          fill: "var(--foreground)",
                           fontFamily: "sans-serif",
                           pointerEvents: "none",
                           userSelect: "none",

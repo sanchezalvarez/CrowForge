@@ -61,7 +61,7 @@ export function CustomEdge({
 
   // ── Stroke style ─────────────────────────────────────────────────────────────
   const pathStyle: React.CSSProperties = {
-    stroke:        "hsl(var(--primary))",
+    stroke:        "var(--primary)",
     strokeWidth:   1.5,
     strokeOpacity: 0.7,
     ...(edgeStyle === "dashed"    ? { strokeDasharray: "6 3" } : {}),

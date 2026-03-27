@@ -120,7 +120,7 @@ export function AINode({ id, data, selected }: NodeProps) {
         <div
           style={shapeStyle}
           className={cn(
-            "w-full h-full min-w-[200px] min-h-[120px] text-card-foreground flex flex-col transition-colors",
+            "w-full h-full min-w-[200px] min-h-[120px] text-card-foreground flex flex-col transition-colors card-riso card-riso-orange",
             showBorder && (selected ? "border-2 border-primary" : "border border-border"),
             isRunning && "ring-2 ring-primary/40 ring-offset-0 animate-pulse",
           )}
@@ -129,7 +129,7 @@ export function AINode({ id, data, selected }: NodeProps) {
           <div className="flex items-center gap-1.5 px-3 py-2 border-b bg-muted/40 rounded-t-md shrink-0">
             <NodeIcon name={nodeData.icon} size={12} className="text-primary shrink-0" />
             {!nodeData.icon && <Bot size={12} className="text-primary shrink-0" />}
-            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex-1">
+            <span className="node-tag node-tag-orange flex-1">
               AI Node
             </span>
             {upstreamAICount > 0 && (

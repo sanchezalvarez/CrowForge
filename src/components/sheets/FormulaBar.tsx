@@ -1,4 +1,3 @@
-import { Sparkles, Wand2 } from "lucide-react";
 import { idxToCol, type Sheet } from "../../lib/cellUtils";
 
 export interface FormulaBarProps {
@@ -12,11 +11,6 @@ export interface FormulaBarProps {
   commitEdit: () => void;
   cancelEdit: () => void;
   startEditing: (ri: number, ci: number, val: string) => void;
-  setAiOpTargetStr: (v: string) => void;
-  setAiOpMode: (m: "row-wise" | "aggregate" | "matrix") => void;
-  setAiOpSourceStr: (v: string) => void;
-  setAiOpOpen: (v: boolean) => void;
-  onOpenFormulaWizard: () => void;
 }
 
 export function FormulaBar({
@@ -30,11 +24,6 @@ export function FormulaBar({
   commitEdit,
   cancelEdit,
   startEditing,
-  setAiOpTargetStr,
-  setAiOpMode,
-  setAiOpSourceStr,
-  setAiOpOpen,
-  onOpenFormulaWizard,
 }: FormulaBarProps) {
   if (activeSheet.columns.length === 0) return null;
 
@@ -53,13 +42,12 @@ export function FormulaBar({
 
   return (
     <div className="border-b px-2 py-1 flex items-center gap-1 bg-muted/20 shrink-0">
-      <span className="text-[11px] font-mono text-muted-foreground w-10 text-center shrink-0 bg-muted rounded px-1 py-0.5">{displayLabel}</span>
+      <span className="font-mono-ui text-[11px] text-muted-foreground w-10 text-center shrink-0 bg-muted rounded px-1 py-0.5">{displayLabel}</span>
       <div className="w-px h-5 bg-border mx-1" />
-      {/* Function buttons: select a range then click to insert formula below/right */}
       {FUNS.map((fn) => (
         <button
           key={fn}
-          className="text-[10px] px-1.5 py-0.5 rounded bg-muted hover:bg-primary/20 text-muted-foreground hover:text-foreground font-mono shrink-0 transition-colors"
+          className="btn-tactile shrink-0"
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => {
             if (!selection) return;
@@ -78,42 +66,9 @@ export function FormulaBar({
           {fn}
         </button>
       ))}
-      <button
-        className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 hover:bg-primary/20 text-primary font-medium shrink-0 transition-colors flex items-center gap-1"
-        onMouseDown={(e) => e.preventDefault()}
-        onClick={onOpenFormulaWizard}
-        title="AI Formula Assistant — describe formula in natural language"
-      >
-        <Wand2 className="h-2.5 w-2.5" />
-        Formula
-      </button>
-      <button
-        className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 hover:bg-primary/20 text-primary font-medium shrink-0 transition-colors flex items-center gap-1"
-        onMouseDown={(e) => e.preventDefault()}
-        onClick={() => {
-          if (selection) {
-            setAiOpTargetStr(`${idxToCol(selection.c1)}${selection.r1 + 1}`);
-            if (selection.r1 !== selection.r2 || selection.c1 !== selection.c2) {
-              setAiOpMode("row-wise");
-              setAiOpSourceStr(`${idxToCol(selection.c1)}${selection.r1 + 1}:${idxToCol(selection.c2)}${selection.r2 + 1}`);
-            } else {
-              setAiOpSourceStr(`${idxToCol(selection.c1)}${selection.r1 + 1}`);
-            }
-          } else {
-            setAiOpSourceStr("");
-            setAiOpTargetStr("");
-          }
-          setAiOpOpen(true);
-        }}
-        title="AI Cell Action"
-      >
-        <Sparkles className="h-2.5 w-2.5" />
-        AI
-      </button>
       <div className="w-px h-5 bg-border mx-1" />
-      {/* Editable formula input */}
       <input
-        className="flex-1 text-xs font-mono bg-transparent outline-none text-foreground px-1"
+        className="font-mono-ui flex-1 text-xs bg-transparent outline-none text-foreground px-1"
         placeholder={editingCell || singleSel ? "Enter value or =formula…" : selection ? `${idxToCol(selection.c1)}${selection.r1+1}:${idxToCol(selection.c2)}${selection.r2+1} — select then click function` : "Select a cell"}
         readOnly={!singleSel && !editingCell}
         value={displayValue}

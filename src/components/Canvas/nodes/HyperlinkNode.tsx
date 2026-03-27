@@ -47,7 +47,7 @@ export function HyperlinkNode({ id, data, selected }: NodeProps) {
     (selected || isConnecting) ? "!opacity-100" : "!opacity-0",
   );
 
-  const bg = nodeData.color || "hsl(var(--card))";
+  const bg = nodeData.color || "var(--card)";
 
   return (
     <>

@@ -11,8 +11,8 @@ export type AnnotationData = {
 
 const TEXT_COLORS = [
   { label: "Default",  value: "" },
-  { label: "Muted",    value: "hsl(var(--muted-foreground))" },
-  { label: "Primary",  value: "hsl(var(--primary))" },
+  { label: "Muted",    value: "var(--muted-foreground)" },
+  { label: "Primary",  value: "var(--primary)" },
   { label: "Red",      value: "#ef4444" },
   { label: "Blue",     value: "#3b82f6" },
   { label: "Green",    value: "#22c55e" },
@@ -54,7 +54,7 @@ export function AnnotationNode({ id, data, selected }: NodeProps) {
   const textStyle: React.CSSProperties = {
     fontSize,
     fontWeight: bold ? "bold" : "normal",
-    color: color || "hsl(var(--foreground))",
+    color: color || "var(--foreground)",
   };
 
   const isEmpty = !label.trim();
@@ -102,7 +102,7 @@ export function AnnotationNode({ id, data, selected }: NodeProps) {
             <button
               key={c.label}
               className="w-4 h-4 rounded-full border border-border/60 hover:scale-125 transition-transform"
-              style={{ backgroundColor: c.value || "hsl(var(--foreground))" }}
+              style={{ backgroundColor: c.value || "var(--foreground)" }}
               title={c.label}
               onClick={() => setFmt({ color: c.value })}
             />
@@ -113,7 +113,7 @@ export function AnnotationNode({ id, data, selected }: NodeProps) {
       {/* Text content — no background, no border (dashed outline when empty) */}
       <div
         className="w-full h-full"
-        style={isEmpty && !editing ? { border: "1.5px dashed hsl(var(--muted-foreground) / 0.4)", borderRadius: 4 } : undefined}
+        style={isEmpty && !editing ? { border: "1.5px dashed color-mix(in srgb, var(--muted-foreground) 40%, transparent)", borderRadius: 4 } : undefined}
         onDoubleClick={() => setEditing(true)}
       >
         {editing ? (

@@ -4,7 +4,7 @@ import {
   AlignLeft, AlignCenter, AlignRight, AlignVerticalJustifyStart,
   AlignVerticalJustifyCenter, AlignVerticalJustifyEnd,
   Filter, Download, ChevronDown, Sparkles, Square, Loader2, X, ArrowUpDown, Palette,
-  ClipboardList, MessageSquare, BarChart3,
+  ClipboardList, MessageSquare, BarChart3, Wand2,
 } from "lucide-react";
 import { Button } from "../ui/button";
 import { idxToCol, ROW_AI_LIMIT, type CellFormat, type Sheet } from "../../lib/cellUtils";
@@ -104,6 +104,7 @@ export interface SheetToolbarProps {
   sheetChatOpen: boolean;
   onToggleChart: () => void;
   chartOpen: boolean;
+  onOpenFormulaWizard: () => void;
 }
 
 export function SheetToolbar({
@@ -121,7 +122,7 @@ export function SheetToolbar({
   aiFillCol, setAiFillCol, aiFillInstructionRef, aiFillInstruction,
   setAiFillInstruction, startAiFill, aiFillProgress, setAiFillProgress,
   autoFitAllCols, onOpenMultiSort, onOpenCondFormat, hasCondRules, copyAsMarkdown,
-  onOpenSheetChat, sheetChatOpen, onToggleChart, chartOpen,
+  onOpenSheetChat, sheetChatOpen, onToggleChart, chartOpen, onOpenFormulaWizard,
 }: SheetToolbarProps) {
   const [currencyOpen, setCurrencyOpen] = useState(false);
   return (
@@ -290,14 +291,6 @@ export function SheetToolbar({
           <Palette className="h-3 w-3" /> Cond.
         </Button>
         <Button
-          variant={sheetChatOpen ? "default" : "outline"}
-          size="sm" className="h-7 text-xs gap-1"
-          onClick={onOpenSheetChat}
-          title="Chat with this sheet data"
-        >
-          <MessageSquare className="h-3 w-3" /> Ask AI
-        </Button>
-        <Button
           variant={chartOpen ? "default" : "outline"}
           size="sm" className="h-7 text-xs gap-1"
           onClick={onToggleChart}
@@ -339,18 +332,14 @@ export function SheetToolbar({
         <div className="sticky top-0 z-10 border-b px-4 py-1.5 flex items-center gap-2 bg-background/95 backdrop-blur-sm">
           <Sparkles className="h-3.5 w-3.5 text-primary" />
           <span className="text-xs font-medium text-primary mr-1">AI</span>
-          <Button
-            size="sm"
-            className="h-7 text-xs"
-            variant={aiFillOpen ? "default" : "outline"}
+          <button
+            className="btn-tactile btn-tactile-outline shrink-0"
             onClick={() => { setAiFillOpen(!aiFillOpen); if (aiFillOpen) cancelAiFill(); }}
             disabled={aiDisabled}
             title={aiDisabled ? `AI disabled for tables > ${ROW_AI_LIMIT.toLocaleString()} rows` : undefined}
-          >Fill</Button>
-          <Button
-            size="sm"
-            className="h-7 text-xs"
-            variant="outline"
+          >Fill</button>
+          <button
+            className="btn-tactile btn-tactile-outline shrink-0"
             onClick={() => {
               if (selection) {
                 setAiOpTargetStr(`${idxToCol(selection.c1)}${selection.r1 + 1}`);
@@ -371,18 +360,30 @@ export function SheetToolbar({
             }}
             disabled={aiDisabled}
             title="Process a single cell or range with AI"
-          >Range</Button>
-          <Button
-            size="sm"
-            className="h-7 text-xs"
-            variant="outline"
+          >Range</button>
+          <button
+            className="btn-tactile btn-tactile-outline shrink-0 flex items-center gap-1"
             onClick={() => { setGenRowsOpen(true); setGenRowsError(null); setGenRowsProgress(0); }}
             disabled={aiDisabled}
             title="Generate new rows with AI"
           >
-            <Sparkles className="h-3 w-3 mr-1" />
+            <Sparkles className="h-3 w-3" />
             Generate rows
-          </Button>
+          </button>
+          <button
+            className={`btn-tactile btn-tactile-outline shrink-0 flex items-center gap-1${sheetChatOpen ? " ring-2 ring-primary/40" : ""}`}
+            onClick={onOpenSheetChat}
+            title="Chat with this sheet data"
+          >
+            <MessageSquare className="h-3 w-3" /> Ask AI
+          </button>
+          <button
+            className="btn-tactile btn-tactile-outline shrink-0 flex items-center gap-1"
+            onClick={onOpenFormulaWizard}
+            title="AI Formula Assistant"
+          >
+            <Wand2 className="h-3 w-3" /> Formula
+          </button>
           <span className="ml-auto text-[10px] text-muted-foreground font-mono">{activeEngine}</span>
         </div>
       )}

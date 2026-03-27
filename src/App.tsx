@@ -114,9 +114,6 @@ export default function App() {
     return (localStorage.getItem("theme") as "light" | "dark") || "light";
   });
 
-  const [baseColor, setBaseColor] = useState<string>(() => {
-    return localStorage.getItem("base_color") || "zinc";
-  });
 
   useEffect(() => {
     function handleUnload() {
@@ -137,12 +134,10 @@ export default function App() {
   }, [theme]);
 
   useEffect(() => {
-    localStorage.setItem("base_color", baseColor);
-    // Remove all possible theme classes
+    // Remove legacy theme classes that could override riso design tokens
     const themes = ["theme-zinc", "theme-slate", "theme-stone", "theme-rose", "theme-orange"];
     document.documentElement.classList.remove(...themes);
-    document.documentElement.classList.add(`theme-${baseColor}`);
-  }, [baseColor]);
+  }, []);
 
   // Tuning params state — persisted to both localStorage and backend DB
   const [tuningParams, setTuningParams] = useState<TuningParams>(() => {
@@ -277,31 +272,35 @@ export default function App() {
 
   return (
     <ChatStreamProvider>
-    <div className="flex h-screen w-full overflow-hidden bg-muted/40 text-foreground font-sans antialiased" onContextMenu={(e) => e.preventDefault()}>
+    <div className="flex flex-col h-screen w-full overflow-hidden text-foreground font-sans antialiased" onContextMenu={(e) => e.preventDefault()}>
+      <div className="riso-strip" />
+      <div className="flex flex-1 min-h-0 overflow-hidden">
       {/* SIDEBAR */}
-      <aside className="hidden lg:flex w-[220px] shrink-0 flex-col border-r bg-background">
-        <div className="h-20 flex items-center px-12 border-b gap-1">
+      <aside className="hidden lg:flex w-[220px] shrink-0 flex-col" style={{ background: 'var(--topbar-bg)', borderRight: '1px solid var(--topbar-border)' }}>
+        <div className="h-20 flex items-center px-5 gap-2.5">
           <img src={crowforgeLogo} alt="CrowForge" className="h-8 w-8 rounded-md shrink-0" />
-          <span className="font-bold text-base tracking-tight truncate">CrowForge</span>
+          <span className="font-display text-base tracking-tight truncate" style={{ color: 'var(--topbar-fg)' }}>CrowForge</span>
         </div>
 
         <div className="flex-1 overflow-y-auto">
           <div className="p-3 space-y-0.5">
             {navItems.map(({ page, label, icon: Icon }) => (
               <Fragment key={page}>
-                {page === "documents" && <div className="border-t border-border mx-1 my-1.5" />}
+                {page === "documents" && <div className="mx-1 my-1.5" style={{ borderTop: '1px solid var(--topbar-border)' }} />}
                 <button
                   onClick={() => setCurrentPage(page)}
-                  className={cn(
-                    "w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-sm transition-colors",
+                  className={cn("w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-sm transition-colors", currentPage === page ? "font-semibold" : "")}
+                  style={
                     page === "agent"
                       ? currentPage === page
-                        ? "bg-violet-500/15 text-violet-600 dark:text-violet-400 font-semibold"
-                        : "text-muted-foreground hover:bg-violet-500/10 hover:text-violet-600 dark:hover:text-violet-400"
+                        ? { background: 'rgba(139,98,212,0.25)', color: '#c4a8f0' }
+                        : { color: 'var(--topbar-muted)' }
                       : currentPage === page
-                        ? "bg-primary/10 text-primary font-semibold"
-                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                  )}
+                        ? { background: 'color-mix(in srgb, var(--primary) 20%, transparent)', color: 'var(--accent-orange)' }
+                        : { color: 'var(--topbar-muted)' }
+                  }
+                  onMouseEnter={(e) => { if (currentPage !== page) { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.06)'; (e.currentTarget as HTMLButtonElement).style.color = 'var(--topbar-fg)'; } }}
+                  onMouseLeave={(e) => { if (currentPage !== page) { (e.currentTarget as HTMLButtonElement).style.background = ''; (e.currentTarget as HTMLButtonElement).style.color = 'var(--topbar-muted)'; } }}
                 >
                   <Icon size={14} />
                   {label}
@@ -311,17 +310,19 @@ export default function App() {
           </div>
         </div>
 
-        <div className="p-3 space-y-0.5 border-t">
+        <div className="p-3 space-y-0.5" style={{ borderTop: '1px solid var(--topbar-border)' }}>
           {bottomNavItems.map(({ page, label, icon: Icon }) => (
             <button
               key={page}
               onClick={() => setCurrentPage(page)}
-              className={cn(
-                "w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-sm transition-colors",
+              className={cn("w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-sm transition-colors", currentPage === page ? "font-semibold" : "")}
+              style={
                 currentPage === page
-                  ? "bg-primary/10 text-primary font-semibold"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
-              )}
+                  ? { background: 'color-mix(in srgb, var(--primary) 20%, transparent)', color: 'var(--accent-orange)' }
+                  : { color: 'var(--topbar-muted)' }
+              }
+              onMouseEnter={(e) => { if (currentPage !== page) { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.06)'; (e.currentTarget as HTMLButtonElement).style.color = 'var(--topbar-fg)'; } }}
+              onMouseLeave={(e) => { if (currentPage !== page) { (e.currentTarget as HTMLButtonElement).style.background = ''; (e.currentTarget as HTMLButtonElement).style.color = 'var(--topbar-muted)'; } }}
             >
               <Icon size={14} />
               {label}
@@ -367,8 +368,6 @@ export default function App() {
             <SettingsPage
               theme={theme}
               setTheme={setTheme}
-              baseColor={baseColor}
-              setBaseColor={setBaseColor}
             />
           ) : currentPage === "help" ? (
             <HelpPage />
@@ -408,6 +407,7 @@ export default function App() {
           {modelStatus === "unloaded" ? "Model unloaded (idle)" : "No model loaded"}
         </div>
       )}
+      </div>
     </div>
     </ChatStreamProvider>
   );

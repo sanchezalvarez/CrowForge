@@ -234,7 +234,7 @@ export function TextNode({ id, data, selected }: NodeProps) {
         <div
           style={shapeStyle}
           className={cn(
-            "w-full h-full min-w-[120px] min-h-[60px] text-card-foreground transition-colors flex flex-col",
+            "w-full h-full min-w-[120px] min-h-[60px] text-card-foreground transition-colors flex flex-col card-riso",
             showBorder && (selected ? "border-2 border-primary" : "border border-border"),
           )}
           onDoubleClick={startEdit}

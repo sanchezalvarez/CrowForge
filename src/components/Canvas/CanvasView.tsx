@@ -168,6 +168,7 @@ export function CanvasView({ canvasId }: CanvasViewProps) {
         />
 
         <div ref={wrapperRef} className="flex-1 overflow-hidden relative">
+          <div className="halftone-patch" style={{ top: -30, right: -30, width: 200, height: 200, pointerEvents: "none" }} />
           <ReactFlow
             nodes={nodes}
             edges={edges}
@@ -180,7 +181,7 @@ export function CanvasView({ canvasId }: CanvasViewProps) {
             fitView
             fitViewOptions={{ padding: 0.2 }}
             proOptions={{ hideAttribution: true }}
-            style={{ background: "hsl(var(--background))" }}
+            style={{ background: `radial-gradient(ellipse at 80% 20%, rgba(224,78,14,.05) 0%, transparent 60%), radial-gradient(ellipse at 10% 80%, rgba(11,114,104,.05) 0%, transparent 55%), var(--canvas-bg)` }}
             snapToGrid={snapToGrid}
             snapGrid={[16, 16]}
             selectionMode={SelectionMode.Partial}
@@ -206,15 +207,15 @@ export function CanvasView({ canvasId }: CanvasViewProps) {
               variant={BackgroundVariant.Dots}
               gap={24}
               size={1.5}
-              color="hsl(var(--muted-foreground) / 0.18)"
+              color="color-mix(in srgb, var(--muted-foreground) 18%, transparent)"
             />
             <Controls
               showInteractive={false}
               className="[&>button]:!bg-background [&>button]:!border [&>button]:!border-border [&>button]:!text-foreground [&>button:hover]:!bg-muted"
             />
             <MiniMap
-              nodeColor="hsl(var(--muted))"
-              maskColor="hsl(var(--background) / 0.7)"
+              nodeColor="var(--muted)"
+              maskColor="color-mix(in srgb, var(--background) 70%, transparent)"
               className="!bg-background !border !border-border !rounded-lg"
             />
           </ReactFlow>

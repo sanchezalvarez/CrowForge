@@ -394,13 +394,13 @@ const SheetRow = React.memo(function SheetRow({
               </div>
             )}
             {selected && !isFormulaRef && (
-              <div className="absolute inset-0 pointer-events-none z-[3] ring-1 ring-primary/70 ring-inset" style={{ backgroundColor: 'hsl(var(--primary) / 0.18)' }} />
+              <div className="absolute inset-0 pointer-events-none z-[3] ring-1 ring-primary/70 ring-inset" style={{ backgroundColor: 'color-mix(in srgb, var(--primary) 18%, transparent)' }} />
             )}
             {justFilled && (
               <div className="absolute inset-0 pointer-events-none z-[3] ring-1 ring-green-500/60 ring-inset" style={{ backgroundColor: 'rgba(34,197,94,0.15)' }} />
             )}
             {fillError && (
-              <div className="absolute inset-0 pointer-events-none z-[3]" style={{ backgroundColor: 'hsl(var(--destructive) / 0.12)' }} />
+              <div className="absolute inset-0 pointer-events-none z-[3]" style={{ backgroundColor: 'color-mix(in srgb, var(--destructive) 12%, transparent)' }} />
             )}
             {isFillHandle && (
               <div
@@ -895,7 +895,7 @@ export function SheetGrid({
                 </th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="paper-surface">
               {/* Virtual scroll spacer top */}
               {filteredRowIndices.length > ROW_RENDER_LIMIT && scrollRowStart > 0 && (
                 <tr><td colSpan={activeSheet.columns.length + 2} style={{ height: filteredRowIndices.slice(0, scrollRowStart).reduce((sum, ri) => sum + (rowHeights[ri] ?? DEFAULT_ROW_HEIGHT) + 1, 0), padding: 0, border: "none" }} /></tr>

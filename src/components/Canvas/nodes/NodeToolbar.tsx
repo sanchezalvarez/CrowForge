@@ -82,7 +82,7 @@ export function getShapeStyle(
   shape?: string,
   color?: string,
 ): React.CSSProperties {
-  const bg = color || "hsl(var(--card))";
+  const bg = color || "var(--card)";
   switch (shape) {
     case "circle":
       return { backgroundColor: bg, borderRadius: "50%", overflow: "hidden" };
@@ -317,8 +317,8 @@ export function CanvasNodeToolbar({ id, selected, secondRow, hideShapes }: Canva
                   onClick={() => handleColor(c.value)}
                   className="w-6 h-6 rounded-full hover:scale-125 transition-transform shrink-0 border border-border/60 relative"
                   style={{
-                    backgroundColor: c.value || "hsl(var(--card))",
-                    boxShadow: c.value ? undefined : "inset 0 0 0 1px hsl(var(--border))",
+                    backgroundColor: c.value || "var(--card)",
+                    boxShadow: c.value ? undefined : "inset 0 0 0 1px var(--border)",
                   }}
                 >
                   {!c.value && (

@@ -200,24 +200,90 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto">
-      <div className="relative p-8 max-w-5xl mx-auto space-y-8">
+    <div className="flex-1 overflow-y-auto riso-noise">
+      {/* Riso background layer — full-width, outside max-w constraint */}
+      <div className="pointer-events-none select-none" style={{ position: 'absolute', inset: 0, overflow: 'hidden', zIndex: 0 }}>
 
-        {/* Riso background circles — large offset rings for depth */}
-        <div className="pointer-events-none select-none" style={{ position: 'absolute', inset: 0, overflow: 'hidden', zIndex: 0 }}>
-          <div style={{ position: 'absolute', width: 440, height: 440, borderRadius: '50%', border: '1.5px solid rgba(11,114,104,0.11)', top: -80, right: -140 }} />
-          <div style={{ position: 'absolute', width: 340, height: 340, borderRadius: '50%', border: '1.5px solid rgba(224,78,14,0.09)', top: -20, right: -80 }} />
-          <div style={{ position: 'absolute', width: 240, height: 240, borderRadius: '50%', border: '1px solid rgba(92,58,156,0.08)', top: 40, right: -20 }} />
-          <div style={{ position: 'absolute', width: 560, height: 560, borderRadius: '50%', border: '1px solid rgba(92,58,156,0.07)', bottom: 40, left: -240 }} />
-          <div style={{ position: 'absolute', width: 220, height: 220, borderRadius: '50%', border: '1px solid rgba(11,114,104,0.07)', bottom: 160, left: -80 }} />
-        </div>
+        {/* ── 1. Colour blobs ── */}
+        <div style={{ position: 'absolute', width: 600, height: 600, borderRadius: '50%', background: 'var(--accent-teal)', opacity: 0.10, mixBlendMode: 'multiply', top: -200, right: -180 }} />
+        <div style={{ position: 'absolute', width: 500, height: 500, borderRadius: '50%', background: 'var(--accent-orange)', opacity: 0.09, mixBlendMode: 'multiply', bottom: -160, left: -160 }} />
+        <div style={{ position: 'absolute', width: 380, height: 380, borderRadius: '50%', background: 'var(--accent-violet)', opacity: 0.07, mixBlendMode: 'multiply', bottom: 80, right: -100 }} />
+        <div style={{ position: 'absolute', width: 260, height: 260, borderRadius: '50%', background: 'var(--accent-teal)', opacity: 0.06, mixBlendMode: 'multiply', top: '35%', left: -100 }} />
+
+        {/* ── 2. Registration crosshairs ── */}
+        <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} xmlns="http://www.w3.org/2000/svg">
+          {/* Top-right — teal */}
+          <line x1="calc(100% - 32)" y1="28" x2="calc(100% - 8)" y2="28" stroke="rgba(11,114,104,0.45)" strokeWidth="1.5" />
+          <line x1="calc(100% - 20)" y1="16" x2="calc(100% - 20)" y2="40" stroke="rgba(11,114,104,0.45)" strokeWidth="1.5" />
+          <circle cx="calc(100% - 20)" cy="28" r="5" stroke="rgba(11,114,104,0.3)" strokeWidth="1" fill="none" />
+          {/* Bottom-left — orange */}
+          <line x1="8" y1="calc(100% - 28)" x2="32" y2="calc(100% - 28)" stroke="rgba(224,78,14,0.45)" strokeWidth="1.5" />
+          <line x1="20" y1="calc(100% - 40)" x2="20" y2="calc(100% - 16)" stroke="rgba(224,78,14,0.45)" strokeWidth="1.5" />
+          <circle cx="20" cy="calc(100% - 28)" r="5" stroke="rgba(224,78,14,0.3)" strokeWidth="1" fill="none" />
+          {/* Top-left — violet */}
+          <line x1="8" y1="28" x2="32" y2="28" stroke="rgba(92,58,156,0.35)" strokeWidth="1.5" />
+          <line x1="20" y1="16" x2="20" y2="40" stroke="rgba(92,58,156,0.35)" strokeWidth="1.5" />
+          {/* Bottom-right — teal faint */}
+          <line x1="calc(100% - 32)" y1="calc(100% - 28)" x2="calc(100% - 8)" y2="calc(100% - 28)" stroke="rgba(11,114,104,0.25)" strokeWidth="1" />
+          <line x1="calc(100% - 20)" y1="calc(100% - 40)" x2="calc(100% - 20)" y2="calc(100% - 16)" stroke="rgba(11,114,104,0.25)" strokeWidth="1" />
+        </svg>
+
+        {/* ── 3. Halftone dot clusters ── */}
+        <svg style={{ position: 'absolute', right: 40, top: 120, width: 100, height: 100 }} viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+          {[[20,20,3.5],[38,14,2.5],[12,38,2],[30,35,3],[48,28,2],[55,42,1.5],[22,52,2],[40,50,1.5],[60,30,1],[15,60,1.5]].map(([x,y,r],i) =>
+            <circle key={i} cx={x} cy={y} r={r} fill="rgba(224,78,14,0.28)" />)}
+        </svg>
+        <svg style={{ position: 'absolute', left: 60, bottom: 120, width: 90, height: 90 }} viewBox="0 0 90 90" xmlns="http://www.w3.org/2000/svg">
+          {[[18,18,3],[34,12,2],[10,32,2.5],[28,30,2],[44,22,1.5],[50,36,2],[16,46,1.5],[36,44,1],[55,28,1],[12,58,1.5]].map(([x,y,r],i) =>
+            <circle key={i} cx={x} cy={y} r={r} fill="rgba(11,114,104,0.28)" />)}
+        </svg>
+        <svg style={{ position: 'absolute', left: 40, top: 50, width: 70, height: 70 }} viewBox="0 0 70 70" xmlns="http://www.w3.org/2000/svg">
+          {[[14,14,2.5],[26,8,1.5],[8,26,2],[22,24,1.5],[36,16,1],[38,30,1.5],[12,38,1],[28,36,1.5]].map(([x,y,r],i) =>
+            <circle key={i} cx={x} cy={y} r={r} fill="rgba(92,58,156,0.22)" />)}
+        </svg>
+
+
+        {/* ── 5. Ink splatter dots ── */}
+        <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} xmlns="http://www.w3.org/2000/svg">
+          <circle cx="18%" cy="12%" r="3" fill="rgba(224,78,14,0.20)" />
+          <circle cx="23%" cy="8%"  r="1.5" fill="rgba(224,78,14,0.14)" />
+          <circle cx="15%" cy="18%" r="2" fill="rgba(224,78,14,0.12)" />
+          <circle cx="72%" cy="55%" r="2.5" fill="rgba(11,114,104,0.18)" />
+          <circle cx="76%" cy="60%" r="1.5" fill="rgba(11,114,104,0.12)" />
+          <circle cx="68%" cy="62%" r="1" fill="rgba(11,114,104,0.15)" />
+          <circle cx="88%" cy="30%" r="2" fill="rgba(92,58,156,0.18)" />
+          <circle cx="92%" cy="35%" r="1.5" fill="rgba(92,58,156,0.12)" />
+          <circle cx="85%" cy="38%" r="1" fill="rgba(92,58,156,0.15)" />
+          <circle cx="40%" cy="85%" r="2.5" fill="rgba(224,78,14,0.16)" />
+          <circle cx="44%" cy="90%" r="1.5" fill="rgba(224,78,14,0.10)" />
+          <circle cx="36%" cy="88%" r="1" fill="rgba(11,114,104,0.14)" />
+          <circle cx="55%" cy="20%" r="2" fill="rgba(92,58,156,0.15)" />
+          <circle cx="60%" cy="15%" r="1" fill="rgba(92,58,156,0.10)" />
+          <circle cx="10%" cy="70%" r="2" fill="rgba(11,114,104,0.16)" />
+          <circle cx="6%"  cy="75%" r="1.5" fill="rgba(11,114,104,0.10)" />
+        </svg>
+
+      </div>
+
+      <div className="relative p-8 max-w-5xl mx-auto space-y-8">
 
         {/* Header */}
         <header style={{ position: 'relative', zIndex: 1 }}>
           <div className="flex items-start justify-between">
             <div>
-              <h1 className="text-2xl font-bold tracking-tight">{greeting()}</h1>
-              <p className="text-sm text-muted-foreground mt-1">Your local-first AI workspace.</p>
+              <h1
+                className="font-display font-black tracking-tight leading-none"
+                style={{
+                  fontSize: 'clamp(2.4rem, 5vw, 3.8rem)',
+                  textShadow: '3px 3px 0 rgba(224,78,14,0.22), -1.5px -1.5px 0 rgba(11,114,104,0.18)',
+                  letterSpacing: '-0.02em',
+                }}
+              >
+                {greeting()}
+              </h1>
+              <p className="text-sm text-muted-foreground mt-2 font-mono-ui tracking-widest uppercase" style={{ fontSize: 11, letterSpacing: '0.18em' }}>
+                Your local-first AI workspace
+              </p>
             </div>
             {totalItems > 0 && (
               <div className="flex items-center gap-2 mt-1">

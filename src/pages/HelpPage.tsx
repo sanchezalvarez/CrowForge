@@ -19,14 +19,40 @@ import {
 
 export function HelpPage() {
   return (
-    <div className="flex flex-col h-full bg-background">
+    <div className="relative flex flex-col h-full overflow-hidden riso-noise">
+      <div className="pointer-events-none select-none" style={{ position: 'absolute', inset: 0, zIndex: 0 }}>
+        <div style={{ position: 'absolute', width: 600, height: 600, borderRadius: '50%', background: 'var(--accent-teal)', opacity: 0.10, mixBlendMode: 'multiply', top: -200, right: -180 }} />
+        <div style={{ position: 'absolute', width: 500, height: 500, borderRadius: '50%', background: 'var(--accent-orange)', opacity: 0.09, mixBlendMode: 'multiply', bottom: -160, left: -160 }} />
+        <div style={{ position: 'absolute', width: 380, height: 380, borderRadius: '50%', background: 'var(--accent-violet)', opacity: 0.07, mixBlendMode: 'multiply', bottom: 80, right: -100 }} />
+        <div style={{ position: 'absolute', width: 260, height: 260, borderRadius: '50%', background: 'var(--accent-teal)', opacity: 0.06, mixBlendMode: 'multiply', top: '35%', left: -100 }} />
+        <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} xmlns="http://www.w3.org/2000/svg">
+          <line x1="calc(100% - 32)" y1="28" x2="calc(100% - 8)" y2="28" stroke="rgba(11,114,104,0.45)" strokeWidth="1.5" />
+          <line x1="calc(100% - 20)" y1="16" x2="calc(100% - 20)" y2="40" stroke="rgba(11,114,104,0.45)" strokeWidth="1.5" />
+          <circle cx="calc(100% - 20)" cy="28" r="5" stroke="rgba(11,114,104,0.3)" strokeWidth="1" fill="none" />
+          <line x1="8" y1="calc(100% - 28)" x2="32" y2="calc(100% - 28)" stroke="rgba(224,78,14,0.45)" strokeWidth="1.5" />
+          <line x1="20" y1="calc(100% - 40)" x2="20" y2="calc(100% - 16)" stroke="rgba(224,78,14,0.45)" strokeWidth="1.5" />
+          <circle cx="20" cy="calc(100% - 28)" r="5" stroke="rgba(224,78,14,0.3)" strokeWidth="1" fill="none" />
+          <line x1="8" y1="28" x2="32" y2="28" stroke="rgba(92,58,156,0.35)" strokeWidth="1.5" />
+          <line x1="20" y1="16" x2="20" y2="40" stroke="rgba(92,58,156,0.35)" strokeWidth="1.5" />
+          <line x1="calc(100% - 32)" y1="calc(100% - 28)" x2="calc(100% - 8)" y2="calc(100% - 28)" stroke="rgba(11,114,104,0.25)" strokeWidth="1" />
+          <line x1="calc(100% - 20)" y1="calc(100% - 40)" x2="calc(100% - 20)" y2="calc(100% - 16)" stroke="rgba(11,114,104,0.25)" strokeWidth="1" />
+        </svg>
+        <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} xmlns="http://www.w3.org/2000/svg">
+          <circle cx="18%" cy="12%" r="3" fill="rgba(224,78,14,0.20)" />
+          <circle cx="23%" cy="8%"  r="1.5" fill="rgba(224,78,14,0.14)" />
+          <circle cx="72%" cy="55%" r="2.5" fill="rgba(11,114,104,0.18)" />
+          <circle cx="88%" cy="30%" r="2" fill="rgba(92,58,156,0.18)" />
+          <circle cx="40%" cy="85%" r="2.5" fill="rgba(224,78,14,0.16)" />
+          <circle cx="10%" cy="70%" r="2" fill="rgba(11,114,104,0.16)" />
+        </svg>
+      </div>
       {/* Header */}
-      <div className="h-16 flex items-center px-6 border-b shrink-0">
+      <div className="h-16 flex items-center px-6 border-b shrink-0" style={{ position: 'relative', zIndex: 1 }}>
         <h1 className="text-xl font-bold tracking-tight">Help!</h1>
       </div>
 
       {/* Main Content */}
-      <ScrollArea className="flex-1">
+      <ScrollArea className="flex-1" style={{ position: 'relative', zIndex: 1 }}>
         <div className="p-6 max-w-5xl mx-auto space-y-10 pb-20">
           
           <div className="space-y-4">

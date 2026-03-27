@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, Component, Fragment, type ReactNode } from "react";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import axios from "axios";
 import {
   Gauge,
@@ -273,6 +274,44 @@ export default function App() {
   return (
     <ChatStreamProvider>
     <div className="flex flex-col h-screen w-full overflow-hidden text-foreground font-sans antialiased" onContextMenu={(e) => e.preventDefault()}>
+      {/* Custom title bar */}
+      <div
+        data-tauri-drag-region
+        className="flex items-center justify-between shrink-0 select-none"
+        style={{ height: 32, background: 'var(--topbar-bg)', borderBottom: '1px solid var(--topbar-border)', paddingLeft: 12, paddingRight: 0, zIndex: 100 }}
+      >
+        <span data-tauri-drag-region className="font-mono-ui uppercase pointer-events-none" style={{ fontSize: 10, letterSpacing: '0.16em', color: 'var(--topbar-muted)' }}>
+          CrowForge
+        </span>
+        <div className="flex h-full">
+          <button
+            onClick={() => getCurrentWindow().minimize()}
+            className="h-full px-4 flex items-center justify-center transition-colors hover:bg-white/8"
+            style={{ color: 'var(--topbar-muted)' }}
+            title="Minimize"
+          >
+            <svg width="10" height="1" viewBox="0 0 10 1"><rect width="10" height="1" fill="currentColor" /></svg>
+          </button>
+          <button
+            onClick={() => getCurrentWindow().toggleMaximize()}
+            className="h-full px-4 flex items-center justify-center transition-colors hover:bg-white/8"
+            style={{ color: 'var(--topbar-muted)' }}
+            title="Maximize"
+          >
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><rect x="0.5" y="0.5" width="9" height="9" stroke="currentColor" strokeWidth="1" /></svg>
+          </button>
+          <button
+            onClick={() => getCurrentWindow().close()}
+            className="h-full px-4 flex items-center justify-center transition-colors"
+            style={{ color: 'var(--topbar-muted)' }}
+            onMouseEnter={e => (e.currentTarget.style.background = 'rgba(224,78,14,0.85)', e.currentTarget.style.color = '#fff')}
+            onMouseLeave={e => (e.currentTarget.style.background = 'transparent', e.currentTarget.style.color = 'var(--topbar-muted)')}
+            title="Close"
+          >
+            <svg width="10" height="10" viewBox="0 0 10 10"><line x1="0" y1="0" x2="10" y2="10" stroke="currentColor" strokeWidth="1.2" /><line x1="10" y1="0" x2="0" y2="10" stroke="currentColor" strokeWidth="1.2" /></svg>
+          </button>
+        </div>
+      </div>
       <div className="riso-strip" />
       <div className="flex flex-1 min-h-0 overflow-hidden">
       {/* SIDEBAR */}
@@ -347,7 +386,7 @@ export default function App() {
 
       {/* MAIN + AI CONTROLS */}
       <div className="flex flex-1 min-w-0 flex-col lg:flex-row overflow-hidden">
-        <main className={`flex-1 min-w-0 ${currentPage === "canvas" ? "overflow-hidden" : "overflow-y-auto"}`}>
+        <main className={`flex-1 min-w-0 ${["canvas", "settings", "chat", "agent", "tools", "help"].includes(currentPage) ? "overflow-hidden" : "overflow-y-auto"}`}>
           <PageErrorBoundary page={currentPage}>
           {currentPage === "home" ? (
             <DashboardPage onNavigate={handleNavigate} />

@@ -185,7 +185,14 @@
   --muted:            #E6DDD0;
   --muted-foreground: #7A6E5E;
   --border:           rgba(20,16,10,0.10);
-  background: #F0E8DC !important;
+  /* Paper grain lines — subtle horizontal rules like paper fibers */
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 27px,
+    rgba(20,16,10,0.016) 27px,
+    rgba(20,16,10,0.016) 28px
+  ), #F0E8DC !important;
   color: #14100A;
 }
 
@@ -443,8 +450,102 @@ input, textarea, [contenteditable] {
   font-family: 'Syne Variable', system-ui, sans-serif;
   font-weight: 700;
 }
+/* Riso mis-registration title effect — teal + orange ghost shadows */
+.riso-title {
+  text-shadow:
+    1.5px 1.5px 0 rgba(11,114,104,0.40),
+    -1px -0.5px 0 rgba(224,78,14,0.25);
+}
 .font-mono-ui {
   font-family: 'IBM Plex Mono', monospace;
+}
+
+/* ── Riso section label — print-style uppercase header with ◆ marker ───── */
+.riso-section-label {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.riso-section-label::before {
+  content: '◆';
+  color: var(--accent-orange);
+  font-size: 7px;
+  flex-shrink: 0;
+}
+
+/* ── Riso ink stamp — circular/pill badge for counts, status ────────────── */
+.riso-stamp {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border: 1.5px solid currentColor;
+  border-radius: 9999px;
+  padding: 1px 7px;
+  opacity: 0.70;
+  line-height: 1.6;
+}
+
+/* ── Riso AI speech bubble — teal + orange offset shadow ────────────────── */
+.riso-bubble-ai {
+  box-shadow:
+    2.5px 2.5px 0 var(--riso-teal),
+    -1px -1px 0 rgba(224,78,14,0.12);
+}
+.dark .riso-bubble-ai {
+  box-shadow:
+    2.5px 2.5px 0 rgba(20,184,166,0.22),
+    -1px -1px 0 rgba(255,90,26,0.14);
+}
+
+/* ── Riso corner registration marks — L-brackets in teal/orange ─────────── */
+.riso-frame {
+  position: relative;
+}
+.riso-frame::before,
+.riso-frame::after {
+  content: '';
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  pointer-events: none;
+  opacity: 0.35;
+}
+.riso-frame::before {
+  top: 8px;
+  right: 8px;
+  border-top: 1.5px solid var(--accent-teal);
+  border-right: 1.5px solid var(--accent-teal);
+}
+.riso-frame::after {
+  bottom: 8px;
+  left: 8px;
+  border-bottom: 1.5px solid var(--accent-orange);
+  border-left: 1.5px solid var(--accent-orange);
+}
+
+/* ── Riso color chips — print registration color strip ──────────────────── */
+.riso-color-chips {
+  display: flex;
+  gap: 3px;
+  align-items: center;
+}
+.riso-color-chips span {
+  width: 8px;
+  height: 8px;
+  border-radius: 1px;
+  display: block;
+  opacity: 0.55;
 }
 
 /* ── Range slider — global riso style ──────────────────────────────────── */

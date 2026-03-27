@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
-import crowforgeLogo from "../assets/crowforge_ico.png";
+import agentCrowner from "../assets/AgentCrowner_512.png";
 
 const STATUS_MESSAGES = [
   "Starting backend…",
@@ -23,7 +23,7 @@ export function SplashScreen({ failed }: { failed?: boolean }) {
 
   return (
     <div className="flex h-screen w-full flex-col items-center justify-center gap-6 bg-background text-foreground">
-      <img src={crowforgeLogo} alt="CrowForge" className="h-20 w-20 rounded-2xl shadow-lg" />
+      <img src={agentCrowner} alt="AgentCrowner" className="h-32 w-32 rounded-2xl object-contain shadow-lg" />
       <span className="text-2xl font-bold tracking-tight">CrowForge</span>
 
       {failed ? (

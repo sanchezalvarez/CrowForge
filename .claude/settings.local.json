@@ -67,7 +67,8 @@
       "Bash(npm list:*)",
       "Bash(findstr :8000)",
       "Bash(wait:*)",
-      "Bash(.build.ps1)"
+      "Bash(.build.ps1)",
+      "Bash(file:*)"
     ]
   }
 }

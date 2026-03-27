@@ -74,9 +74,9 @@ function DigestSection() {
   return (
     <section>
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-bold flex items-center gap-2">
-          <Newspaper className="h-5 w-5 text-primary" />
-          Today's Digest
+        <h2 className="text-base font-bold flex items-center gap-2">
+          <Newspaper className="h-4 w-4 text-primary" />
+          <span className="riso-section-label" style={{ fontSize: 12, letterSpacing: '0.08em' }}>Today's Digest</span>
         </h2>
         <div className="flex items-center gap-2">
           <button
@@ -201,17 +201,37 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
 
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="p-8 max-w-5xl mx-auto space-y-8">
+      <div className="relative p-8 max-w-5xl mx-auto space-y-8">
+
+        {/* Riso background circles — large offset rings for depth */}
+        <div className="pointer-events-none select-none" style={{ position: 'absolute', inset: 0, overflow: 'hidden', zIndex: 0 }}>
+          <div style={{ position: 'absolute', width: 440, height: 440, borderRadius: '50%', border: '1.5px solid rgba(11,114,104,0.11)', top: -80, right: -140 }} />
+          <div style={{ position: 'absolute', width: 340, height: 340, borderRadius: '50%', border: '1.5px solid rgba(224,78,14,0.09)', top: -20, right: -80 }} />
+          <div style={{ position: 'absolute', width: 240, height: 240, borderRadius: '50%', border: '1px solid rgba(92,58,156,0.08)', top: 40, right: -20 }} />
+          <div style={{ position: 'absolute', width: 560, height: 560, borderRadius: '50%', border: '1px solid rgba(92,58,156,0.07)', bottom: 40, left: -240 }} />
+          <div style={{ position: 'absolute', width: 220, height: 220, borderRadius: '50%', border: '1px solid rgba(11,114,104,0.07)', bottom: 160, left: -80 }} />
+        </div>
 
         {/* Header */}
-        <header>
-          <h1 className="text-2xl font-bold tracking-tight">{greeting()}</h1>
-          <p className="text-sm text-muted-foreground mt-1">Your local-first AI workspace.</p>
+        <header style={{ position: 'relative', zIndex: 1 }}>
+          <div className="flex items-start justify-between">
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight">{greeting()}</h1>
+              <p className="text-sm text-muted-foreground mt-1">Your local-first AI workspace.</p>
+            </div>
+            {totalItems > 0 && (
+              <div className="flex items-center gap-2 mt-1">
+                <span className="riso-stamp" style={{ color: 'var(--accent-teal)' }}>{counts.documents} docs</span>
+                <span className="riso-stamp" style={{ color: 'var(--accent-orange)' }}>{counts.sheets} sheets</span>
+                <span className="riso-stamp" style={{ color: 'var(--accent-violet)' }}>{counts.chats} chats</span>
+              </div>
+            )}
+          </div>
         </header>
 
         {/* Quick actions */}
-        <section>
-          <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">Create</h2>
+        <section className="riso-frame" style={{ position: 'relative', zIndex: 1, padding: '2px' }}>
+          <h2 className="riso-section-label mb-3">Create</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             {quickActions.map((a) => (
               <button
@@ -233,19 +253,21 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
         </section>
 
         {/* Today's Digest — isolated component, streaming chunks don't re-render above */}
-        <DigestSection />
+        <div style={{ position: 'relative', zIndex: 1 }}><DigestSection /></div>
 
         {/* Recent activity */}
-        <section>
-          <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">Recent activity</h2>
+        <section style={{ position: 'relative', zIndex: 1 }}>
+          <h2 className="riso-section-label mb-3">Recent activity</h2>
           {activityFeed.length === 0 ? (
-            <Card className="border-dashed">
+            <Card className="border-dashed riso-frame">
               <CardContent className="p-8 flex flex-col items-center gap-3 text-center">
-                <div className="p-3 rounded-full bg-muted">
+                {/* Halftone empty-state background */}
+                <div className="halftone-patch" style={{ top: 0, right: 0, width: 120, height: 120, opacity: 0.5, borderRadius: 8 }} />
+                <div className="p-3 rounded-full bg-muted relative z-10">
                   <Zap className="h-6 w-6 text-muted-foreground" />
                 </div>
-                <p className="text-sm font-medium">No activity yet</p>
-                <p className="text-xs text-muted-foreground">Create a chat, document, or sheet to get started.</p>
+                <p className="text-sm font-medium relative z-10">No activity yet</p>
+                <p className="text-xs text-muted-foreground relative z-10">Create a chat, document, or sheet to get started.</p>
               </CardContent>
             </Card>
           ) : (
@@ -272,7 +294,7 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
         </section>
 
         {totalItems > 0 && (
-          <div className="flex items-center gap-2 text-xs text-muted-foreground pt-2 border-t border-border/40">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground pt-2 border-t border-border/40" style={{ position: 'relative', zIndex: 1 }}>
             <Sparkles className="h-3 w-3 text-primary/60 shrink-0" />
             <span>Tip: Use <strong>Ask AI</strong> in Sheets to chat about your data, or the <strong>Formula Wizard</strong> to generate formulas with natural language.</span>
           </div>

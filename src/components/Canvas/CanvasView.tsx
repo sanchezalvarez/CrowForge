@@ -220,6 +220,40 @@ export function CanvasView({ canvasId }: CanvasViewProps) {
             />
           </ReactFlow>
 
+          {nodes.length === 0 && loaded && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none z-10">
+              <svg width="200" height="180" viewBox="0 0 200 180" fill="none" style={{ opacity: 0.7 }}>
+                <line x1="10" y1="20" x2="30" y2="20" stroke="rgba(11,114,104,0.4)" strokeWidth="1.5" />
+                <line x1="20" y1="10" x2="20" y2="30" stroke="rgba(11,114,104,0.4)" strokeWidth="1.5" />
+                <line x1="170" y1="20" x2="190" y2="20" stroke="rgba(224,78,14,0.35)" strokeWidth="1.5" />
+                <line x1="180" y1="10" x2="180" y2="30" stroke="rgba(224,78,14,0.35)" strokeWidth="1.5" />
+                <line x1="10" y1="160" x2="30" y2="160" stroke="rgba(92,58,156,0.35)" strokeWidth="1.5" />
+                <line x1="20" y1="150" x2="20" y2="170" stroke="rgba(92,58,156,0.35)" strokeWidth="1.5" />
+                <line x1="170" y1="160" x2="190" y2="160" stroke="rgba(11,114,104,0.3)" strokeWidth="1.5" />
+                <line x1="180" y1="150" x2="180" y2="170" stroke="rgba(11,114,104,0.3)" strokeWidth="1.5" />
+                <rect x="75" y="60" width="50" height="30" rx="6"
+                  fill="rgba(224,78,14,0.08)" stroke="rgba(224,78,14,0.35)" strokeWidth="1.5" strokeDasharray="4 2" />
+                <rect x="30" y="110" width="50" height="30" rx="6"
+                  fill="rgba(11,114,104,0.08)" stroke="rgba(11,114,104,0.3)" strokeWidth="1.5" strokeDasharray="4 2" />
+                <rect x="120" y="110" width="50" height="30" rx="6"
+                  fill="rgba(92,58,156,0.08)" stroke="rgba(92,58,156,0.3)" strokeWidth="1.5" strokeDasharray="4 2" />
+                <line x1="100" y1="90" x2="55" y2="110" stroke="rgba(11,114,104,0.25)" strokeWidth="1" strokeDasharray="3 3" />
+                <line x1="100" y1="90" x2="145" y2="110" stroke="rgba(92,58,156,0.22)" strokeWidth="1" strokeDasharray="3 3" />
+                <circle cx="155" cy="50" r="3" fill="rgba(224,78,14,0.25)" />
+                <circle cx="162" cy="44" r="2" fill="rgba(224,78,14,0.15)" />
+                <circle cx="148" cy="56" r="1.5" fill="rgba(224,78,14,0.18)" />
+                <circle cx="40" cy="55" r="2.5" fill="rgba(11,114,104,0.2)" />
+                <circle cx="35" cy="48" r="1.5" fill="rgba(11,114,104,0.15)" />
+              </svg>
+              <p className="font-display text-sm font-semibold riso-title mt-2" style={{ color: 'var(--muted-foreground)' }}>
+                Empty Canvas
+              </p>
+              <p className="text-xs mt-1 font-mono-ui" style={{ color: 'var(--muted-foreground)', opacity: 0.6 }}>
+                Use the toolbar above to add nodes
+              </p>
+            </div>
+          )}
+
           {contextMenu && (
             <CanvasContextMenu
               target={contextMenu}

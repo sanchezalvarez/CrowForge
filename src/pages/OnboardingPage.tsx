@@ -1,7 +1,7 @@
 import { useState } from "react";
 import axios from "axios";
 import { CheckCircle2, AlertCircle } from "lucide-react";
-import crowforgeLogo from "../assets/crowforge_ico.png";
+import agentCrowner from "../assets/AgentCrowner_512.png";
 import { cn } from "../lib/utils";
 
 const API_BASE = "http://127.0.0.1:8000";
@@ -58,7 +58,7 @@ export function OnboardingPage({ onComplete }: Props) {
         {step === 1 && (
           <>
             <div className="flex flex-col items-center gap-3 text-center">
-              <img src={crowforgeLogo} alt="CrowForge" className="h-16 w-16 rounded-xl" />
+              <img src={agentCrowner} alt="AgentCrowner" className="h-24 w-24 rounded-2xl object-contain shadow-md" />
               <h1 className="text-2xl font-bold">Welcome to CrowForge</h1>
               <p className="text-sm text-muted-foreground">A local-first AI workspace</p>
             </div>

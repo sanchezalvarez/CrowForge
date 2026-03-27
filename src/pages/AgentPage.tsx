@@ -4,6 +4,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark, oneLight } from "react-syntax-highlighter/dist/esm/styles/prism";
+import agentCrowner from "../assets/AgentCrowner_512.png";
 import {
   PlusCircle, Send, Trash2, Bot, Loader2, Square, Pencil,
   Wrench, ChevronDown, ChevronRight, Check, Copy,
@@ -1052,7 +1053,7 @@ export function AgentPage({ tuningParams }: AgentPageProps) {
                         <Bot className="h-4 w-4 text-violet-500" />
                       </div>
                     ) : (
-                      <div className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-lg leading-none bg-muted">
+                      <div className="shrink-0 w-14 h-14 rounded-full flex items-center justify-center text-3xl leading-none bg-muted">
                         {(() => {
                           const idx = parseInt(localStorage.getItem("user_avatar_index") ?? "0", 10);
                           const avatars = ["🐱","🐶","🐰","🦜","🐟","🦊","🐢","🐸","🐼","🦋","🐧","🦔"];
@@ -1158,16 +1159,35 @@ export function AgentPage({ tuningParams }: AgentPageProps) {
             </div>
           </>
         ) : (
-          <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground">
-            <Bot className="h-10 w-10 mb-3 text-violet-400/40" />
-            <p className="text-sm font-medium">No agent chat selected</p>
-            <p className="text-xs mt-1 text-muted-foreground">
-              Create a new agent chat to get started.
-            </p>
-            <p className="text-xs mt-3 max-w-[280px] text-center text-muted-foreground/70">
-              The agent can read & write your Sheets and Documents.
-              Use the <strong>Context</strong> button to choose what it can access.
-            </p>
+          <div className="flex-1 flex flex-col items-center justify-center gap-5 select-none">
+            <div style={{
+              width: 150, height: 150, borderRadius: '50%', overflow: 'hidden',
+              background: '#0a0806', flexShrink: 0,
+              boxShadow: '5px 5px 0 rgba(139,98,212,0.32), -2.5px -2.5px 0 rgba(255,90,26,0.15)'
+            }}>
+              <img src={agentCrowner} alt="AgentCrowner"
+                style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+            </div>
+
+            <div className="text-center space-y-1.5">
+              <h2 className="font-display text-xl font-bold" style={{ color: 'var(--accent-violet)' }}>
+                Agent Mode
+              </h2>
+              <p className="text-xs text-muted-foreground max-w-[260px] text-center">
+                The agent can read &amp; write your Sheets and Documents.
+              </p>
+              <p className="text-xs text-muted-foreground/60">
+                Use <strong>Context</strong> to choose what it can access.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <span style={{ width: 20, height: 4, borderRadius: 2, background: 'var(--accent-violet)', opacity: 0.7, display: 'block' }} />
+              <span style={{ width: 20, height: 4, borderRadius: 2, background: 'var(--accent-orange)', opacity: 0.5, display: 'block' }} />
+              <span style={{ width: 20, height: 4, borderRadius: 2, background: 'var(--accent-teal)', opacity: 0.5, display: 'block' }} />
+            </div>
+
+            <p className="riso-stamp" style={{ color: 'var(--accent-violet)' }}>Select or create a session</p>
           </div>
         )}
       </div>

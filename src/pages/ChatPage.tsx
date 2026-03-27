@@ -26,6 +26,7 @@ import { cn } from "../lib/utils";
 import { toast } from "../hooks/useToast";
 import type { DocumentContext } from "../App";
 import type { TuningParams } from "../components/AIControlPanel";
+import agentCrowner from "../assets/AgentCrowner_512.png";
 import crowforgeIco from "../assets/crowforge_ico.png";
 
 const API_BASE = "http://127.0.0.1:8000";
@@ -853,11 +854,11 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
                   >
                     {/* Avatar */}
                     {msg.role === "assistant" ? (
-                      <div className="shrink-0 w-7 h-7 rounded-full bg-muted border flex items-center justify-center overflow-hidden">
-                        <img src={crowforgeIco} alt="CrowForge" className="w-5 h-5 object-contain" />
+                      <div className="shrink-0 w-14 h-14 rounded-full bg-muted border flex items-center justify-center overflow-hidden">
+                        <img src={crowforgeIco} alt="CrowForge" className="w-9 h-9 object-contain" />
                       </div>
                     ) : (
-                      <div className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-lg leading-none bg-muted">
+                      <div className="shrink-0 w-14 h-14 rounded-full flex items-center justify-center text-3xl leading-none bg-muted">
                         {userAvatar.emoji}
                       </div>
                     )}
@@ -868,7 +869,7 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
                         "px-4 py-2.5 max-w-[80%] text-sm",
                         msg.role === "user"
                           ? "bg-primary text-primary-foreground"
-                          : "bg-muted"
+                          : "bg-muted riso-bubble-ai"
                       )}
                     >
                       {msg.role === "user" ? (() => {
@@ -907,7 +908,7 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
                 {sending && (
                   <div className="flex gap-2 min-w-0">
                     <div className="shrink-0 w-7 h-7 rounded-full bg-muted border flex items-center justify-center overflow-hidden">
-                      <img src={crowforgeIco} alt="CrowForge" className="w-5 h-5 object-contain" />
+                      <img src={agentCrowner} alt="AgentCrowner" className="w-5 h-5 rounded-full object-contain shrink-0" />
                     </div>
                     <Card className="px-4 py-2.5 bg-muted text-sm max-w-[80%] min-w-0 overflow-hidden">
                       {agentEvents.length > 0 && <ToolCallBubble events={agentEvents} />}
@@ -998,10 +999,20 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
             </div>
           </>
         ) : (
-          <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground">
-            <MessageSquare className="h-10 w-10 mb-3 text-muted-foreground/40" />
-            <p className="text-sm font-medium">No chat selected</p>
-            <p className="text-xs mt-1">Create a new chat to get started.</p>
+          <div className="flex-1 flex flex-col items-center justify-center gap-5 select-none">
+            <div style={{ width: 150, height: 150, borderRadius: '50%', overflow: 'hidden', background: '#0a0806', boxShadow: '5px 5px 0 rgba(11,114,104,0.28), -2.5px -2.5px 0 rgba(224,78,14,0.18)', flexShrink: 0 }}>
+              <img src={agentCrowner} alt="AgentCrowner" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+            </div>
+            <div className="text-center space-y-1">
+              <h2 className="font-display text-xl font-bold riso-title" style={{ color: 'var(--foreground)' }}>CrowForge</h2>
+              <p className="text-xs text-muted-foreground">Your local-first AI workspace</p>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span style={{ width: 20, height: 4, borderRadius: 2, background: 'var(--accent-orange)', opacity: 0.7, display: 'block' }} />
+              <span style={{ width: 20, height: 4, borderRadius: 2, background: 'var(--accent-teal)', opacity: 0.7, display: 'block' }} />
+              <span style={{ width: 20, height: 4, borderRadius: 2, background: 'var(--accent-violet)', opacity: 0.7, display: 'block' }} />
+            </div>
+            <p className="text-xs font-mono-ui" style={{ color: 'var(--muted-foreground)', opacity: 0.6 }}>Select or create a chat to begin</p>
           </div>
         )}
       </div>

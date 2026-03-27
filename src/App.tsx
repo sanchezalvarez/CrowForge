@@ -14,7 +14,7 @@ import {
   Workflow,
   HelpCircle,
 } from "lucide-react";
-import crowforgeLogo from "./assets/crowforge_ico.png";
+import agentCrowner from "./assets/AgentCrowner_512.png";
 import { cn } from "./lib/utils";
 import DashboardPage from "./pages/DashboardPage";
 import { BenchmarkPage } from "./pages/BenchmarkPage";
@@ -277,9 +277,13 @@ export default function App() {
       <div className="flex flex-1 min-h-0 overflow-hidden">
       {/* SIDEBAR */}
       <aside className="hidden lg:flex w-[220px] shrink-0 flex-col" style={{ background: 'var(--topbar-bg)', borderRight: '1px solid var(--topbar-border)' }}>
-        <div className="h-20 flex items-center px-5 gap-2.5">
-          <img src={crowforgeLogo} alt="CrowForge" className="h-8 w-8 rounded-md shrink-0" />
-          <span className="font-display text-base tracking-tight truncate" style={{ color: 'var(--topbar-fg)' }}>CrowForge</span>
+        <div className="relative overflow-hidden shrink-0" style={{ height: 148 }}>
+          <img
+            src={agentCrowner}
+            alt="AgentCrowner"
+            className="w-full h-full object-contain"
+          />
+          <div className="absolute inset-0" style={{ background: 'linear-gradient(to top, var(--topbar-bg) 0%, transparent 55%)' }} />
         </div>
 
         <div className="flex-1 overflow-y-auto">
@@ -293,7 +297,7 @@ export default function App() {
                   style={
                     page === "agent"
                       ? currentPage === page
-                        ? { background: 'rgba(139,98,212,0.25)', color: '#c4a8f0' }
+                        ? { background: 'rgba(139,98,212,0.25)', color: '#c4a8f0', boxShadow: '0 0 0 1px rgba(139,98,212,0.40)' }
                         : { color: 'var(--topbar-muted)' }
                       : currentPage === page
                         ? { background: 'color-mix(in srgb, var(--primary) 20%, transparent)', color: 'var(--accent-orange)' }
@@ -308,6 +312,16 @@ export default function App() {
               </Fragment>
             ))}
           </div>
+        </div>
+
+        {/* Riso color chips — print registration marks */}
+        <div className="flex items-center justify-between px-4 py-1.5">
+          <div className="riso-color-chips">
+            <span style={{ background: 'var(--accent-orange)' }} />
+            <span style={{ background: 'var(--accent-teal)' }} />
+            <span style={{ background: 'var(--accent-violet)' }} />
+          </div>
+          <span className="font-mono-ui" style={{ fontSize: 8, color: 'var(--topbar-muted)', letterSpacing: '0.08em' }}>v0.3</span>
         </div>
 
         <div className="p-3 space-y-0.5" style={{ borderTop: '1px solid var(--topbar-border)' }}>

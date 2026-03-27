@@ -214,10 +214,29 @@ export function DocumentsPage({ onContextChange, tuningParams, initialDocId }: D
           onContextChange={onContextChange}
         />
       ) : (
-        <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground">
-          <FileText className="h-10 w-10 mb-3 text-muted-foreground/40" />
-          <p className="text-sm font-medium">No document selected</p>
-          <p className="text-xs mt-1">Create a new document to get started.</p>
+        <div className="flex-1 flex flex-col items-center justify-center gap-4 select-none">
+          <svg width="100" height="120" viewBox="0 0 100 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="14" y="12" width="72" height="92" rx="4"
+              fill="rgba(224,78,14,0.12)" stroke="rgba(224,78,14,0.35)" strokeWidth="1.5" />
+            <rect x="8" y="8" width="72" height="92" rx="4"
+              fill="rgba(11,114,104,0.08)" stroke="rgba(11,114,104,0.25)" strokeWidth="1.5" />
+            <rect x="2" y="4" width="72" height="92" rx="4"
+              fill="var(--background)" stroke="rgba(20,16,10,0.25)" strokeWidth="1.5" />
+            <line x1="12" y1="24" x2="64" y2="24" stroke="currentColor" strokeWidth="1" strokeOpacity="0.3" />
+            <line x1="12" y1="34" x2="64" y2="34" stroke="currentColor" strokeWidth="1" strokeOpacity="0.2" />
+            <line x1="12" y1="44" x2="50" y2="44" stroke="currentColor" strokeWidth="1" strokeOpacity="0.2" />
+            <circle cx="58" cy="70" r="2" fill="rgba(224,78,14,0.4)" />
+            <circle cx="66" cy="66" r="1.5" fill="rgba(224,78,14,0.25)" />
+            <circle cx="62" cy="76" r="1" fill="rgba(224,78,14,0.2)" />
+            <circle cx="70" cy="74" r="2" fill="rgba(11,114,104,0.3)" />
+            <line x1="72" y1="4" x2="76" y2="4" stroke="rgba(11,114,104,0.4)" strokeWidth="1" />
+            <line x1="74" y1="2" x2="74" y2="6" stroke="rgba(11,114,104,0.4)" strokeWidth="1" />
+          </svg>
+          <div className="text-center space-y-1">
+            <p className="text-sm font-semibold font-display">No document selected</p>
+            <p className="text-xs text-muted-foreground">Create a new document to get started.</p>
+          </div>
+          <span className="riso-stamp" style={{ color: 'var(--accent-orange)' }}>Documents</span>
         </div>
       )}
     </div>

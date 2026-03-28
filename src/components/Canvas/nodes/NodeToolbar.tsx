@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import {
   NodeToolbar,
   Position,
@@ -153,6 +153,8 @@ interface CanvasNodeToolbarProps {
 export function CanvasNodeToolbar({ id, selected, secondRow, hideShapes }: CanvasNodeToolbarProps) {
   const [showIconPicker,  setShowIconPicker]  = useState(false);
   const [showColorPicker, setShowColorPicker] = useState(false);
+  const [hexInput,        setHexInput]        = useState("");
+  const hexRef = useRef<HTMLInputElement>(null);
 
   const {
     getNodes, getEdges,
@@ -207,6 +209,18 @@ export function CanvasNodeToolbar({ id, selected, secondRow, hideShapes }: Canva
     },
     [id, isMultiSelect, setNodes, updateNodeData],
   );
+
+  // Hex color input submit
+  const handleHexSubmit = useCallback(() => {
+    const val = hexInput.trim();
+    if (!val) return;
+    const hex = val.startsWith("#") ? val : `#${val}`;
+    // Basic hex validation: #rgb or #rrggbb
+    if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(hex)) {
+      handleColor(hex);
+      setHexInput("");
+    }
+  }, [hexInput, handleColor]);
 
   // Icon
   const handleIcon = useCallback(
@@ -309,7 +323,7 @@ export function CanvasNodeToolbar({ id, selected, secondRow, hideShapes }: Canva
         {showColorPicker && (
           <div className="absolute top-full left-0 mt-1.5 p-2.5 bg-background border rounded-lg shadow-xl z-50 min-w-max">
             <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-2 px-0.5">Color</div>
-            <div className="grid grid-cols-6 gap-1.5">
+            <div className="grid grid-cols-6 gap-1.5 mb-2.5">
               {PRESET_COLORS.map((c) => (
                 <button
                   key={c.label}
@@ -326,6 +340,34 @@ export function CanvasNodeToolbar({ id, selected, secondRow, hideShapes }: Canva
                   )}
                 </button>
               ))}
+            </div>
+            {/* Custom hex input */}
+            <div className="flex items-center gap-1.5 mt-1">
+              <input
+                ref={hexRef}
+                type="color"
+                className="w-6 h-6 rounded cursor-pointer border border-border shrink-0 p-0"
+                onChange={(e) => setHexInput(e.target.value)}
+                title="Pick custom color"
+              />
+              <input
+                type="text"
+                placeholder="#hex"
+                maxLength={7}
+                value={hexInput}
+                onChange={(e) => setHexInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleHexSubmit();
+                  e.stopPropagation();
+                }}
+                className="w-20 px-1.5 py-1 rounded border border-border text-[11px] bg-muted outline-none focus:ring-1 focus:ring-primary/50 font-mono"
+              />
+              <button
+                onClick={handleHexSubmit}
+                className="px-2 py-1 rounded bg-primary text-primary-foreground text-[10px] font-medium hover:opacity-90"
+              >
+                OK
+              </button>
             </div>
           </div>
         )}

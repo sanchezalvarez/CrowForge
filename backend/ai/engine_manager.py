@@ -57,6 +57,11 @@ class AIEngineManager:
             self._active_name = None
             logger.info("All engines cleared")
 
+    def get_engine(self, name: str) -> Optional["AIEngine"]:
+        """Return a registered engine by name, or None if not found."""
+        with self._lock:
+            return self._engines.get(name)
+
     # ── introspection ────────────────────────────────────────────────
 
     def list_engines(self) -> list[dict]:

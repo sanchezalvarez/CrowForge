@@ -2544,9 +2544,8 @@ async def canvas_run(body: dict, request: Request):
 
     async def event_generator():
         try:
-            async for chunk in engine_manager.get_active().generate(
-                system_prompt=system_prompt,
-                user_prompt=final_prompt,
+            async for chunk in engine_manager.get_active().generate_stream(
+                system_prompt, final_prompt,
                 max_tokens=int(os.getenv("LLM_MAX_TOKENS", "1024")),
                 temperature=0.7,
                 json_mode=False,

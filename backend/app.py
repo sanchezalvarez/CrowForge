@@ -128,6 +128,25 @@ async def lifespan(app: FastAPI):
     except Exception:
         pass  # Column already exists
 
+    # Prune rss_articles to 10 per feed on startup (cleans up accumulated bloat)
+    try:
+        with _rss_db() as conn:
+            feeds = conn.execute("SELECT id FROM rss_feeds").fetchall()
+            total_deleted = 0
+            for (fid,) in feeds:
+                conn.execute(
+                    """DELETE FROM rss_articles WHERE feed_id=? AND id NOT IN (
+                       SELECT id FROM rss_articles WHERE feed_id=? ORDER BY fetched_at DESC LIMIT 10
+                    )""",
+                    (fid, fid),
+                )
+                total_deleted += conn.execute("SELECT changes()").fetchone()[0]
+            conn.commit()
+            if total_deleted:
+                print(f"[RSS] Startup prune: removed {total_deleted} old articles (kept ≤10 per feed)")
+    except Exception as e:
+        print(f"[RSS] Startup prune failed: {e}")
+
     # Start background tasks
     idle_task = asyncio.create_task(_idle_unload_watcher())
     parent_task = asyncio.create_task(_parent_watchdog())
@@ -2706,6 +2725,13 @@ def _upsert_articles(feed_id: int, articles: list):
             except Exception:
                 pass
         conn.execute("UPDATE rss_feeds SET last_fetched_at=CURRENT_TIMESTAMP WHERE id=?", (feed_id,))
+        # Keep only the 10 most recent articles per feed
+        conn.execute(
+            """DELETE FROM rss_articles WHERE feed_id=? AND id NOT IN (
+               SELECT id FROM rss_articles WHERE feed_id=? ORDER BY fetched_at DESC LIMIT 10
+            )""",
+            (feed_id, feed_id),
+        )
         conn.commit()
     return new_count
 
@@ -2823,6 +2849,26 @@ async def delete_rss_feed(feed_id: int):
         conn.commit()
     return {"ok": True}
 
+# ── POST /rss/prune ───────────────────────────────────────────────────────────
+
+@app.post("/rss/prune")
+async def prune_rss_articles(body: dict = {}):
+    keep = int(body.get("keep", 10))
+    keep = max(3, min(keep, 50))
+    deleted = 0
+    with _rss_db() as conn:
+        feeds = conn.execute("SELECT id FROM rss_feeds").fetchall()
+        for (fid,) in feeds:
+            conn.execute(
+                """DELETE FROM rss_articles WHERE feed_id=? AND id NOT IN (
+                   SELECT id FROM rss_articles WHERE feed_id=? ORDER BY fetched_at DESC LIMIT ?
+                )""",
+                (fid, fid, keep),
+            )
+            deleted += conn.execute("SELECT changes()").fetchone()[0]
+        conn.commit()
+    return {"deleted": deleted, "kept_per_feed": keep}
+
 # ── PATCH /rss/feeds/{feed_id} ────────────────────────────────────────────────
 
 @app.patch("/rss/feeds/{feed_id}")
@@ -2917,7 +2963,7 @@ async def get_rss_digest_cached():
 
 @app.post("/rss/digest")
 async def generate_rss_digest(request: Request):
-    # Fetch top 8 most recent articles per active feed (guaranteed coverage of all feeds)
+    # Fetch top 3 most recent articles per active feed (compact for 7B GGUF context window)
     with _rss_db() as conn:
         rows = conn.execute(
             """SELECT a.title, a.summary, a.url, a.published_at, f.title as feed_title
@@ -2928,7 +2974,7 @@ async def generate_rss_digest(request: Request):
                    SELECT id, ROW_NUMBER() OVER (PARTITION BY feed_id ORDER BY fetched_at DESC) as rn
                    FROM rss_articles
                    WHERE feed_id IN (SELECT id FROM rss_feeds WHERE is_active = 1)
-                 ) WHERE rn <= 8
+                 ) WHERE rn <= 3
                )
                ORDER BY f.title, a.fetched_at DESC"""
         ).fetchall()
@@ -2950,31 +2996,22 @@ async def generate_rss_digest(request: Request):
     for feed_title, items in by_feed.items():
         articles_text += f"\n[Feed: {feed_title}]\n"
         for item in items:
-            summary = (item["summary"] or "")[:400].replace("\n", " ")
+            summary = (item["summary"] or "")[:150].replace("\n", " ")
             pub = item.get("published_at") or ""
             articles_text += f"- TITLE: {item['title']}\n  DATE: {pub}\n  SUMMARY: {summary}\n  URL: {item['url']}\n"
 
     # Build sources summary
     sources_lines = "\n".join(f"- {feed}: {len(items)} articles" for feed, items in by_feed.items())
 
-    system_prompt = """You are a news digest assistant. Create a structured news digest in Markdown.
+    system_prompt = """You are a news digest assistant. Write a Markdown news digest.
 
-For EACH article, write:
-
-### [Article Title]
-*[Feed Name] · [formatted date, e.g. Mon 23 Mar, or omit if unavailable]*
-Write 2-4 sentences (50-200 words) summarizing the article. Be factual, informative, and clear.
+For each article:
+### [Title]
+*[Feed] · [date if available]*
+2-3 sentences summarizing the article.
 [Read more](url)
 
-Group articles under ## [Feed Name] section headers.
-
-At the very end, after all articles, add:
-
-## Sources
-- Feed Name — N articles
-(one line per feed)
-
-Important: Cover EVERY feed and EVERY article provided. Do not skip any."""
+Group under ## [Feed Name] headers. Add ## Sources at end (one line per feed)."""
 
     user_prompt = f"Create a news digest from these articles:\n{articles_text}\n\nSources to list at end:\n{sources_lines}"
 
@@ -2983,7 +3020,7 @@ Important: Cover EVERY feed and EVERY article provided. Do not skip any."""
         try:
             async for chunk in engine_manager.get_active().generate_stream(
                 system_prompt, user_prompt,
-                temperature=0.5, max_tokens=2048, json_mode=False,
+                temperature=0.5, max_tokens=1024, json_mode=False,
             ):
                 if await request.is_disconnected():
                     break

@@ -14,6 +14,7 @@ import {
   Wrench,
   Workflow,
   HelpCircle,
+  KanbanSquare,
 } from "lucide-react";
 import agentCrowner from "./assets/AgentCrowner_512.png";
 import { cn } from "./lib/utils";
@@ -27,6 +28,8 @@ import { AgentPage } from "./pages/AgentPage";
 import { ToolsPage } from "./pages/ToolsPage";
 import { CanvasPage } from "./pages/CanvasPage";
 import { HelpPage } from "./pages/HelpPage";
+import { ProjectsPage } from "./pages/ProjectsPage";
+import { ProjectDetailPage } from "./pages/ProjectDetailPage";
 import { SplashScreen } from "./components/SplashScreen";
 import { OnboardingPage } from "./pages/OnboardingPage";
 import { Toaster } from "./components/ui/toaster";
@@ -67,7 +70,7 @@ class PageErrorBoundary extends Component<{ children: ReactNode; page: string },
 }
 
 type AppStatus = "loading" | "onboarding" | "ready" | "failed";
-type AppPage = "home" | "chat" | "agent" | "documents" | "sheets" | "tools" | "benchmark" | "settings" | "canvas" | "help";
+type AppPage = "home" | "chat" | "agent" | "documents" | "sheets" | "tools" | "benchmark" | "settings" | "canvas" | "help" | "projects" | "project_detail";
 
 export interface DocumentContext {
   title: string;
@@ -86,12 +89,14 @@ export default function App() {
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [activeDocId, setActiveDocId] = useState<string | null>(null);
   const [activeSheetId, setActiveSheetId] = useState<string | null>(null);
+  const [activeProjectId, setActiveProjectId] = useState<number | null>(null);
 
   const handleNavigate = (page: AppPage, id?: string) => {
     if (id) {
       if (page === "chat") setActiveChatId(id);
       if (page === "documents") setActiveDocId(id);
       if (page === "sheets") setActiveSheetId(id);
+      if (page === "project_detail") setActiveProjectId(Number(id));
     }
     setCurrentPage(page);
   };
@@ -258,6 +263,7 @@ export default function App() {
     { page: "documents", label: "Documents", icon: FileText },
     { page: "sheets", label: "Sheets", icon: Table2 },
     { page: "canvas", label: "Canvas", icon: Workflow },
+    { page: "projects", label: "Projects", icon: KanbanSquare },
     { page: "tools", label: "Tools", icon: Wrench },
   ];
 
@@ -404,7 +410,7 @@ export default function App() {
 
       {/* MAIN + AI CONTROLS */}
       <div className="flex flex-1 min-w-0 flex-col lg:flex-row overflow-hidden">
-        <main className={`flex-1 min-w-0 ${["canvas", "settings", "chat", "agent", "tools", "help"].includes(currentPage) ? "overflow-hidden" : "overflow-y-auto"}`}>
+        <main className={`flex-1 min-w-0 ${["canvas", "settings", "chat", "agent", "tools", "help", "project_detail"].includes(currentPage) ? "overflow-hidden" : "overflow-y-auto"}`}>
           <PageErrorBoundary page={currentPage}>
           {currentPage === "home" ? (
             <DashboardPage onNavigate={handleNavigate} />
@@ -435,6 +441,15 @@ export default function App() {
             <BenchmarkPage />
           ) : currentPage === "canvas" ? (
             <CanvasPage onNavigate={handleNavigate} />
+          ) : currentPage === "projects" ? (
+            <ProjectsPage
+              onNavigateToProject={(id) => handleNavigate("project_detail", String(id))}
+            />
+          ) : currentPage === "project_detail" && activeProjectId ? (
+            <ProjectDetailPage
+              projectId={activeProjectId}
+              onBack={() => setCurrentPage("projects")}
+            />
           ) : currentPage === "settings" ? (
             <SettingsPage
               theme={theme}

@@ -3038,6 +3038,721 @@ Group under ## [Feed Name] headers. Add ## Sources at end (one line per feed).""
     return EventSourceResponse(event_generator())
 
 
+# ── Project Management ──────────────────────────────────────────────────────
+
+# Type hierarchy rules: what item_type is allowed as child of a given parent type
+_PM_CHILD_TYPES = {
+    "epic":    ["feature"],
+    "feature": ["story"],
+    "story":   ["task", "bug", "spike"],
+    "task":    [],
+    "bug":     [],
+    "spike":   [],
+}
+# Root-level allowed types (parent_id = NULL) — all types allowed at root
+_PM_ROOT_TYPES = ["epic", "feature", "story", "task", "bug", "spike"]
+
+def _pm_log_activity(conn, project_id: int, action: str, detail: str, task_id=None, member_id=1):
+    conn.execute(
+        "INSERT INTO pm_activity (project_id, task_id, member_id, action, detail) VALUES (?,?,?,?,?)",
+        (project_id, task_id, member_id, action, detail)
+    )
+
+def _pm_task_with_meta(conn, task_id: int):
+    row = conn.execute("""
+        SELECT t.*, m.name as assignee_name, m.avatar_color as assignee_color, m.initials as assignee_initials
+        FROM pm_tasks t LEFT JOIN pm_members m ON m.id = t.assignee_id
+        WHERE t.id = ?
+    """, (task_id,)).fetchone()
+    if not row:
+        return None
+    task = dict(row)
+    labels = conn.execute("SELECT label FROM pm_task_labels WHERE task_id = ?", (task_id,)).fetchall()
+    task["labels"] = [r["label"] for r in labels]
+    child_count = conn.execute("SELECT COUNT(*) as c FROM pm_tasks WHERE parent_id = ?", (task_id,)).fetchone()
+    task["child_count"] = child_count["c"] if child_count else 0
+    return task
+
+def _pm_build_tree(conn, project_id: int, parent_id=None):
+    """Recursively build tree of tasks for a project."""
+    if parent_id is None:
+        rows = conn.execute("""
+            SELECT t.*, m.name as assignee_name, m.avatar_color as assignee_color, m.initials as assignee_initials
+            FROM pm_tasks t LEFT JOIN pm_members m ON m.id = t.assignee_id
+            WHERE t.project_id = ? AND t.parent_id IS NULL
+            ORDER BY CASE t.item_type WHEN 'epic' THEN 0 WHEN 'feature' THEN 1 ELSE 2 END, t.position ASC
+        """, (project_id,)).fetchall()
+    else:
+        rows = conn.execute("""
+            SELECT t.*, m.name as assignee_name, m.avatar_color as assignee_color, m.initials as assignee_initials
+            FROM pm_tasks t LEFT JOIN pm_members m ON m.id = t.assignee_id
+            WHERE t.project_id = ? AND t.parent_id = ?
+            ORDER BY CASE t.item_type WHEN 'feature' THEN 0 WHEN 'story' THEN 1 ELSE 2 END, t.position ASC
+        """, (project_id, parent_id)).fetchall()
+    result = []
+    for row in rows:
+        task = dict(row)
+        labels = conn.execute("SELECT label FROM pm_task_labels WHERE task_id = ?", (task["id"],)).fetchall()
+        task["labels"] = [r["label"] for r in labels]
+        task["children"] = _pm_build_tree(conn, project_id, task["id"])
+        task["child_count"] = len(task["children"])
+        result.append(task)
+    return result
+
+# ── Projects ──
+
+@app.get("/pm/projects")
+async def pm_list_projects():
+    with db.get_connection() as conn:
+        rows = conn.execute("""
+            SELECT p.*,
+              COALESCE(SUM(CASE WHEN t.status IN ('resolved','closed') THEN 1 ELSE 0 END), 0) as closed_count,
+              COUNT(t.id) as total_count,
+              COALESCE(SUM(CASE WHEN t.status='new' THEN 1 ELSE 0 END), 0) as new_count,
+              COALESCE(SUM(CASE WHEN t.status='active' THEN 1 ELSE 0 END), 0) as active_count,
+              COALESCE(SUM(CASE WHEN t.status='resolved' THEN 1 ELSE 0 END), 0) as resolved_count,
+              COALESCE(SUM(CASE WHEN t.item_type='bug' AND t.status NOT IN ('resolved','closed') THEN 1 ELSE 0 END), 0) as open_bug_count
+            FROM pm_projects p
+            LEFT JOIN pm_tasks t ON t.project_id = p.id AND t.parent_id IS NULL
+            WHERE p.status != 'archived'
+            GROUP BY p.id ORDER BY p.created_at DESC
+        """).fetchall()
+        result = []
+        for row in rows:
+            proj = dict(row)
+            sprint = conn.execute(
+                "SELECT * FROM pm_sprints WHERE project_id = ? AND status = 'active' LIMIT 1",
+                (proj["id"],)
+            ).fetchone()
+            proj["active_sprint"] = dict(sprint) if sprint else None
+            from datetime import date
+            overdue = conn.execute(
+                "SELECT COUNT(*) as c FROM pm_tasks WHERE project_id = ? AND due_date < ? AND status NOT IN ('resolved','closed')",
+                (proj["id"], date.today().isoformat())
+            ).fetchone()
+            proj["overdue_count"] = overdue["c"] if overdue else 0
+            result.append(proj)
+        return result
+
+@app.post("/pm/projects")
+async def pm_create_project(body: dict):
+    name = str(body.get("name", "")).strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="name is required")
+    description = str(body.get("description", ""))
+    color = str(body.get("color", "#E04E0E"))
+    icon = str(body.get("icon", "📋"))
+    with db.get_connection() as conn:
+        cur = conn.execute(
+            "INSERT INTO pm_projects (name, description, color, icon) VALUES (?,?,?,?)",
+            (name, description, color, icon)
+        )
+        conn.commit()
+        row = conn.execute("SELECT * FROM pm_projects WHERE id = ?", (cur.lastrowid,)).fetchone()
+        return dict(row)
+
+@app.patch("/pm/projects/{project_id}")
+async def pm_update_project(project_id: int, body: dict):
+    row = db.get_connection().execute("SELECT id FROM pm_projects WHERE id = ?", (project_id,)).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Project not found")
+    fields = []
+    params = []
+    for key in ("name", "description", "color", "icon", "status"):
+        if key in body:
+            fields.append(f"{key} = ?")
+            params.append(str(body[key]))
+    if not fields:
+        raise HTTPException(status_code=400, detail="No fields to update")
+    fields.append("updated_at = CURRENT_TIMESTAMP")
+    params.append(project_id)
+    with db.get_connection() as conn:
+        conn.execute(f"UPDATE pm_projects SET {', '.join(fields)} WHERE id = ?", params)
+        conn.commit()
+        updated = conn.execute("SELECT * FROM pm_projects WHERE id = ?", (project_id,)).fetchone()
+        return dict(updated)
+
+@app.delete("/pm/projects/{project_id}")
+async def pm_delete_project(project_id: int):
+    with db.get_connection() as conn:
+        conn.execute("DELETE FROM pm_projects WHERE id = ?", (project_id,))
+        conn.commit()
+    return {"ok": True}
+
+# ── Members ──
+
+@app.get("/pm/members")
+async def pm_list_members():
+    with db.get_connection() as conn:
+        rows = conn.execute("SELECT * FROM pm_members ORDER BY id ASC").fetchall()
+        return [dict(r) for r in rows]
+
+@app.post("/pm/members")
+async def pm_create_member(body: dict):
+    name = str(body.get("name", "")).strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="name is required")
+    email = str(body.get("email", ""))
+    avatar_color = str(body.get("avatar_color", "#0B7268"))
+    initials = str(body.get("initials", name[:2].upper()))
+    with db.get_connection() as conn:
+        cur = conn.execute(
+            "INSERT INTO pm_members (name, email, avatar_color, initials) VALUES (?,?,?,?)",
+            (name, email, avatar_color, initials)
+        )
+        conn.commit()
+        row = conn.execute("SELECT * FROM pm_members WHERE id = ?", (cur.lastrowid,)).fetchone()
+        return dict(row)
+
+@app.delete("/pm/members/{member_id}")
+async def pm_delete_member(member_id: int):
+    if member_id == 1:
+        raise HTTPException(status_code=400, detail="Cannot delete the default member")
+    active = db.get_connection().execute(
+        "SELECT COUNT(*) as c FROM pm_tasks WHERE assignee_id = ? AND status NOT IN ('resolved','closed')", (member_id,)
+    ).fetchone()
+    if active and active["c"] > 0:
+        raise HTTPException(status_code=400, detail="Member has active tasks assigned")
+    with db.get_connection() as conn:
+        conn.execute("DELETE FROM pm_members WHERE id = ?", (member_id,))
+        conn.commit()
+    return {"ok": True}
+
+# ── Tasks ──
+
+@app.get("/pm/tasks/stats")
+async def pm_task_stats(project_id: Optional[int] = None):
+    clauses = ["1=1"]
+    params = []
+    if project_id is not None:
+        clauses.append("project_id = ?")
+        params.append(project_id)
+    where = "WHERE " + " AND ".join(clauses)
+    with db.get_connection() as conn:
+        type_rows = conn.execute(
+            f"SELECT item_type, COUNT(*) as c FROM pm_tasks {where} GROUP BY item_type", params
+        ).fetchall()
+        status_rows = conn.execute(
+            f"SELECT status, COUNT(*) as c FROM pm_tasks {where} GROUP BY status", params
+        ).fetchall()
+        total = conn.execute(f"SELECT COUNT(*) as c FROM pm_tasks {where}", params).fetchone()["c"]
+        open_bugs = conn.execute(
+            f"SELECT COUNT(*) as c FROM pm_tasks {where} AND item_type='bug' AND status NOT IN ('resolved','closed')",
+            params
+        ).fetchone()["c"]
+        by_type = {r["item_type"]: r["c"] for r in type_rows}
+        by_status = {r["status"]: r["c"] for r in status_rows}
+        return {"by_type": by_type, "by_status": by_status, "open_bugs": open_bugs, "total": total}
+
+@app.get("/pm/tasks")
+async def pm_list_tasks(
+    project_id: Optional[int] = None,
+    sprint_id: Optional[int] = None,
+    status: Optional[str] = None,
+    assignee_id: Optional[int] = None,
+    parent_id: Optional[int] = None,
+    item_type: Optional[str] = None,
+    tree: bool = False,
+):
+    if tree and project_id is not None:
+        with db.get_connection() as conn:
+            return _pm_build_tree(conn, project_id)
+
+    clauses = []
+    params = []
+    if project_id is not None:
+        clauses.append("t.project_id = ?")
+        params.append(project_id)
+    if sprint_id is not None:
+        clauses.append("t.sprint_id = ?")
+        params.append(sprint_id)
+    if status is not None:
+        clauses.append("t.status = ?")
+        params.append(status)
+    if assignee_id is not None:
+        clauses.append("t.assignee_id = ?")
+        params.append(assignee_id)
+    if item_type is not None:
+        clauses.append("t.item_type = ?")
+        params.append(item_type)
+    if parent_id is not None:
+        clauses.append("t.parent_id = ?")
+        params.append(parent_id)
+    else:
+        clauses.append("t.parent_id IS NULL")
+
+    where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
+    # Flat hierarchical sort: epics first, features, stories, then leaf types
+    type_order = "CASE t.item_type WHEN 'epic' THEN 0 WHEN 'feature' THEN 1 WHEN 'story' THEN 2 WHEN 'task' THEN 3 WHEN 'bug' THEN 4 WHEN 'spike' THEN 5 ELSE 6 END"
+    with db.get_connection() as conn:
+        rows = conn.execute(f"""
+            SELECT t.*, m.name as assignee_name, m.avatar_color as assignee_color, m.initials as assignee_initials
+            FROM pm_tasks t LEFT JOIN pm_members m ON m.id = t.assignee_id
+            {where}
+            ORDER BY {type_order}, t.position ASC, t.created_at ASC
+        """, params).fetchall()
+        result = []
+        for row in rows:
+            task = dict(row)
+            labels = conn.execute("SELECT label FROM pm_task_labels WHERE task_id = ?", (task["id"],)).fetchall()
+            task["labels"] = [r["label"] for r in labels]
+            child = conn.execute("SELECT COUNT(*) as c FROM pm_tasks WHERE parent_id = ?", (task["id"],)).fetchone()
+            task["child_count"] = child["c"] if child else 0
+            result.append(task)
+        return result
+
+@app.post("/pm/tasks")
+async def pm_create_task(body: dict):
+    project_id = body.get("project_id")
+    if not project_id:
+        raise HTTPException(status_code=400, detail="project_id is required")
+    title = str(body.get("title", "")).strip()
+    if not title:
+        raise HTTPException(status_code=400, detail="title is required")
+    item_type = str(body.get("item_type", "task"))
+    status_val = str(body.get("status", "new"))
+    priority = str(body.get("priority", "medium"))
+    description = str(body.get("description", ""))
+    acceptance_criteria = str(body.get("acceptance_criteria", ""))
+    assignee_id = body.get("assignee_id")
+    due_date = body.get("due_date")
+    story_points = body.get("story_points")
+    parent_id = body.get("parent_id")
+    sprint_id = body.get("sprint_id")
+    labels = body.get("labels", [])
+
+    with db.get_connection() as conn:
+        # Validate type hierarchy
+        if parent_id is not None:
+            parent = conn.execute("SELECT item_type FROM pm_tasks WHERE id = ?", (parent_id,)).fetchone()
+            if not parent:
+                raise HTTPException(status_code=400, detail="Parent not found")
+            allowed = _PM_CHILD_TYPES.get(parent["item_type"], [])
+            if item_type not in allowed:
+                raise HTTPException(status_code=400, detail=f"A {parent['item_type']} can only have children of type: {', '.join(allowed)}")
+        else:
+            if item_type not in _PM_ROOT_TYPES:
+                raise HTTPException(status_code=400, detail=f"Root-level items must be one of: {', '.join(_PM_ROOT_TYPES)}")
+
+        max_pos = conn.execute(
+            "SELECT COALESCE(MAX(position), 0) as m FROM pm_tasks WHERE project_id = ? AND COALESCE(parent_id, -1) = COALESCE(?, -1)",
+            (project_id, parent_id)
+        ).fetchone()["m"]
+        cur = conn.execute(
+            """INSERT INTO pm_tasks (project_id, parent_id, sprint_id, item_type, title, description,
+               acceptance_criteria, status, priority, assignee_id, story_points, due_date, position)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (project_id, parent_id, sprint_id, item_type, title, description,
+             acceptance_criteria, status_val, priority, assignee_id, story_points, due_date, max_pos + 1000)
+        )
+        task_id = cur.lastrowid
+        for label in labels:
+            if label:
+                conn.execute("INSERT OR IGNORE INTO pm_task_labels (task_id, label) VALUES (?,?)", (task_id, str(label).strip()))
+        _pm_log_activity(conn, project_id, "created", f"Created {item_type}: {title}", task_id=task_id)
+        conn.commit()
+        return _pm_task_with_meta(conn, task_id)
+
+@app.patch("/pm/tasks/reorder")
+async def pm_reorder_tasks(body: dict):
+    items = body.get("items", [])
+    if not items:
+        raise HTTPException(status_code=400, detail="items is required")
+    with db.get_connection() as conn:
+        for item in items:
+            upd = {"position": item["position"]}
+            if "status" in item:
+                upd["status"] = item["status"]
+            set_clause = ", ".join(f"{k} = ?" for k in upd)
+            conn.execute(f"UPDATE pm_tasks SET {set_clause} WHERE id = ?", list(upd.values()) + [item["id"]])
+        conn.commit()
+    return {"ok": True}
+
+@app.patch("/pm/tasks/{task_id}")
+async def pm_update_task(task_id: int, body: dict):
+    from datetime import date
+    with db.get_connection() as conn:
+        existing = conn.execute("SELECT * FROM pm_tasks WHERE id = ?", (task_id,)).fetchone()
+        if not existing:
+            raise HTTPException(status_code=404, detail="Task not found")
+        existing = dict(existing)
+
+        fields = []
+        params = []
+        for key in ("title", "description", "acceptance_criteria", "status", "priority", "assignee_id",
+                    "due_date", "story_points", "sprint_id", "parent_id", "position"):
+            if key in body:
+                fields.append(f"{key} = ?")
+                params.append(body[key])
+        if not fields:
+            return _pm_task_with_meta(conn, task_id)
+
+        # Auto-set resolved_date when status → resolved or closed
+        new_status = body.get("status")
+        if new_status in ("resolved", "closed") and existing.get("status") not in ("resolved", "closed"):
+            fields.append("resolved_date = ?")
+            params.append(date.today().isoformat())
+        elif new_status not in (None, "resolved", "closed") and existing.get("status") in ("resolved", "closed"):
+            fields.append("resolved_date = ?")
+            params.append(None)
+
+        fields.append("updated_at = CURRENT_TIMESTAMP")
+        params.append(task_id)
+        conn.execute(f"UPDATE pm_tasks SET {', '.join(fields)} WHERE id = ?", params)
+
+        # Activity logging
+        if new_status and new_status != existing["status"]:
+            _pm_log_activity(conn, existing["project_id"], "moved",
+                             f"Moved \"{existing['title']}\" to {new_status}", task_id=task_id)
+        elif "assignee_id" in body and body["assignee_id"] != existing["assignee_id"]:
+            member = conn.execute("SELECT name FROM pm_members WHERE id = ?", (body["assignee_id"],)).fetchone()
+            name = member["name"] if member else "someone"
+            _pm_log_activity(conn, existing["project_id"], "updated",
+                             f"Assigned \"{existing['title']}\" to {name}", task_id=task_id)
+        else:
+            _pm_log_activity(conn, existing["project_id"], "updated",
+                             f"Updated \"{existing['title']}\"", task_id=task_id)
+
+        if "labels" in body:
+            conn.execute("DELETE FROM pm_task_labels WHERE task_id = ?", (task_id,))
+            for label in body["labels"]:
+                if label:
+                    conn.execute("INSERT OR IGNORE INTO pm_task_labels (task_id, label) VALUES (?,?)", (task_id, str(label).strip()))
+
+        conn.commit()
+        return _pm_task_with_meta(conn, task_id)
+
+@app.delete("/pm/tasks/{task_id}")
+async def pm_delete_task(task_id: int):
+    with db.get_connection() as conn:
+        task = conn.execute("SELECT * FROM pm_tasks WHERE id = ?", (task_id,)).fetchone()
+        if not task:
+            raise HTTPException(status_code=404, detail="Task not found")
+        task = dict(task)
+        _pm_log_activity(conn, task["project_id"], "deleted", f"Deleted {task['item_type']}: {task['title']}", task_id=task_id)
+        conn.execute("DELETE FROM pm_tasks WHERE id = ?", (task_id,))
+        conn.commit()
+    return {"ok": True}
+
+# ── Sprints ──
+
+@app.get("/pm/sprints")
+async def pm_list_sprints(project_id: Optional[int] = None, status: Optional[str] = None):
+    clauses = []
+    params = []
+    if project_id is not None:
+        clauses.append("s.project_id = ?")
+        params.append(project_id)
+    if status is not None:
+        clauses.append("s.status = ?")
+        params.append(status)
+    where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
+    with db.get_connection() as conn:
+        rows = conn.execute(f"SELECT * FROM pm_sprints s {where} ORDER BY s.start_date ASC", params).fetchall()
+        result = []
+        for row in rows:
+            sprint = dict(row)
+            counts = conn.execute(
+                """SELECT COUNT(*) as total,
+                          COALESCE(SUM(CASE WHEN status IN ('resolved','closed') THEN 1 ELSE 0 END),0) as done,
+                          COALESCE(SUM(story_points),0) as total_sp,
+                          COALESCE(SUM(CASE WHEN status IN ('resolved','closed') THEN story_points ELSE 0 END),0) as done_sp
+                   FROM pm_tasks WHERE sprint_id = ?""",
+                (sprint["id"],)
+            ).fetchone()
+            sprint["task_count"] = counts["total"] if counts else 0
+            sprint["done_count"] = counts["done"] if counts else 0
+            sprint["total_sp"] = counts["total_sp"] if counts else 0
+            sprint["done_sp"] = counts["done_sp"] if counts else 0
+            result.append(sprint)
+        return result
+
+@app.post("/pm/sprints")
+async def pm_create_sprint(body: dict):
+    project_id = body.get("project_id")
+    if not project_id:
+        raise HTTPException(status_code=400, detail="project_id is required")
+    name = str(body.get("name", "")).strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="name is required")
+    goal = str(body.get("goal", ""))
+    start_date = body.get("start_date")
+    end_date = body.get("end_date")
+    with db.get_connection() as conn:
+        cur = conn.execute(
+            "INSERT INTO pm_sprints (project_id, name, goal, start_date, end_date) VALUES (?,?,?,?,?)",
+            (project_id, name, goal, start_date, end_date)
+        )
+        conn.commit()
+        row = conn.execute("SELECT * FROM pm_sprints WHERE id = ?", (cur.lastrowid,)).fetchone()
+        return dict(row)
+
+@app.patch("/pm/sprints/{sprint_id}")
+async def pm_update_sprint(sprint_id: int, body: dict):
+    with db.get_connection() as conn:
+        sprint = conn.execute("SELECT * FROM pm_sprints WHERE id = ?", (sprint_id,)).fetchone()
+        if not sprint:
+            raise HTTPException(status_code=404, detail="Sprint not found")
+        sprint = dict(sprint)
+        # Guard: only one active sprint per project
+        if body.get("status") == "active":
+            active = conn.execute(
+                "SELECT id FROM pm_sprints WHERE project_id = ? AND status = 'active' AND id != ?",
+                (sprint["project_id"], sprint_id)
+            ).fetchone()
+            if active:
+                raise HTTPException(status_code=400, detail="Another sprint is already active for this project")
+        fields = []
+        params = []
+        for key in ("name", "goal", "start_date", "end_date", "status"):
+            if key in body:
+                fields.append(f"{key} = ?")
+                params.append(body[key])
+        if not fields:
+            return sprint
+        params.append(sprint_id)
+        conn.execute(f"UPDATE pm_sprints SET {', '.join(fields)} WHERE id = ?", params)
+        conn.commit()
+        updated = conn.execute("SELECT * FROM pm_sprints WHERE id = ?", (sprint_id,)).fetchone()
+        return dict(updated)
+
+@app.post("/pm/sprints/{sprint_id}/complete")
+async def pm_complete_sprint(sprint_id: int):
+    with db.get_connection() as conn:
+        sprint = conn.execute("SELECT * FROM pm_sprints WHERE id = ?", (sprint_id,)).fetchone()
+        if not sprint:
+            raise HTTPException(status_code=404, detail="Sprint not found")
+        sprint = dict(sprint)
+        # Count and move incomplete tasks to backlog
+        incomplete = conn.execute(
+            "SELECT COUNT(*) as c FROM pm_tasks WHERE sprint_id = ? AND status NOT IN ('resolved','closed')", (sprint_id,)
+        ).fetchone()["c"]
+        conn.execute("UPDATE pm_tasks SET sprint_id = NULL WHERE sprint_id = ? AND status NOT IN ('resolved','closed')", (sprint_id,))
+        done = conn.execute(
+            "SELECT COUNT(*) as c FROM pm_tasks WHERE sprint_id = ? AND status IN ('resolved','closed')", (sprint_id,)
+        ).fetchone()["c"]
+        conn.execute("UPDATE pm_sprints SET status = 'completed' WHERE id = ?", (sprint_id,))
+        conn.commit()
+        return {"completed": done, "moved_to_backlog": incomplete}
+
+# ── Activity ──
+
+@app.get("/pm/activity")
+async def pm_list_activity(project_id: Optional[int] = None, limit: int = 50):
+    clauses = []
+    params = []
+    if project_id is not None:
+        clauses.append("a.project_id = ?")
+        params.append(project_id)
+    where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
+    params.append(limit)
+    with db.get_connection() as conn:
+        rows = conn.execute(f"""
+            SELECT a.*, m.name as member_name, t.title as task_title
+            FROM pm_activity a
+            LEFT JOIN pm_members m ON m.id = a.member_id
+            LEFT JOIN pm_tasks t ON t.id = a.task_id
+            {where}
+            ORDER BY a.created_at DESC LIMIT ?
+        """, params).fetchall()
+        return [dict(r) for r in rows]
+
+# ── AI Endpoints ──
+
+@app.post("/pm/ai/standup")
+async def pm_ai_standup(body: dict, request: Request):
+    from datetime import datetime, timezone, date
+    project_id = body.get("project_id")
+
+    with db.get_connection() as conn:
+        if project_id:
+            projects = conn.execute("SELECT * FROM pm_projects WHERE id = ?", (project_id,)).fetchall()
+        else:
+            projects = conn.execute("SELECT * FROM pm_projects WHERE status != 'archived'").fetchall()
+        projects = [dict(p) for p in projects]
+
+        if not projects:
+            async def empty_gen():
+                yield {"data": "No active projects found."}
+                yield {"data": "[DONE]"}
+            return EventSourceResponse(empty_gen())
+
+        today = date.today().isoformat()
+        context_parts = []
+        for proj in projects:
+            pid = proj["id"]
+            active_items = conn.execute(
+                "SELECT title, item_type FROM pm_tasks WHERE project_id=? AND status='active' AND parent_id IS NULL", (pid,)
+            ).fetchall()
+            overdue = conn.execute(
+                "SELECT title, due_date FROM pm_tasks WHERE project_id=? AND due_date < ? AND status NOT IN ('resolved','closed') AND parent_id IS NULL",
+                (pid, today)
+            ).fetchall()
+            closed_today = conn.execute(
+                "SELECT title, story_points FROM pm_tasks WHERE project_id=? AND status IN ('resolved','closed') AND date(updated_at)=? AND parent_id IS NULL",
+                (pid, today)
+            ).fetchall()
+            sprint = conn.execute(
+                "SELECT name, start_date, end_date, goal FROM pm_sprints WHERE project_id=? AND status='active' LIMIT 1", (pid,)
+            ).fetchone()
+
+            part = f"Project: {proj['name']}\n"
+            if sprint:
+                part += f"  Active sprint: {sprint['name']} ({sprint['start_date']} → {sprint['end_date']}), goal: {sprint['goal']}\n"
+            if active_items:
+                part += f"  Active ({len(active_items)}): {', '.join(r['title'] for r in active_items)}\n"
+            if overdue:
+                part += f"  Overdue ({len(overdue)}): {', '.join(r['title'] + ' (due ' + r['due_date'] + ')' for r in overdue)}\n"
+            if closed_today:
+                sp_total = sum(r["story_points"] or 0 for r in closed_today)
+                part += f"  Closed today ({len(closed_today)}, {sp_total} SP): {', '.join(r['title'] for r in closed_today)}\n"
+            context_parts.append(part)
+
+    projects_text = "\n".join(context_parts)
+    system_prompt = "You are a project management assistant. Generate concise daily standup summaries."
+    user_prompt = f"""Generate a daily standup summary for {today}.
+
+Projects overview:
+{projects_text}
+
+Write a standup in this format:
+## Daily Standup — {today}
+### What's happening today
+[2-3 sentences overview]
+### By project
+**[project name]**: [1-2 sentences, mention story points if relevant]
+### Watch out
+[Any overdue items or blockers, if none say "All clear"]
+
+Keep it under 150 words. Be direct and factual."""
+
+    async def event_generator():
+        full_response = ""
+        try:
+            async with asyncio.timeout(GENERATION_TIMEOUT):
+                async for chunk in engine_manager.get_active().generate_stream(
+                    system_prompt, user_prompt,
+                    temperature=0.4, max_tokens=512, json_mode=False,
+                ):
+                    if await request.is_disconnected():
+                        break
+                    full_response += chunk
+                    yield {"data": chunk}
+            yield {"data": "[DONE]"}
+            if full_response.strip():
+                cache_key = f"pm_standup_cache_{project_id or 'all'}"
+                date_key = f"pm_standup_last_{project_id or 'all'}"
+                app_repo.set_setting(cache_key, full_response.strip())
+                app_repo.set_setting(date_key, datetime.now(timezone.utc).isoformat())
+        except Exception as e:
+            yield {"data": f"[ERROR] {str(e).replace(chr(10), ' ')}"}
+
+    return EventSourceResponse(event_generator())
+
+@app.get("/pm/ai/standup/cache")
+async def pm_get_standup_cache(project_id: Optional[int] = None):
+    key = f"pm_standup_cache_{project_id or 'all'}"
+    date_key = f"pm_standup_last_{project_id or 'all'}"
+    cached = app_repo.get_setting(key)
+    last_generated = app_repo.get_setting(date_key)
+    return {"cache": cached, "last_generated": last_generated}
+
+@app.post("/pm/ai/suggest-tasks")
+async def pm_ai_suggest_tasks(body: dict):
+    import re
+    project_id = body.get("project_id")
+    context = str(body.get("context", "")).strip()
+    if not project_id:
+        raise HTTPException(status_code=400, detail="project_id is required")
+
+    with db.get_connection() as conn:
+        proj = conn.execute("SELECT * FROM pm_projects WHERE id = ?", (project_id,)).fetchone()
+        if not proj:
+            raise HTTPException(status_code=404, detail="Project not found")
+        proj = dict(proj)
+        existing = conn.execute("SELECT title, item_type FROM pm_tasks WHERE project_id = ? AND parent_id IS NULL LIMIT 20", (project_id,)).fetchall()
+        existing_titles = ", ".join(r["title"] for r in existing) or "none"
+
+    system_prompt = "You are a project management assistant. Respond ONLY with a JSON array, no markdown, no explanation."
+    user_prompt = f"""Based on this project, suggest 5-8 specific actionable work items.
+
+Project: {proj['name']}
+Description: {context or proj['description']}
+Existing items: {existing_titles}
+
+Use item_type: epic (large feature), feature (group of stories), story (user-facing deliverable), task (technical work), bug (defect), spike (research).
+Respond ONLY with a JSON array:
+[
+  {{"title": "...", "priority": "high|medium|low", "item_type": "task|story|bug|spike|feature|epic", "story_points": 3}},
+  ...
+]"""
+
+    try:
+        async with asyncio.timeout(GENERATION_TIMEOUT):
+            full_response = ""
+            async for chunk in engine_manager.get_active().generate_stream(
+                system_prompt, user_prompt, temperature=0.5, max_tokens=512, json_mode=False
+            ):
+                full_response += chunk
+
+        # Strip markdown fences
+        cleaned = re.sub(r"```(?:json)?\s*", "", full_response).strip().strip("`")
+        start = cleaned.find("[")
+        end = cleaned.rfind("]")
+        if start == -1 or end == -1:
+            return {"tasks": []}
+        tasks = json.loads(cleaned[start:end+1])
+        return {"tasks": tasks}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"AI error: {str(e)}")
+
+@app.post("/pm/ai/prioritize")
+async def pm_ai_prioritize(body: dict):
+    import re
+    project_id = body.get("project_id")
+    if not project_id:
+        raise HTTPException(status_code=400, detail="project_id is required")
+
+    with db.get_connection() as conn:
+        tasks = conn.execute(
+            "SELECT id, title, priority, due_date, status, item_type, story_points FROM pm_tasks WHERE project_id = ? AND status IN ('new','active') AND parent_id IS NULL ORDER BY position ASC",
+            (project_id,)
+        ).fetchall()
+        tasks = [dict(t) for t in tasks]
+
+    if not tasks:
+        return {"priorities": []}
+
+    task_list = "\n".join(f"- ID {t['id']}: [{t['item_type']}] {t['title']} (priority: {t['priority']}, SP: {t['story_points'] or '?'}, due: {t['due_date'] or 'none'}, status: {t['status']})" for t in tasks)
+    system_prompt = "You are a project manager. Respond ONLY with a JSON array, no markdown."
+    user_prompt = f"""Analyze these tasks and suggest priority order.
+Consider: due dates, current priority labels, task status.
+
+Tasks:
+{task_list}
+
+Respond ONLY with JSON array of task IDs in suggested order with brief reason:
+[{{"id": 1, "reason": "Overdue by 2 days"}}, ...]"""
+
+    try:
+        async with asyncio.timeout(GENERATION_TIMEOUT):
+            full_response = ""
+            async for chunk in engine_manager.get_active().generate_stream(
+                system_prompt, user_prompt, temperature=0.3, max_tokens=512, json_mode=False
+            ):
+                full_response += chunk
+
+        cleaned = re.sub(r"```(?:json)?\s*", "", full_response).strip().strip("`")
+        start = cleaned.find("[")
+        end = cleaned.rfind("]")
+        if start == -1 or end == -1:
+            return {"priorities": []}
+        priorities = json.loads(cleaned[start:end+1])
+        return {"priorities": priorities}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"AI error: {str(e)}")
+
+
 if __name__ == "__main__":
     import uvicorn
     # Free port 8000 if occupied by a stale backend process (e.g. after PC restart)

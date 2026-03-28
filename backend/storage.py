@@ -18,9 +18,10 @@ class DatabaseManager:
         with open(schema_path, 'r') as f:
             schema_script = f.read()
         with self.get_connection() as conn:
-            conn.executescript(schema_script)
-            # Migrations for existing databases
+            # Migrations FIRST so schema changes (e.g. parent_id rename) are applied
+            # before executescript tries to create indexes on the new column names.
             self._migrate(conn)
+            conn.executescript(schema_script)
 
     def _migrate(self, conn):
         """Add columns/tables that may be missing from older databases."""
@@ -114,6 +115,130 @@ class DatabaseManager:
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )""")
+
+        # Project Management tables
+        conn.execute("""CREATE TABLE IF NOT EXISTS pm_members (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            email TEXT NOT NULL DEFAULT '',
+            avatar_color TEXT NOT NULL DEFAULT '#E04E0E',
+            initials TEXT NOT NULL DEFAULT '',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )""")
+        conn.execute("""CREATE TABLE IF NOT EXISTS pm_projects (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            description TEXT NOT NULL DEFAULT '',
+            color TEXT NOT NULL DEFAULT '#E04E0E',
+            icon TEXT NOT NULL DEFAULT '📋',
+            status TEXT NOT NULL DEFAULT 'active',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )""")
+        conn.execute("""CREATE TABLE IF NOT EXISTS pm_sprints (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id INTEGER NOT NULL,
+            name TEXT NOT NULL,
+            goal TEXT NOT NULL DEFAULT '',
+            start_date TEXT,
+            end_date TEXT,
+            status TEXT NOT NULL DEFAULT 'planned',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (project_id) REFERENCES pm_projects(id) ON DELETE CASCADE
+        )""")
+        # Migrate pm_tasks: if old schema (has parent_task_id), recreate with new schema
+        pm_tasks_cols = {row["name"] for row in conn.execute("PRAGMA table_info(pm_tasks)").fetchall()}
+        if pm_tasks_cols and "item_type" not in pm_tasks_cols:
+            # Save existing data
+            try:
+                old_rows = conn.execute("SELECT * FROM pm_tasks").fetchall()
+            except Exception:
+                old_rows = []
+            conn.execute("DROP TABLE IF EXISTS pm_task_labels")
+            conn.execute("DROP TABLE IF EXISTS pm_tasks")
+            conn.execute("""CREATE TABLE IF NOT EXISTS pm_tasks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id INTEGER NOT NULL,
+                parent_id INTEGER DEFAULT NULL,
+                sprint_id INTEGER DEFAULT NULL,
+                item_type TEXT NOT NULL DEFAULT 'task',
+                title TEXT NOT NULL,
+                description TEXT DEFAULT '',
+                acceptance_criteria TEXT DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'new',
+                priority TEXT NOT NULL DEFAULT 'medium',
+                assignee_id INTEGER DEFAULT NULL,
+                story_points INTEGER DEFAULT NULL,
+                due_date TEXT DEFAULT NULL,
+                resolved_date TEXT DEFAULT NULL,
+                position INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )""")
+            # Migrate old rows with best-effort status mapping
+            status_map = {"todo": "new", "in_progress": "active", "review": "active", "done": "closed", "blocked": "active"}
+            for r in old_rows:
+                try:
+                    r = dict(r)
+                    new_status = status_map.get(r.get("status", "todo"), "new")
+                    conn.execute(
+                        """INSERT OR IGNORE INTO pm_tasks
+                           (id, project_id, parent_id, sprint_id, item_type, title, description, status, priority, assignee_id, due_date, position, created_at, updated_at)
+                           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                        (r["id"], r["project_id"], r.get("parent_task_id"), r.get("sprint_id"),
+                         "task", r["title"], r.get("description",""), new_status,
+                         r.get("priority","medium"), r.get("assignee_id"), r.get("due_date"),
+                         r.get("position", 0), r.get("created_at"), r.get("updated_at"))
+                    )
+                except Exception:
+                    pass
+        else:
+            conn.execute("""CREATE TABLE IF NOT EXISTS pm_tasks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id INTEGER NOT NULL,
+                parent_id INTEGER DEFAULT NULL,
+                sprint_id INTEGER DEFAULT NULL,
+                item_type TEXT NOT NULL DEFAULT 'task',
+                title TEXT NOT NULL,
+                description TEXT DEFAULT '',
+                acceptance_criteria TEXT DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'new',
+                priority TEXT NOT NULL DEFAULT 'medium',
+                assignee_id INTEGER DEFAULT NULL,
+                story_points INTEGER DEFAULT NULL,
+                due_date TEXT DEFAULT NULL,
+                resolved_date TEXT DEFAULT NULL,
+                position INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )""")
+        conn.execute("""CREATE TABLE IF NOT EXISTS pm_task_labels (
+            task_id INTEGER NOT NULL,
+            label TEXT NOT NULL,
+            PRIMARY KEY (task_id, label),
+            FOREIGN KEY (task_id) REFERENCES pm_tasks(id) ON DELETE CASCADE
+        )""")
+        # Indexes
+        for idx_sql in [
+            "CREATE INDEX IF NOT EXISTS idx_pm_tasks_project ON pm_tasks(project_id)",
+            "CREATE INDEX IF NOT EXISTS idx_pm_tasks_parent ON pm_tasks(parent_id)",
+            "CREATE INDEX IF NOT EXISTS idx_pm_tasks_sprint ON pm_tasks(sprint_id)",
+            "CREATE INDEX IF NOT EXISTS idx_pm_tasks_type ON pm_tasks(item_type)",
+            "CREATE INDEX IF NOT EXISTS idx_pm_tasks_status ON pm_tasks(status)",
+            "CREATE INDEX IF NOT EXISTS idx_pm_tasks_assignee ON pm_tasks(assignee_id)",
+        ]:
+            conn.execute(idx_sql)
+        conn.execute("""CREATE TABLE IF NOT EXISTS pm_activity (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id INTEGER NOT NULL,
+            task_id INTEGER DEFAULT NULL,
+            member_id INTEGER DEFAULT NULL,
+            action TEXT NOT NULL,
+            detail TEXT NOT NULL DEFAULT '',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (project_id) REFERENCES pm_projects(id) ON DELETE CASCADE
+        )""")
+        conn.execute("INSERT OR IGNORE INTO pm_members (id, name, email, avatar_color, initials) VALUES (1, 'Me', '', '#E04E0E', 'ME')")
 
         conn.commit()
 

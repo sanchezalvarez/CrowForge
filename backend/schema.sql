@@ -113,3 +113,94 @@ CREATE TABLE IF NOT EXISTS rss_articles (
   fetched_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   UNIQUE(feed_id, guid)
 );
+
+-- ── Project Management ──────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS pm_members (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  email TEXT NOT NULL DEFAULT '',
+  avatar_color TEXT NOT NULL DEFAULT '#E04E0E',
+  initials TEXT NOT NULL DEFAULT '',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS pm_projects (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  color TEXT NOT NULL DEFAULT '#E04E0E',
+  icon TEXT NOT NULL DEFAULT '📋',
+  status TEXT NOT NULL DEFAULT 'active',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS pm_sprints (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  project_id INTEGER NOT NULL,
+  name TEXT NOT NULL,
+  goal TEXT NOT NULL DEFAULT '',
+  start_date TEXT,
+  end_date TEXT,
+  status TEXT NOT NULL DEFAULT 'planned',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (project_id) REFERENCES pm_projects(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS pm_tasks (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  project_id INTEGER NOT NULL REFERENCES pm_projects(id) ON DELETE CASCADE,
+  parent_id INTEGER DEFAULT NULL REFERENCES pm_tasks(id) ON DELETE SET NULL,
+  sprint_id INTEGER DEFAULT NULL REFERENCES pm_sprints(id) ON DELETE SET NULL,
+
+  item_type TEXT NOT NULL DEFAULT 'task',
+  -- epic | feature | story | task | bug | spike
+
+  title TEXT NOT NULL,
+  description TEXT DEFAULT '',
+  acceptance_criteria TEXT DEFAULT '',
+
+  status TEXT NOT NULL DEFAULT 'new',
+  -- new | active | resolved | closed
+
+  priority TEXT NOT NULL DEFAULT 'medium',
+  -- critical | high | medium | low
+
+  assignee_id INTEGER DEFAULT NULL REFERENCES pm_members(id) ON DELETE SET NULL,
+  story_points INTEGER DEFAULT NULL,
+  due_date TEXT DEFAULT NULL,
+  resolved_date TEXT DEFAULT NULL,
+  position INTEGER DEFAULT 0,
+
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_pm_tasks_project ON pm_tasks(project_id);
+CREATE INDEX IF NOT EXISTS idx_pm_tasks_parent ON pm_tasks(parent_id);
+CREATE INDEX IF NOT EXISTS idx_pm_tasks_sprint ON pm_tasks(sprint_id);
+CREATE INDEX IF NOT EXISTS idx_pm_tasks_type ON pm_tasks(item_type);
+CREATE INDEX IF NOT EXISTS idx_pm_tasks_status ON pm_tasks(status);
+CREATE INDEX IF NOT EXISTS idx_pm_tasks_assignee ON pm_tasks(assignee_id);
+
+CREATE TABLE IF NOT EXISTS pm_task_labels (
+  task_id INTEGER NOT NULL,
+  label TEXT NOT NULL,
+  PRIMARY KEY (task_id, label),
+  FOREIGN KEY (task_id) REFERENCES pm_tasks(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS pm_activity (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  project_id INTEGER NOT NULL,
+  task_id INTEGER DEFAULT NULL,
+  member_id INTEGER DEFAULT NULL,
+  action TEXT NOT NULL,
+  detail TEXT NOT NULL DEFAULT '',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (project_id) REFERENCES pm_projects(id) ON DELETE CASCADE
+);
+
+INSERT OR IGNORE INTO pm_members (id, name, email, avatar_color, initials)
+VALUES (1, 'Me', '', '#E04E0E', 'ME');

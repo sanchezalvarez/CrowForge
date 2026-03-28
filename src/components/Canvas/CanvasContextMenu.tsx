@@ -320,6 +320,44 @@ export function CanvasContextMenu({ target, onClose, onAddNode }: Props) {
           <div className={ItemCls} onClick={() => handleEdgeStyle("animated")}>
             Animated
           </div>
+          <div className={SepCls} />
+          <div className="px-3 py-1 text-[10px] text-muted-foreground uppercase tracking-wider">
+            Width
+          </div>
+          <div className={ItemCls} onClick={() => { updateEdgeData(target.edgeId, { width: "thin" }); onClose(); }}>
+            Thin
+          </div>
+          <div className={ItemCls} onClick={() => { updateEdgeData(target.edgeId, { width: "medium" }); onClose(); }}>
+            Medium
+          </div>
+          <div className={ItemCls} onClick={() => { updateEdgeData(target.edgeId, { width: "thick" }); onClose(); }}>
+            Thick
+          </div>
+          <div className={SepCls} />
+          <div className="px-3 py-1 text-[10px] text-muted-foreground uppercase tracking-wider">
+            Color
+          </div>
+          {[
+            { label: "Default",  value: "" },
+            { label: "Blue",     value: "#3b82f6" },
+            { label: "Green",    value: "#10b981" },
+            { label: "Amber",    value: "#f59e0b" },
+            { label: "Rose",     value: "#f43f5e" },
+            { label: "Violet",   value: "#8b5cf6" },
+            { label: "Slate",    value: "#64748b" },
+          ].map(({ label, value }) => (
+            <div
+              key={label}
+              className={ItemCls}
+              onClick={() => { updateEdgeData(target.edgeId, { color: value || undefined }); onClose(); }}
+            >
+              <span
+                className="w-3 h-3 rounded-full border border-border shrink-0"
+                style={{ backgroundColor: value || "var(--primary)" }}
+              />
+              {label}
+            </div>
+          ))}
         </>
       )}
     </div>

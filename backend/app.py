@@ -156,8 +156,10 @@ async def _idle_unload_watcher():
     while True:
         await asyncio.sleep(60)
         try:
-            local = engine_manager._engines.get("local")
+            local = engine_manager.get_engine("local")
             if isinstance(local, LocalLLAMAEngine) and local.is_ready and local.last_used > 0:
+                if local._generating:
+                    continue
                 idle_secs = _time.time() - local.last_used
                 if _model_idle_timeout_seconds > 0 and idle_secs >= _model_idle_timeout_seconds:
                     local.unload()
@@ -645,7 +647,7 @@ async def list_local_models():
     """List available GGUF models and the currently loaded one."""
     models = _scan_local_models()
     # Get current model info from LocalLLAMAEngine if registered
-    local = engine_manager._engines.get("local")
+    local = engine_manager.get_engine("local")
     current = None
     if isinstance(local, LocalLLAMAEngine):
         info = local.get_model_info()
@@ -663,7 +665,7 @@ async def set_local_model(data: dict):
     ctx = int(data.get("ctx", 2048))
     model_path = os.path.join(LLM_MODELS_DIR, filename)
 
-    local = engine_manager._engines.get("local")
+    local = engine_manager.get_engine("local")
     if not isinstance(local, LocalLLAMAEngine):
         raise HTTPException(status_code=400, detail="Local engine is not registered")
 
@@ -682,14 +684,14 @@ async def set_local_model(data: dict):
 @app.get("/ai/model/status")
 async def get_model_status():
     """Return whether a local model is currently loaded."""
-    local = engine_manager._engines.get("local")
+    local = engine_manager.get_engine("local")
     if not isinstance(local, LocalLLAMAEngine):
         return {"loaded": False, "model_name": None, "is_local_engine": False}
     info = local.get_model_info()
     return {
         "loaded": info["is_ready"],
         "model_name": info.get("model_name"),
-        "is_local_engine": engine_manager._active_name == "local",
+        "is_local_engine": engine_manager.active_name == "local",
     }
 
 
@@ -841,7 +843,7 @@ async def run_benchmark(req: BenchmarkRequest):
         print(f"[BENCHMARK] {engine_name}/{model_label}: {latency_ms}ms, {len(output)} chars{', ERROR: ' + error if error else ''}")
 
     for engine_name in req.engines:
-        engine = engine_manager._engines.get(engine_name)
+        engine = engine_manager.get_engine(engine_name)
         if engine is None:
             run = BenchmarkRun(
                 input_text=req.input_text,
@@ -1764,7 +1766,7 @@ async def ai_range_operation(
 
     # Override model if requested (for local engine)
     if model:
-        local = engine_manager._engines.get("local")
+        local = engine_manager.get_engine("local")
         if isinstance(local, LocalLLAMAEngine):
             # Check if already loaded
             info = local.get_model_info()

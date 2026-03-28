@@ -7,6 +7,7 @@ import {
   MiniMap,
   SelectionMode,
   type Node,
+  type Edge,
   type NodeTypes,
   type EdgeTypes,
   MarkerType,
@@ -138,6 +139,15 @@ export function CanvasView({ canvasId }: CanvasViewProps) {
     scheduleSave();
   }, [setNodes, setEdges, scheduleSave]);
 
+  const handleImportJSON = useCallback(
+    (data: { nodes: unknown[]; edges: unknown[] }) => {
+      setNodes(data.nodes as Node[]);
+      setEdges(data.edges as Edge[]);
+      scheduleSave();
+    },
+    [setNodes, setEdges, scheduleSave],
+  );
+
   // ── Keyboard shortcuts ────────────────────────────────────────────────────
   useKeyboardShortcuts({ undo, scheduleSave });
 
@@ -165,6 +175,7 @@ export function CanvasView({ canvasId }: CanvasViewProps) {
           onClear={handleClear}
           snapToGrid={snapToGrid}
           onSnapToggle={handleSnapToggle}
+          onImportJSON={handleImportJSON}
         />
 
         <div ref={wrapperRef} className="flex-1 overflow-hidden relative">

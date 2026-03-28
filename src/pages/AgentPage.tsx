@@ -860,10 +860,10 @@ export function AgentPage({ tuningParams }: AgentPageProps) {
       <div className="relative flex-1 flex flex-col min-w-0 overflow-hidden riso-noise">
         {/* Riso background — vždy viditeľný, violet dominant */}
         <div className="pointer-events-none" style={{ position: 'absolute', inset: 0, zIndex: 0 }}>
-          <div style={{ position: 'absolute', width: 600, height: 600, borderRadius: '50%', background: 'var(--accent-violet)', opacity: 0.10, mixBlendMode: 'multiply', top: -200, right: -180 }} />
-          <div style={{ position: 'absolute', width: 500, height: 500, borderRadius: '50%', background: 'var(--accent-orange)', opacity: 0.09, mixBlendMode: 'multiply', bottom: -160, left: -160 }} />
-          <div style={{ position: 'absolute', width: 380, height: 380, borderRadius: '50%', background: 'var(--accent-teal)', opacity: 0.07, mixBlendMode: 'multiply', bottom: 80, right: -100 }} />
-          <div style={{ position: 'absolute', width: 260, height: 260, borderRadius: '50%', background: 'var(--accent-violet)', opacity: 0.06, mixBlendMode: 'multiply', top: '35%', left: -100 }} />
+          <div className="animate-blob-drift" style={{ position: 'absolute', width: 600, height: 600, borderRadius: '50%', background: 'var(--accent-violet)', opacity: 0.10, mixBlendMode: 'multiply', top: -200, right: -180 }} />
+          <div className="animate-blob-drift-b" style={{ position: 'absolute', width: 500, height: 500, borderRadius: '50%', background: 'var(--accent-orange)', opacity: 0.09, mixBlendMode: 'multiply', bottom: -160, left: -160 }} />
+          <div className="animate-blob-drift-c" style={{ position: 'absolute', width: 380, height: 380, borderRadius: '50%', background: 'var(--accent-teal)', opacity: 0.07, mixBlendMode: 'multiply', bottom: 80, right: -100 }} />
+          <div className="animate-blob-drift-d" style={{ position: 'absolute', width: 260, height: 260, borderRadius: '50%', background: 'var(--accent-violet)', opacity: 0.06, mixBlendMode: 'multiply', top: '35%', left: -100 }} />
           <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} xmlns="http://www.w3.org/2000/svg">
             <line x1="calc(100% - 32)" y1="28" x2="calc(100% - 8)" y2="28" stroke="rgba(139,98,212,0.45)" strokeWidth="1.5" />
             <line x1="calc(100% - 20)" y1="16" x2="calc(100% - 20)" y2="40" stroke="rgba(139,98,212,0.45)" strokeWidth="1.5" />
@@ -907,7 +907,7 @@ export function AgentPage({ tuningParams }: AgentPageProps) {
         {activeSessionId ? (
           <>
             {/* Header */}
-            <div className="h-20 border-b px-4 flex items-center gap-3">
+            <div className="h-20 border-b px-4 flex items-center gap-3" style={{ position: 'relative', zIndex: 1 }}>
               <div className="flex items-center gap-1.5 shrink-0">
                 <Bot className="h-4 w-4 text-violet-500" />
                 <span className="text-sm font-semibold text-violet-600 dark:text-violet-400">Agent</span>
@@ -1086,7 +1086,7 @@ export function AgentPage({ tuningParams }: AgentPageProps) {
             )}
 
             {/* Messages */}
-            <ScrollArea className="flex-1 p-4">
+            <ScrollArea className="flex-1 p-4" style={{ position: 'relative', zIndex: 1 }}>
               <div className="max-w-3xl mx-auto space-y-4">
                 {messages.map((msg) => (
                   <div
@@ -1169,7 +1169,7 @@ export function AgentPage({ tuningParams }: AgentPageProps) {
             </ScrollArea>
 
             {/* Input */}
-            <div className="border-t p-4">
+            <div className="border-t p-4" style={{ position: 'relative', zIndex: 1 }}>
               <div className="max-w-3xl mx-auto">
                 <div className="flex gap-2">
                   <Textarea
@@ -1205,30 +1205,30 @@ export function AgentPage({ tuningParams }: AgentPageProps) {
             </div>
           </>
         ) : (
-          <div className="flex-1 relative flex flex-col items-center justify-center gap-5 select-none">
-            <div style={{ position: 'relative', zIndex: 1, width: 150, height: 150, borderRadius: '50%', overflow: 'hidden', background: '#0a0806', flexShrink: 0, boxShadow: '5px 5px 0 rgba(139,98,212,0.32), -2.5px -2.5px 0 rgba(255,90,26,0.15)' }}>
+          <div className="flex-1 relative flex flex-col items-center justify-center gap-7 select-none">
+            <div style={{ position: 'relative', zIndex: 1, width: 220, height: 220, borderRadius: '50%', overflow: 'hidden', background: '#0a0806', flexShrink: 0, boxShadow: '8px 8px 0 rgba(139,98,212,0.36), -4px -4px 0 rgba(224,78,14,0.20)' }}>
               <img src={agentCrowner} alt="AgentCrowner" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
             </div>
-            <div className="text-center space-y-1.5" style={{ position: 'relative', zIndex: 1 }}>
+            <div className="text-center space-y-2" style={{ position: 'relative', zIndex: 1 }}>
               <h2
                 className="font-display font-black tracking-tight leading-none"
-                style={{ fontSize: 'clamp(2rem, 4vw, 3rem)', textShadow: '3px 3px 0 rgba(139,98,212,0.28), -1.5px -1.5px 0 rgba(224,78,14,0.18)', letterSpacing: '-0.02em', color: 'var(--accent-violet)' }}
+                style={{ fontSize: 'clamp(2.8rem, 6vw, 4.2rem)', textShadow: '4px 4px 0 rgba(139,98,212,0.28), -2px -2px 0 rgba(224,78,14,0.18)', letterSpacing: '-0.02em', color: 'var(--accent-violet)' }}
               >
                 Agent Mode
               </h2>
-              <p className="text-xs text-muted-foreground max-w-[260px] text-center">
+              <p className="text-sm text-muted-foreground text-center whitespace-nowrap">
                 The agent can read &amp; write your Sheets and Documents.
               </p>
-              <p className="font-mono-ui uppercase tracking-widest" style={{ fontSize: 10, letterSpacing: '0.16em', color: 'var(--muted-foreground)', opacity: 0.7 }}>
+              <p className="font-mono-ui uppercase" style={{ fontSize: 12, letterSpacing: '0.12em', paddingLeft: '0.12em', color: 'var(--muted-foreground)', opacity: 0.7, whiteSpace: 'nowrap', textAlign: 'center' }}>
                 Use Context to choose access
               </p>
             </div>
-            <div className="flex items-center gap-1.5" style={{ position: 'relative', zIndex: 1 }}>
-              <span style={{ width: 20, height: 4, borderRadius: 2, background: 'var(--accent-violet)', opacity: 0.7, display: 'block' }} />
-              <span style={{ width: 20, height: 4, borderRadius: 2, background: 'var(--accent-orange)', opacity: 0.5, display: 'block' }} />
-              <span style={{ width: 20, height: 4, borderRadius: 2, background: 'var(--accent-teal)', opacity: 0.5, display: 'block' }} />
+            <div className="flex items-center gap-2" style={{ position: 'relative', zIndex: 1 }}>
+              <span style={{ width: 28, height: 5, borderRadius: 3, background: 'var(--accent-violet)', opacity: 0.75, display: 'block' }} />
+              <span style={{ width: 28, height: 5, borderRadius: 3, background: 'var(--accent-orange)', opacity: 0.6, display: 'block' }} />
+              <span style={{ width: 28, height: 5, borderRadius: 3, background: 'var(--accent-teal)', opacity: 0.6, display: 'block' }} />
             </div>
-            <p className="riso-stamp" style={{ position: 'relative', zIndex: 1, color: 'var(--accent-violet)' }}>Select or create a session</p>
+            <p className="riso-stamp text-center" style={{ position: 'relative', zIndex: 1, color: 'var(--accent-violet)', fontSize: 13 }}>Select or create a session</p>
           </div>
         )}
       </div>

@@ -200,15 +200,15 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto riso-noise">
+    <div className="flex-1 overflow-y-auto riso-noise riso-noise-live">
       {/* Riso background layer — full-width, outside max-w constraint */}
       <div className="pointer-events-none select-none" style={{ position: 'absolute', inset: 0, overflow: 'hidden', zIndex: 0 }}>
 
         {/* ── 1. Colour blobs ── */}
-        <div style={{ position: 'absolute', width: 600, height: 600, borderRadius: '50%', background: 'var(--accent-teal)', opacity: 0.10, mixBlendMode: 'multiply', top: -200, right: -180 }} />
-        <div style={{ position: 'absolute', width: 500, height: 500, borderRadius: '50%', background: 'var(--accent-orange)', opacity: 0.09, mixBlendMode: 'multiply', bottom: -160, left: -160 }} />
-        <div style={{ position: 'absolute', width: 380, height: 380, borderRadius: '50%', background: 'var(--accent-violet)', opacity: 0.07, mixBlendMode: 'multiply', bottom: 80, right: -100 }} />
-        <div style={{ position: 'absolute', width: 260, height: 260, borderRadius: '50%', background: 'var(--accent-teal)', opacity: 0.06, mixBlendMode: 'multiply', top: '35%', left: -100 }} />
+        <div className="animate-blob-drift" style={{ position: 'absolute', width: 600, height: 600, borderRadius: '50%', background: 'var(--accent-teal)', opacity: 0.10, mixBlendMode: 'multiply', top: -200, right: -180 }} />
+        <div className="animate-blob-drift-b" style={{ position: 'absolute', width: 500, height: 500, borderRadius: '50%', background: 'var(--accent-orange)', opacity: 0.09, mixBlendMode: 'multiply', bottom: -160, left: -160 }} />
+        <div className="animate-blob-drift-c" style={{ position: 'absolute', width: 380, height: 380, borderRadius: '50%', background: 'var(--accent-violet)', opacity: 0.07, mixBlendMode: 'multiply', bottom: 80, right: -100 }} />
+        <div className="animate-blob-drift-d" style={{ position: 'absolute', width: 260, height: 260, borderRadius: '50%', background: 'var(--accent-teal)', opacity: 0.06, mixBlendMode: 'multiply', top: '35%', left: -100 }} />
 
         {/* ── 2. Registration crosshairs ── */}
         <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} xmlns="http://www.w3.org/2000/svg">
@@ -268,7 +268,7 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
       <div className="relative p-8 max-w-5xl mx-auto space-y-8">
 
         {/* Header */}
-        <header style={{ position: 'relative', zIndex: 1 }}>
+        <header className="animate-ink-in" style={{ position: 'relative', zIndex: 1, animationDelay: '0ms' }}>
           <div className="flex items-start justify-between">
             <div>
               <h1
@@ -287,16 +287,16 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
             </div>
             {totalItems > 0 && (
               <div className="flex items-center gap-2 mt-1">
-                <span className="riso-stamp" style={{ color: 'var(--accent-teal)' }}>{counts.documents} docs</span>
-                <span className="riso-stamp" style={{ color: 'var(--accent-orange)' }}>{counts.sheets} sheets</span>
-                <span className="riso-stamp" style={{ color: 'var(--accent-violet)' }}>{counts.chats} chats</span>
+                <span className="riso-stamp riso-stamp-press" style={{ color: 'var(--accent-teal)' }}>{counts.documents} docs</span>
+                <span className="riso-stamp riso-stamp-press" style={{ color: 'var(--accent-orange)' }}>{counts.sheets} sheets</span>
+                <span className="riso-stamp riso-stamp-press" style={{ color: 'var(--accent-violet)' }}>{counts.chats} chats</span>
               </div>
             )}
           </div>
         </header>
 
         {/* Quick actions */}
-        <section className="riso-frame" style={{ position: 'relative', zIndex: 1, padding: '2px' }}>
+        <section className="riso-frame animate-ink-in" style={{ position: 'relative', zIndex: 1, padding: '2px', animationDelay: '70ms' }}>
           <h2 className="riso-section-label mb-3">Create</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             {quickActions.map((a) => (
@@ -319,10 +319,10 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
         </section>
 
         {/* Today's Digest — isolated component, streaming chunks don't re-render above */}
-        <div style={{ position: 'relative', zIndex: 1 }}><DigestSection /></div>
+        <div className="animate-ink-in" style={{ position: 'relative', zIndex: 1, animationDelay: '140ms' }}><DigestSection /></div>
 
         {/* Recent activity */}
-        <section style={{ position: 'relative', zIndex: 1 }}>
+        <section className="animate-ink-in" style={{ position: 'relative', zIndex: 1, animationDelay: '210ms' }}>
           <h2 className="riso-section-label mb-3">Recent activity</h2>
           {activityFeed.length === 0 ? (
             <Card className="border-dashed riso-frame">

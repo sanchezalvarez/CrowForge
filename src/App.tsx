@@ -315,17 +315,35 @@ export default function App() {
       <div className="riso-strip" />
       <div className="flex flex-1 min-h-0 overflow-hidden">
       {/* SIDEBAR */}
-      <aside className="hidden lg:flex w-[220px] shrink-0 flex-col" style={{ background: 'var(--topbar-bg)', borderRight: '1px solid var(--topbar-border)' }}>
-        <div className="relative overflow-hidden shrink-0" style={{ height: 148 }}>
-          <img
-            src={agentCrowner}
-            alt="AgentCrowner"
-            className="w-full h-full object-contain"
-          />
-          <div className="absolute inset-0" style={{ background: 'linear-gradient(to top, var(--topbar-bg) 0%, transparent 55%)' }} />
-        </div>
+      <aside className="hidden lg:flex w-[220px] shrink-0 flex-col relative overflow-hidden" style={{ background: 'var(--topbar-bg)', borderRight: '1px solid var(--topbar-border)' }}>
 
-        <div className="flex-1 overflow-y-auto">
+        {/* ── Riso sidebar BG elements ── */}
+        {/* Teal glow — top, large */}
+        <div className="absolute pointer-events-none animate-blob-drift-b" style={{ top: -100, left: '50%', transform: 'translateX(-50%)', width: 480, height: 360, background: 'rgba(11,114,104,0.22)', borderRadius: '50%', mixBlendMode: 'screen', filter: 'blur(50px)', zIndex: 0 }} />
+        {/* Orange glow — bottom, large */}
+        <div className="absolute pointer-events-none animate-blob-drift-c" style={{ bottom: -80, left: -70, width: 400, height: 320, background: 'rgba(224,78,14,0.20)', borderRadius: '50%', mixBlendMode: 'screen', filter: 'blur(45px)', zIndex: 0 }} />
+        {/* Violet glow — mid right */}
+        <div className="absolute pointer-events-none animate-blob-drift" style={{ top: '36%', right: -80, width: 300, height: 300, background: 'rgba(92,58,156,0.18)', borderRadius: '50%', mixBlendMode: 'screen', filter: 'blur(40px)', zIndex: 0 }} />
+        {/* Registration crosshair — top right corner, above content */}
+        <svg className="absolute pointer-events-none" style={{ top: 8, right: 8, opacity: 0.30, zIndex: 2 }} width="16" height="16" viewBox="0 0 16 16">
+          <line x1="8" y1="0" x2="8" y2="16" stroke="#E04E0E" strokeWidth="1" className="animate-reg-draw" />
+          <line x1="0" y1="8" x2="16" y2="8" stroke="#E04E0E" strokeWidth="1" className="animate-reg-draw" style={{ animationDelay: '0.12s' }} />
+          <circle cx="8" cy="8" r="3.5" fill="none" stroke="#E04E0E" strokeWidth="1" className="animate-reg-draw" style={{ animationDelay: '0.24s' }} />
+        </svg>
+        {/* Registration crosshair — bottom left corner, above content */}
+        <svg className="absolute pointer-events-none" style={{ bottom: 8, left: 8, opacity: 0.24, zIndex: 2 }} width="16" height="16" viewBox="0 0 16 16">
+          <line x1="8" y1="0" x2="8" y2="16" stroke="#0B7268" strokeWidth="1" className="animate-reg-draw" style={{ animationDelay: '0.35s' }} />
+          <line x1="0" y1="8" x2="16" y2="8" stroke="#0B7268" strokeWidth="1" className="animate-reg-draw" style={{ animationDelay: '0.47s' }} />
+          <circle cx="8" cy="8" r="3.5" fill="none" stroke="#0B7268" strokeWidth="1" className="animate-reg-draw" style={{ animationDelay: '0.58s' }} />
+        </svg>
+        {/* Halftone cluster 1 — bottom, right side */}
+        <div className="absolute pointer-events-none" style={{ bottom: 0, right: 0, width: 160, height: 200, opacity: 0.06, backgroundImage: 'radial-gradient(circle, rgba(240,232,220,0.9) 1.8px, transparent 1.8px)', backgroundSize: '11px 11px', zIndex: 0 }} />
+        {/* Halftone cluster 2 — lower nav area, left side */}
+        <div className="absolute pointer-events-none" style={{ top: '50%', left: 0, width: 140, height: 180, opacity: 0.10, backgroundImage: 'radial-gradient(circle, rgba(224,78,14,0.85) 1.7px, transparent 1.7px)', backgroundSize: '10px 10px', zIndex: 0 }} />
+        {/* Halftone cluster 3 — mascot area, right — bigger */}
+        <div className="absolute pointer-events-none" style={{ top: 60, right: 0, width: 180, height: 180, opacity: 0.11, backgroundImage: 'radial-gradient(circle, rgba(11,114,104,0.9) 1.7px, transparent 1.7px)', backgroundSize: '9px 9px', zIndex: 0 }} />
+
+        <div className="flex-1 overflow-y-auto relative" style={{ zIndex: 1 }}>
           <div className="p-3 space-y-0.5">
             {navItems.map(({ page, label, icon: Icon }) => (
               <Fragment key={page}>
@@ -354,7 +372,7 @@ export default function App() {
         </div>
 
         {/* Riso color chips — print registration marks */}
-        <div className="flex items-center justify-between px-4 py-1.5">
+        <div className="flex items-center justify-between px-4 py-1.5 relative" style={{ zIndex: 1 }}>
           <div className="riso-color-chips">
             <span style={{ background: 'var(--accent-orange)' }} />
             <span style={{ background: 'var(--accent-teal)' }} />
@@ -363,7 +381,7 @@ export default function App() {
           <span className="font-mono-ui" style={{ fontSize: 8, color: 'var(--topbar-muted)', letterSpacing: '0.08em' }}>v0.3</span>
         </div>
 
-        <div className="p-3 space-y-0.5" style={{ borderTop: '1px solid var(--topbar-border)' }}>
+        <div className="p-3 space-y-0.5 relative" style={{ borderTop: '1px solid var(--topbar-border)', zIndex: 1 }}>
           {bottomNavItems.map(({ page, label, icon: Icon }) => (
             <button
               key={page}

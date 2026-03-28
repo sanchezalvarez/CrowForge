@@ -3071,6 +3071,7 @@ def _pm_task_with_meta(conn, task_id: int):
     task["labels"] = [r["label"] for r in labels]
     child_count = conn.execute("SELECT COUNT(*) as c FROM pm_tasks WHERE parent_id = ?", (task_id,)).fetchone()
     task["child_count"] = child_count["c"] if child_count else 0
+    task["refs"] = json.loads(task.get("refs_json") or "[]")
     return task
 
 def _pm_build_tree(conn, project_id: int, parent_id=None):
@@ -3094,6 +3095,7 @@ def _pm_build_tree(conn, project_id: int, parent_id=None):
         task = dict(row)
         labels = conn.execute("SELECT label FROM pm_task_labels WHERE task_id = ?", (task["id"],)).fetchall()
         task["labels"] = [r["label"] for r in labels]
+        task["refs"] = json.loads(task.get("refs_json") or "[]")
         task["children"] = _pm_build_tree(conn, project_id, task["id"])
         task["child_count"] = len(task["children"])
         result.append(task)
@@ -3298,6 +3300,7 @@ async def pm_list_tasks(
             task["labels"] = [r["label"] for r in labels]
             child = conn.execute("SELECT COUNT(*) as c FROM pm_tasks WHERE parent_id = ?", (task["id"],)).fetchone()
             task["child_count"] = child["c"] if child else 0
+            task["refs"] = json.loads(task.get("refs_json") or "[]")
             result.append(task)
         return result
 
@@ -3320,6 +3323,7 @@ async def pm_create_task(body: dict):
     parent_id = body.get("parent_id")
     sprint_id = body.get("sprint_id")
     labels = body.get("labels", [])
+    refs = body.get("refs", [])
 
     with db.get_connection() as conn:
         # Validate type hierarchy
@@ -3340,10 +3344,11 @@ async def pm_create_task(body: dict):
         ).fetchone()["m"]
         cur = conn.execute(
             """INSERT INTO pm_tasks (project_id, parent_id, sprint_id, item_type, title, description,
-               acceptance_criteria, status, priority, assignee_id, story_points, due_date, position)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+               acceptance_criteria, status, priority, assignee_id, story_points, due_date, position, refs_json)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (project_id, parent_id, sprint_id, item_type, title, description,
-             acceptance_criteria, status_val, priority, assignee_id, story_points, due_date, max_pos + 1000)
+             acceptance_criteria, status_val, priority, assignee_id, story_points, due_date, max_pos + 1000,
+             json.dumps(refs if isinstance(refs, list) else []))
         )
         task_id = cur.lastrowid
         for label in labels:
@@ -3352,6 +3357,14 @@ async def pm_create_task(body: dict):
         _pm_log_activity(conn, project_id, "created", f"Created {item_type}: {title}", task_id=task_id)
         conn.commit()
         return _pm_task_with_meta(conn, task_id)
+
+@app.get("/pm/tasks/{task_id}")
+async def pm_get_task(task_id: int):
+    with db.get_connection() as conn:
+        task = _pm_task_with_meta(conn, task_id)
+        if not task:
+            raise HTTPException(status_code=404, detail="Task not found")
+        return task
 
 @app.patch("/pm/tasks/reorder")
 async def pm_reorder_tasks(body: dict):
@@ -3384,6 +3397,9 @@ async def pm_update_task(task_id: int, body: dict):
             if key in body:
                 fields.append(f"{key} = ?")
                 params.append(body[key])
+        if "refs" in body:
+            fields.append("refs_json = ?")
+            params.append(json.dumps(body["refs"] if isinstance(body["refs"], list) else []))
         if not fields:
             return _pm_task_with_meta(conn, task_id)
 

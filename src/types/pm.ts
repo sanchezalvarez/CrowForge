@@ -2,6 +2,14 @@ export type PMItemType = "epic" | "feature" | "story" | "task" | "bug" | "spike"
 export type PMTaskStatus = "new" | "active" | "resolved" | "closed";
 export type PMPriority = "critical" | "high" | "medium" | "low";
 export type PMView = "backlog" | "kanban" | "sprint";
+export type PMRefType = "link" | "image" | "document" | "sheet" | "canvas";
+
+export interface PMRef {
+  type: PMRefType;
+  url?: string;     // for link / image
+  ref_id?: string;  // for document / sheet / canvas
+  label: string;
+}
 
 export interface PMProject {
   id: number;
@@ -47,6 +55,7 @@ export interface PMTask {
   resolved_date: string | null;
   position: number;
   labels: string[];
+  refs: PMRef[];
   child_count: number;
   created_at: string;
   updated_at: string;

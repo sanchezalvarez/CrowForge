@@ -3,7 +3,7 @@ import { ChevronLeft, Plus, LayoutList, LayoutGrid, Zap, AlertTriangle, X, Spark
 import axios from "axios";
 import { useTasks } from "../hooks/useTasks";
 import { useSprints } from "../hooks/useSprints";
-import { PMProject, PMTask, PMTaskStatus, PMMember, PMSuggestedTask } from "../types/pm";
+import { PMProject, PMTask, PMTaskStatus, PMItemType, PMMember, PMSuggestedTask } from "../types/pm";
 import { BacklogView } from "../components/PM/BacklogView";
 import { KanbanBoard } from "../components/PM/KanbanBoard";
 import { SprintView } from "../components/PM/SprintView";
@@ -28,9 +28,10 @@ const LS_DISMISSED_KEY = () => `pm_deadline_dismissed_${new Date().toISOString()
 interface ProjectDetailPageProps {
   projectId: number;
   onBack: () => void;
+  onNavigate?: (page: string, id?: string) => void;
 }
 
-export function ProjectDetailPage({ projectId, onBack }: ProjectDetailPageProps) {
+export function ProjectDetailPage({ projectId, onBack, onNavigate }: ProjectDetailPageProps) {
   const { tasks, loading: tasksLoading, load: loadTasks, create: createTask, update: updateTask, remove: removeTask, reorder: reorderTasks } = useTasks(projectId);
   const { sprints, create: createSprint, completeSprint } = useSprints(projectId);
 
@@ -123,6 +124,11 @@ export function ProjectDetailPage({ projectId, onBack }: ProjectDetailPageProps)
   const handleTaskDelete = async (id: number) => {
     await removeTask(id);
     setPanelOpen(false);
+    await loadProject();
+  };
+
+  const handleChildCreate = async (parentId: number, title: string, type: PMItemType) => {
+    await createTask({ project_id: projectId, parent_id: parentId, title, item_type: type, status: "new", priority: "medium" } as PMTask & { project_id: number; title: string });
     await loadProject();
   };
 
@@ -257,6 +263,7 @@ export function ProjectDetailPage({ projectId, onBack }: ProjectDetailPageProps)
                   onTaskClick={handleTaskClick}
                   onTaskCreate={handleTaskCreate}
                   onTaskUpdate={handleTaskUpdate}
+                  onChildCreate={handleChildCreate}
                 />
               )}
               <AIStandup projectId={projectId} />
@@ -302,6 +309,8 @@ export function ProjectDetailPage({ projectId, onBack }: ProjectDetailPageProps)
         onDelete={handleTaskDelete}
         members={members}
         sprints={sprints}
+        allTasks={tasks}
+        onNavigate={onNavigate}
       />
 
       {/* Task Form Dialog */}

@@ -91,14 +91,14 @@ export default function App() {
   const [activeSheetId, setActiveSheetId] = useState<string | null>(null);
   const [activeProjectId, setActiveProjectId] = useState<number | null>(null);
 
-  const handleNavigate = (page: AppPage, id?: string) => {
+  const handleNavigate = (page: string, id?: string) => {
     if (id) {
       if (page === "chat") setActiveChatId(id);
       if (page === "documents") setActiveDocId(id);
       if (page === "sheets") setActiveSheetId(id);
       if (page === "project_detail") setActiveProjectId(Number(id));
     }
-    setCurrentPage(page);
+    setCurrentPage(page as AppPage);
   };
   
   // ... rest of state ...
@@ -449,6 +449,7 @@ export default function App() {
             <ProjectDetailPage
               projectId={activeProjectId}
               onBack={() => setCurrentPage("projects")}
+              onNavigate={handleNavigate}
             />
           ) : currentPage === "settings" ? (
             <SettingsPage

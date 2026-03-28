@@ -1206,10 +1206,13 @@ export function AgentPage({ tuningParams }: AgentPageProps) {
           </>
         ) : (
           <div className="flex-1 relative flex flex-col items-center justify-center gap-7 select-none">
-            <div style={{ position: 'relative', zIndex: 1, width: 220, height: 220, borderRadius: '50%', overflow: 'hidden', background: '#0a0806', flexShrink: 0, boxShadow: '8px 8px 0 rgba(139,98,212,0.36), -4px -4px 0 rgba(224,78,14,0.20)' }}>
+            <div className="animate-crower-pulse" style={{ position: 'relative', zIndex: 1, width: 220, height: 220, borderRadius: '50%', overflow: 'hidden', background: '#0a0806', flexShrink: 0 }}>
               <img src={agentCrowner} alt="AgentCrowner" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+              {/* light sweep overlay */}
+              <div className="animate-crower-shine" style={{ position: 'absolute', inset: 0, pointerEvents: 'none', background: 'linear-gradient(105deg, transparent 30%, rgba(255,255,255,0.18) 50%, transparent 70%)', borderRadius: '50%' }} />
             </div>
             <div className="text-center space-y-2" style={{ position: 'relative', zIndex: 1 }}>
+              <p className="font-mono-ui uppercase" style={{ fontSize: 11, letterSpacing: '0.22em', color: 'var(--accent-violet)', opacity: 0.85 }}>Agent Crower</p>
               <h2
                 className="font-display font-black tracking-tight leading-none"
                 style={{ fontSize: 'clamp(2.8rem, 6vw, 4.2rem)', textShadow: '4px 4px 0 rgba(139,98,212,0.28), -2px -2px 0 rgba(224,78,14,0.18)', letterSpacing: '-0.02em', color: 'var(--accent-violet)' }}

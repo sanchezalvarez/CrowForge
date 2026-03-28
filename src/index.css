@@ -662,6 +662,26 @@ input[type="range"]:focus-visible::-webkit-slider-thumb {
 .animate-blob-drift-c { animation: riso-blob-drift    9s ease-in-out infinite reverse; }
 .animate-blob-drift-d { animation: riso-blob-drift-b 20s ease-in-out infinite reverse; }
 
+/* Crower logo — gentle pulse glow */
+@keyframes crower-pulse {
+  0%,  100% { transform: scale(1);     box-shadow: 8px 8px 0 rgba(139,98,212,0.36), -4px -4px 0 rgba(224,78,14,0.20), 0 0 0px 0px rgba(139,98,212,0); }
+  50%        { transform: scale(1.028); box-shadow: 8px 8px 0 rgba(139,98,212,0.50), -4px -4px 0 rgba(224,78,14,0.30), 0 0 32px 8px rgba(139,98,212,0.22); }
+}
+@keyframes crower-pulse-chat {
+  0%,  100% { transform: scale(1);     box-shadow: 8px 8px 0 rgba(11,114,104,0.32), -4px -4px 0 rgba(224,78,14,0.22), 0 0 0px 0px rgba(11,114,104,0); }
+  50%        { transform: scale(1.028); box-shadow: 8px 8px 0 rgba(11,114,104,0.50), -4px -4px 0 rgba(224,78,14,0.32), 0 0 32px 8px rgba(11,114,104,0.22); }
+}
+/* Crower logo — diagonal light sweep */
+@keyframes crower-shine {
+  0%   { transform: translateX(-180%) skewX(-20deg); opacity: 0; }
+  15%  { opacity: 1; }
+  85%  { opacity: 1; }
+  100% { transform: translateX(280%)  skewX(-20deg); opacity: 0; }
+}
+.animate-crower-pulse      { animation: crower-pulse      4s ease-in-out infinite; }
+.animate-crower-pulse-chat { animation: crower-pulse-chat 4s ease-in-out infinite; }
+.animate-crower-shine      { animation: crower-shine      5s ease-in-out infinite 1.5s; }
+
 /* Registration marks draw-in */
 @keyframes riso-reg-draw {
   from { stroke-dashoffset: 40; opacity: 0; }

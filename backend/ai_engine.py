@@ -406,12 +406,16 @@ class LocalLLAMAEngine(AIEngine):
         json_mode: bool = True,
     ) -> AsyncGenerator[str, None]:
         import time as _time
+        _not_ready = False
         with self._lock:
             if not self.is_ready:
-                yield "[ERROR] Local model is not loaded."
-                return
-            self.last_used = _time.time()
-            self._generating = True
+                _not_ready = True
+            else:
+                self.last_used = _time.time()
+                self._generating = True
+        if _not_ready:
+            yield "[ERROR] Local model is not loaded."
+            return
         try:
             kwargs: dict = dict(
                 messages=[
@@ -481,12 +485,16 @@ class LocalLLAMAEngine(AIEngine):
         temperature: float = 0.7, max_tokens: int = 1024,
     ) -> AsyncGenerator[str, None]:
         import time as _time
+        _not_ready = False
         with self._lock:
             if not self.is_ready:
-                yield json.dumps({"type": "error", "message": "Local model is not loaded."})
-                return
-            self.last_used = _time.time()
-            self._generating = True
+                _not_ready = True
+            else:
+                self.last_used = _time.time()
+                self._generating = True
+        if _not_ready:
+            yield json.dumps({"type": "error", "message": "Local model is not loaded."})
+            return
         queue: asyncio.Queue = asyncio.Queue()
         loop = asyncio.get_event_loop()
 

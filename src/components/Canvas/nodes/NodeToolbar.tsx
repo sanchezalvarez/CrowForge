@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback } from "react";
 import {
   NodeToolbar,
   Position,
@@ -154,7 +154,6 @@ export function CanvasNodeToolbar({ id, selected, secondRow, hideShapes }: Canva
   const [showIconPicker,  setShowIconPicker]  = useState(false);
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [hexInput,        setHexInput]        = useState("");
-  const hexRef = useRef<HTMLInputElement>(null);
 
   const {
     getNodes, getEdges,
@@ -344,7 +343,6 @@ export function CanvasNodeToolbar({ id, selected, secondRow, hideShapes }: Canva
             {/* Custom hex input */}
             <div className="flex items-center gap-1.5 mt-1">
               <input
-                ref={hexRef}
                 type="color"
                 className="w-6 h-6 rounded cursor-pointer border border-border shrink-0 p-0"
                 onChange={(e) => setHexInput(e.target.value)}

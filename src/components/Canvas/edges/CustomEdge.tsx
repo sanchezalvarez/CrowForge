@@ -8,6 +8,13 @@ import {
 } from "@xyflow/react";
 
 type EdgeStyle = "solid" | "dashed" | "animated";
+type EdgeWidth = "thin" | "medium" | "thick";
+
+const WIDTH_MAP: Record<EdgeWidth, number> = {
+  thin:   1,
+  medium: 1.5,
+  thick:  3,
+};
 
 export function CustomEdge({
   id,
@@ -19,8 +26,16 @@ export function CustomEdge({
   markerEnd,
   style,
 }: EdgeProps) {
-  const edgeData = (data ?? {}) as { label?: string; style?: EdgeStyle; _startEditing?: boolean };
+  const edgeData = (data ?? {}) as {
+    label?: string;
+    style?: EdgeStyle;
+    color?: string;
+    width?: EdgeWidth;
+    _startEditing?: boolean;
+  };
   const edgeStyle: EdgeStyle = edgeData.style ?? "solid";
+  const edgeColor = edgeData.color ?? "var(--primary)";
+  const edgeWidth = WIDTH_MAP[edgeData.width ?? "medium"];
 
   const { updateEdgeData } = useReactFlow();
 
@@ -61,8 +76,8 @@ export function CustomEdge({
 
   // ── Stroke style ─────────────────────────────────────────────────────────────
   const pathStyle: React.CSSProperties = {
-    stroke:        "var(--primary)",
-    strokeWidth:   1.5,
+    stroke:        edgeColor,
+    strokeWidth:   edgeWidth,
     strokeOpacity: 0.7,
     ...(edgeStyle === "dashed"    ? { strokeDasharray: "6 3" } : {}),
     ...(edgeStyle === "animated"  ? {

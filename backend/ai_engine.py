@@ -379,6 +379,8 @@ class LocalLLAMAEngine(AIEngine):
     def unload(self) -> None:
         """Free the loaded model from memory."""
         with self._lock:
+            if self._generating:
+                return  # don't unload while inference is running
             if self.llm is not None:
                 old = self.llm
                 self.llm = None
@@ -403,13 +405,13 @@ class LocalLLAMAEngine(AIEngine):
         max_tokens: int = 1024, seed: int | None = None,
         json_mode: bool = True,
     ) -> AsyncGenerator[str, None]:
-        if not self.is_ready:
-            yield "[ERROR] Local model is not loaded."
-            return
-
         import time as _time
-        self.last_used = _time.time()
-        self._generating = True
+        with self._lock:
+            if not self.is_ready:
+                yield "[ERROR] Local model is not loaded."
+                return
+            self.last_used = _time.time()
+            self._generating = True
         try:
             kwargs: dict = dict(
                 messages=[
@@ -478,13 +480,13 @@ class LocalLLAMAEngine(AIEngine):
         self, *, messages: list[dict], tools: list[dict],
         temperature: float = 0.7, max_tokens: int = 1024,
     ) -> AsyncGenerator[str, None]:
-        if not self.is_ready:
-            yield json.dumps({"type": "error", "message": "Local model is not loaded."})
-            return
-
         import time as _time
-        self.last_used = _time.time()
-        self._generating = True
+        with self._lock:
+            if not self.is_ready:
+                yield json.dumps({"type": "error", "message": "Local model is not loaded."})
+                return
+            self.last_used = _time.time()
+            self._generating = True
         queue: asyncio.Queue = asyncio.Queue()
         loop = asyncio.get_event_loop()
 

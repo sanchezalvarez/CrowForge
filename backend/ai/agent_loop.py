@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import os
 import time
 from typing import AsyncGenerator
 from backend.ai.tool_registry import ToolRegistry
@@ -10,6 +11,7 @@ MAX_ITERATIONS = 6
 TOOL_TIMEOUT_SECONDS = 30
 MAX_TOOL_RETRIES = 1
 MAX_CONSECUTIVE_ERRORS = 3
+GENERATION_TIMEOUT = float(os.getenv("LLM_GENERATION_TIMEOUT", "120"))
 
 
 async def run_agent_loop(
@@ -37,42 +39,47 @@ async def run_agent_loop(
         current_text = ""
         tool_calls_collected: list[dict] = []
 
-        async for event_str in engine.generate_with_tools(
-            messages=messages,
-            tools=tools,
-            temperature=temperature,
-            max_tokens=max_tokens,
-        ):
-            try:
-                event = json.loads(event_str)
-            except (json.JSONDecodeError, TypeError):
-                # Plain text token from base-class fallback (no JSON wrapping)
-                current_text += event_str
-                continue
+        try:
+            async with asyncio.timeout(GENERATION_TIMEOUT):
+                async for event_str in engine.generate_with_tools(
+                    messages=messages,
+                    tools=tools,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                ):
+                    try:
+                        event = json.loads(event_str)
+                    except (json.JSONDecodeError, TypeError):
+                        # Plain text token from base-class fallback (no JSON wrapping)
+                        current_text += event_str
+                        continue
 
-            # json.loads can return int/float/str/list for valid non-object JSON —
-            # only dicts carry structured events.
-            if not isinstance(event, dict):
-                current_text += event_str
-                continue
+                    # json.loads can return int/float/str/list for valid non-object JSON —
+                    # only dicts carry structured events.
+                    if not isinstance(event, dict):
+                        current_text += event_str
+                        continue
 
-            evt_type = event.get("type")
-            if evt_type == "token":
-                token = event.get("content", "")
-                current_text += token
-                # Don't yield yet — wait to know if tools follow
-            elif evt_type == "tool_call_delta":
-                tc = event.get("tool_call", {})
-                idx = tc.get("index", 0)
-                while len(tool_calls_collected) <= idx:
-                    tool_calls_collected.append({"name": "", "arguments": ""})
-                if tc.get("function", {}).get("name"):
-                    tool_calls_collected[idx]["name"] = tc["function"]["name"]
-                if tc.get("function", {}).get("arguments"):
-                    tool_calls_collected[idx]["arguments"] += tc["function"]["arguments"]
-            elif evt_type == "error":
-                yield json.dumps({"type": "error", "message": event.get("message", "Unknown error")})
-                return
+                    evt_type = event.get("type")
+                    if evt_type == "token":
+                        token = event.get("content", "")
+                        current_text += token
+                        # Don't yield yet — wait to know if tools follow
+                    elif evt_type == "tool_call_delta":
+                        tc = event.get("tool_call", {})
+                        idx = tc.get("index", 0)
+                        while len(tool_calls_collected) <= idx:
+                            tool_calls_collected.append({"name": "", "arguments": ""})
+                        if tc.get("function", {}).get("name"):
+                            tool_calls_collected[idx]["name"] = tc["function"]["name"]
+                        if tc.get("function", {}).get("arguments"):
+                            tool_calls_collected[idx]["arguments"] += tc["function"]["arguments"]
+                    elif evt_type == "error":
+                        yield json.dumps({"type": "error", "message": event.get("message", "Unknown error")})
+                        return
+        except asyncio.TimeoutError:
+            yield json.dumps({"type": "error", "message": f"Generation timed out after {GENERATION_TIMEOUT}s"})
+            return
 
         # ── No tool calls → this is the final iteration ──
         if not tool_calls_collected or not any(tc["name"] for tc in tool_calls_collected):

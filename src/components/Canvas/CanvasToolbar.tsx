@@ -104,7 +104,7 @@ export function CanvasToolbar({
   );
 
   return (
-    <div className="flex items-center gap-2 px-4 py-2 border-b bg-background shrink-0 flex-wrap">
+    <div className="relative flex items-center gap-2 px-4 py-2 border-b bg-background shrink-0 flex-wrap">
       <span className="text-xs font-semibold text-muted-foreground mr-1 select-none uppercase tracking-wider">Add</span>
 
       <button className={btnCls} onClick={onAddText} title="Add text node">
@@ -228,8 +228,7 @@ export function CanvasToolbar({
       {/* Shortcuts overlay */}
       {showHelp && (
         <div
-          className="absolute top-12 right-4 z-50 bg-background border rounded-lg shadow-xl p-4 w-72"
-          style={{ top: 48 }}
+          className="absolute top-12 right-0 z-50 bg-background border rounded-lg shadow-xl p-4 w-72"
         >
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">

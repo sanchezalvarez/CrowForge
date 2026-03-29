@@ -40,44 +40,55 @@ export function parseMarkdownTasks(markdown: string): MarkdownTask[] {
 
 /**
  * Toggles a markdown task checkbox at the specified line index.
+ * Uses direct string index manipulation to avoid split/join on the entire document.
  */
 export function toggleMarkdownTask(markdown: string, lineIndex: number): string {
   if (!markdown) return markdown;
-  
-  const lines = markdown.split("\n");
-  if (lineIndex < 0 || lineIndex >= lines.length) return markdown;
-  
-  const line = lines[lineIndex];
+
+  // Find the start offset of the target line without splitting the whole string
+  let lineStart = 0;
+  for (let i = 0; i < lineIndex; i++) {
+    const next = markdown.indexOf("\n", lineStart);
+    if (next === -1) return markdown; // lineIndex out of bounds
+    lineStart = next + 1;
+  }
+  const lineEnd = markdown.indexOf("\n", lineStart);
+  const line = lineEnd === -1 ? markdown.slice(lineStart) : markdown.slice(lineStart, lineEnd);
+
   const taskRegex = /^(\s*[-*]\s*\[)([ xX])(\]\s*.*)$/;
   const match = line.match(taskRegex);
-  
   if (!match) return markdown;
-  
+
   const currentChecked = match[2].toLowerCase() === "x";
   const newChecked = currentChecked ? " " : "x";
-  
-  lines[lineIndex] = `${match[1]}${newChecked}${match[3]}`;
-  
-  return lines.join("\n");
+  // match[1].length gives offset of the bracket character within the line
+  const bracketOffset = lineStart + match[1].length;
+
+  return markdown.slice(0, bracketOffset) + newChecked + markdown.slice(bracketOffset + 1);
 }
 
 /**
  * Updates a specific task's completion state in markdown.
+ * Uses direct string index manipulation to avoid split/join on the entire document.
  */
 export function setMarkdownTaskState(markdown: string, lineIndex: number, completed: boolean): string {
   if (!markdown) return markdown;
-  
-  const lines = markdown.split("\n");
-  if (lineIndex < 0 || lineIndex >= lines.length) return markdown;
-  
-  const line = lines[lineIndex];
+
+  let lineStart = 0;
+  for (let i = 0; i < lineIndex; i++) {
+    const next = markdown.indexOf("\n", lineStart);
+    if (next === -1) return markdown;
+    lineStart = next + 1;
+  }
+  const lineEnd = markdown.indexOf("\n", lineStart);
+  const line = lineEnd === -1 ? markdown.slice(lineStart) : markdown.slice(lineStart, lineEnd);
+
   const taskRegex = /^(\s*[-*]\s*\[)([ xX])(\]\s*.*)$/;
   const match = line.match(taskRegex);
-  
   if (!match) return markdown;
-  
+
   const newChecked = completed ? "x" : " ";
-  lines[lineIndex] = `${match[1]}${newChecked}${match[3]}`;
-  
-  return lines.join("\n");
+  const bracketOffset = lineStart + match[1].length;
+
+  return markdown.slice(0, bracketOffset) + newChecked + markdown.slice(bracketOffset + 1);
 }

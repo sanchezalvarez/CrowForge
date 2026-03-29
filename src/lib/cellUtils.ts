@@ -75,12 +75,18 @@ export const REF_COLORS = [
 
 export type RefGroup = { cells: string[]; colorIdx: number; token: string; start: number; end: number };
 
+const _colLetterCache = new Map<string, number>();
 export function colLetterToIndex(letters: string): number {
+  const key = letters.toUpperCase();
+  const cached = _colLetterCache.get(key);
+  if (cached !== undefined) return cached;
   let idx = 0;
-  for (let i = 0; i < letters.length; i++) {
-    idx = idx * 26 + (letters.toUpperCase().charCodeAt(i) - 64);
+  for (let i = 0; i < key.length; i++) {
+    idx = idx * 26 + (key.charCodeAt(i) - 64);
   }
-  return idx - 1;
+  const result = idx - 1;
+  _colLetterCache.set(key, result);
+  return result;
 }
 
 // Parse formula refs into groups with color indices and token positions
@@ -150,7 +156,12 @@ export function matchCondRule(rule: ConditionalRule, value: string): boolean {
   const v = value ?? "";
   const rv = rule.value ?? "";
   const num = parseFloat(v);
-  const rnum = parseFloat(rv);
+  // Cache parsed rule value on the rule object to avoid re-parsing on every cell
+  let rnum = (rule as any)._parsedValue;
+  if (rnum === undefined) {
+    rnum = parseFloat(rv);
+    (rule as any)._parsedValue = rnum;
+  }
   switch (rule.operator) {
     case "isEmpty":    return v.trim() === "";
     case "isNotEmpty": return v.trim() !== "";

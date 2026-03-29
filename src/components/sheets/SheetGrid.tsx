@@ -349,14 +349,7 @@ const SheetRow = React.memo(function SheetRow({
                   const a = activeSheet.alignments?.[`${ri},${ci}`];
                   const [h, v] = a ? a.split(",") : ["left", "top"];
                   const fmt: CellFormat = activeSheet.formats?.[`${ri},${ci}`] ?? {};
-                  // Apply conditional formatting rules (later rules override earlier)
-                  const condRules = activeSheet.sizes?.condRules ?? [];
-                  const condFmt: Partial<CellFormat> = {};
-                  for (const rule of condRules) {
-                    if (rule.col !== null && rule.col !== ci) continue;
-                    if (matchCondRule(rule, cell)) Object.assign(condFmt, rule.format);
-                  }
-                  const ef = { ...fmt, ...condFmt };
+                  const ef = { ...fmt, ...(condStyles.get(`${ri},${ci}`) ?? {}) };
                   const noWrap = ef.wrap === false;
                   const manualH = ri in rowHeights;
                   return {
@@ -542,6 +535,28 @@ export function SheetGrid({
     const sum = nums.reduce((a, b) => a + b, 0);
     return { sum, avg: sum / nums.length, count: nums.length };
   }, [selection, activeSheet.rows]);
+
+  // Pre-compute conditional formatting for all rows×cols once per data/rules change
+  // instead of running matchCondRule inside the per-cell render (O(n³) → O(1) per cell)
+  const condStyles = useMemo(() => {
+    const condRules = activeSheet.sizes?.condRules ?? [];
+    if (condRules.length === 0) return new Map<string, Partial<CellFormat>>();
+    const map = new Map<string, Partial<CellFormat>>();
+    for (let ri = 0; ri < activeSheet.rows.length; ri++) {
+      const row = activeSheet.rows[ri];
+      for (let ci = 0; ci < activeSheet.columns.length; ci++) {
+        const cell = row?.[ci] ?? "";
+        const fmt: Partial<CellFormat> = {};
+        let hasMatch = false;
+        for (const rule of condRules) {
+          if (rule.col !== null && rule.col !== ci) continue;
+          if (matchCondRule(rule, cell)) { Object.assign(fmt, rule.format); hasMatch = true; }
+        }
+        if (hasMatch) map.set(`${ri},${ci}`, fmt);
+      }
+    }
+    return map;
+  }, [activeSheet.rows, activeSheet.columns.length, activeSheet.sizes?.condRules]);
 
   return (
     <>

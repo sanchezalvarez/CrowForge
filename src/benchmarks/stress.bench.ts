@@ -1,4 +1,4 @@
-import { describe, bench, expect } from "vitest";
+import { describe, bench } from "vitest";
 import { parseMarkdownTasks, toggleMarkdownTask } from "../lib/markdownTasks";
 import { PMTask } from "../types/pm";
 
@@ -139,29 +139,13 @@ describe("CrowForge Performance Benchmarks", () => {
     taskDb.find(t => t.title.includes("Target Keyword"));
   });
 
-  // 5. Memory Leak Check
-  it("Memory Leak Check: Clearing document should free memory", async () => {
-    // Note: JS environment memory measurement is non-deterministic but we can check allocation
-    const getMem = () => (global as any).performance?.memory?.usedJSHeapSize || 0;
-    
-    const initialMem = getMem();
-    let bigData: string | null = generateMassiveMarkdown(50000, 0.5); // Very large string
-    const afterAllocation = getMem();
-    
-    // Check if memory increased (if supported by environment)
-    if (initialMem > 0) {
-      expect(afterAllocation).toBeGreaterThan(initialMem);
-    }
-    
-    bigData = null; // Clear reference
-    
-    // Force GC if possible (requires --expose-gc flag, usually not in CI)
-    if (global.gc) global.gc();
-    
-    const finalMem = getMem();
-    // We expect some reduction or stability after nulling out the large object
-    if (initialMem > 0 && global.gc) {
-      expect(finalMem).toBeLessThan(afterAllocation);
+  // 5. Bulk Task Toggling
+  const bulkMd = generateMassiveMarkdown(1000, 0.5); // 1k lines, ~500 tasks
+  bench("Bulk Toggle All Tasks (1k lines)", () => {
+    const tasks = parseMarkdownTasks(bulkMd);
+    let md = bulkMd;
+    for (const task of tasks) {
+      md = toggleMarkdownTask(md, task.lineIndex);
     }
   });
 });

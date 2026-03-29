@@ -40,4 +40,22 @@ describe("DeadlineWarning Component", () => {
     const { container } = render(<DeadlineWarning dueDate="2026-04-10" status="active" />);
     expect(container.firstChild).toBeNull();
   });
+
+  it("should return null for closed and rejected statuses", () => {
+    const { container: c1 } = render(<DeadlineWarning dueDate="2026-03-29" status="closed" />);
+    expect(c1.firstChild).toBeNull();
+
+    const { container: c2 } = render(<DeadlineWarning dueDate="2026-03-29" status="rejected" />);
+    expect(c2.firstChild).toBeNull();
+  });
+
+  it("should return null when dueDate is undefined", () => {
+    const { container } = render(<DeadlineWarning dueDate={undefined} status="active" />);
+    expect(container.firstChild).toBeNull();
+  });
+
+  it("should show 'Due in 3d' for exactly 3 days in the future (boundary)", () => {
+    render(<DeadlineWarning dueDate="2026-04-01" status="active" />);
+    expect(screen.getByText("Due in 3d")).toBeDefined();
+  });
 });

@@ -203,5 +203,11 @@ CREATE TABLE IF NOT EXISTS pm_activity (
   FOREIGN KEY (project_id) REFERENCES pm_projects(id) ON DELETE CASCADE
 );
 
+-- ── Performance indexes ────────────────────────────────────────────────────
+-- Speed up ORDER BY updated_at DESC queries used in list endpoints
+CREATE INDEX IF NOT EXISTS idx_sheets_updated    ON sheets(updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_documents_updated ON documents(updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_canvases_updated  ON rf_canvases(updated_at DESC);
+
 INSERT OR IGNORE INTO pm_members (id, name, email, avatar_color, initials)
 VALUES (1, 'Me', '', '#E04E0E', 'ME');

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import axios from "axios";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -711,7 +711,7 @@ export function AgentPage({ tuningParams }: AgentPageProps) {
     }
   }
 
-  const markdownComponents = {
+  const markdownComponents = useMemo(() => ({
     code({ className, children, ...props }: React.HTMLAttributes<HTMLElement> & { inline?: boolean }) {
       const match = /language-(\w+)/.exec(className || "");
       const codeString = String(children).replace(/\n$/, "");
@@ -725,7 +725,8 @@ export function AgentPage({ tuningParams }: AgentPageProps) {
         </code>
       );
     },
-  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [isDark]);
 
   const scopeCount = selectedSheetIds.size + selectedDocumentIds.size;
   const totalCount = allSheets.length + allDocuments.length;

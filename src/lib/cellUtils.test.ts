@@ -1,12 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { 
-  colLetterToIndex, 
-  idxToCol, 
-  resolveCellRef, 
-  resolveRange, 
-  matchCondRule, 
-  inferFillSeries, 
+import {
+  colLetterToIndex,
+  idxToCol,
+  resolveCellRef,
+  resolveRange,
+  matchCondRule,
+  inferFillSeries,
   ctrlArrowMove,
+  parseFormulaRefGroups,
   ConditionalRule
 } from "./cellUtils";
 
@@ -63,6 +64,46 @@ describe("Cell Utilities - Conditional Rules", () => {
     expect(matchCondRule(rule, "  ")).toBe(true);
     expect(matchCondRule(rule, "content")).toBe(false);
   });
+
+  it("should match isNotEmpty correctly", () => {
+    const rule: ConditionalRule = { id: "1", col: null, operator: "isNotEmpty", value: "", format: {} };
+    expect(matchCondRule(rule, "hello")).toBe(true);
+    expect(matchCondRule(rule, "")).toBe(false);
+    expect(matchCondRule(rule, "  ")).toBe(false);
+  });
+
+  it("should match startsWith and endsWith case-insensitively", () => {
+    const sw: ConditionalRule = { id: "1", col: null, operator: "startsWith", value: "Hello", format: {} };
+    expect(matchCondRule(sw, "hello world")).toBe(true);
+    expect(matchCondRule(sw, "world hello")).toBe(false);
+
+    const ew: ConditionalRule = { id: "2", col: null, operator: "endsWith", value: "World", format: {} };
+    expect(matchCondRule(ew, "hello world")).toBe(true);
+    expect(matchCondRule(ew, "world hello")).toBe(false);
+  });
+
+  it("should match == and != operators numerically and by string", () => {
+    const eqNum: ConditionalRule = { id: "1", col: null, operator: "==", value: "42", format: {} };
+    expect(matchCondRule(eqNum, "42")).toBe(true);
+    expect(matchCondRule(eqNum, "42.0")).toBe(true);
+    expect(matchCondRule(eqNum, "43")).toBe(false);
+
+    const neqStr: ConditionalRule = { id: "2", col: null, operator: "!=", value: "foo", format: {} };
+    expect(matchCondRule(neqStr, "bar")).toBe(true);
+    expect(matchCondRule(neqStr, "foo")).toBe(false);
+  });
+
+  it("should match >= and <= operators", () => {
+    const gte: ConditionalRule = { id: "1", col: null, operator: ">=", value: "10", format: {} };
+    expect(matchCondRule(gte, "10")).toBe(true);
+    expect(matchCondRule(gte, "11")).toBe(true);
+    expect(matchCondRule(gte, "9")).toBe(false);
+
+    const lte: ConditionalRule = { id: "2", col: null, operator: "<=", value: "10", format: {} };
+    expect(matchCondRule(lte, "10")).toBe(true);
+    expect(matchCondRule(lte, "9")).toBe(true);
+    expect(matchCondRule(lte, "11")).toBe(false);
+  });
 });
 
 describe("Cell Utilities - Fill Series", () => {
@@ -79,7 +120,7 @@ describe("Cell Utilities - Fill Series", () => {
 
 describe("Cell Utilities - Ctrl+Arrow Navigation", () => {
   const cells = ["A", "B", "C", undefined, undefined, "F", "G", undefined];
-  
+
   it("should jump to the end of a block when starting on a filled cell", () => {
     expect(ctrlArrowMove(cells, 0, cells.length - 1, 1)).toBe(2); // Ends at 'C'
   });
@@ -90,5 +131,65 @@ describe("Cell Utilities - Ctrl+Arrow Navigation", () => {
 
   it("should jump to the very end if no more filled cells", () => {
     expect(ctrlArrowMove(cells, 6, cells.length - 1, 1)).toBe(7); // Last cell
+  });
+
+  it("should jump backward to end of block when starting on a filled cell", () => {
+    expect(ctrlArrowMove(cells, 6, cells.length - 1, -1)).toBe(5); // Ends at 'F'
+  });
+
+  it("should jump backward to the previous filled cell when starting on an empty cell", () => {
+    expect(ctrlArrowMove(cells, 4, cells.length - 1, -1)).toBe(2); // Jumps back to 'C'
+  });
+
+  it("should jump to the very start if no more filled cells going backward", () => {
+    expect(ctrlArrowMove(cells, 0, cells.length - 1, -1)).toBe(0); // Already at start
+  });
+});
+
+describe("Cell Utilities - Formula Reference Groups", () => {
+  it("should return empty array for non-formula strings", () => {
+    expect(parseFormulaRefGroups("", 10, 10)).toEqual([]);
+    expect(parseFormulaRefGroups("A1+B2", 10, 10)).toEqual([]); // no leading =
+  });
+
+  it("should parse a single cell reference", () => {
+    const groups = parseFormulaRefGroups("=A1", 5, 5);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].cells).toEqual(["0,0"]);
+    expect(groups[0].token).toBe("A1");
+    expect(groups[0].colorIdx).toBe(0);
+  });
+
+  it("should parse a range reference into multiple cells", () => {
+    const groups = parseFormulaRefGroups("=A1:B2", 5, 5);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].cells).toHaveLength(4); // A1, A2, B1, B2
+    expect(groups[0].cells).toContain("0,0");
+    expect(groups[0].cells).toContain("0,1");
+    expect(groups[0].cells).toContain("1,0");
+    expect(groups[0].cells).toContain("1,1");
+  });
+
+  it("should parse multiple separate references with different color indices", () => {
+    const groups = parseFormulaRefGroups("=A1+B2", 5, 5);
+    expect(groups).toHaveLength(2);
+    expect(groups[0].cells).toEqual(["0,0"]);
+    expect(groups[1].cells).toEqual(["1,1"]);
+    expect(groups[0].colorIdx).toBe(0);
+    expect(groups[1].colorIdx).toBe(1);
+  });
+
+  it("should exclude references out of grid bounds", () => {
+    // Grid is 2x2, A1:C3 partially out of bounds
+    const groups = parseFormulaRefGroups("=A1:C3", 2, 2);
+    expect(groups).toHaveLength(1);
+    // Only A1, A2, B1, B2 are within 2x2 grid
+    expect(groups[0].cells).toHaveLength(4);
+  });
+
+  it("should return empty groups array if all refs are out of bounds", () => {
+    // Grid is 1x1, Z100 is way out of bounds
+    const groups = parseFormulaRefGroups("=Z100", 1, 1);
+    expect(groups).toHaveLength(0);
   });
 });

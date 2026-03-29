@@ -33,6 +33,7 @@ We're focused on providing a clean, efficient, and inspiring environment for cre
 
 -   **Server-Based Local Development & Testing:** Enhancing our local backend infrastructure for more robust development and testing workflows.
 -   **User Management:** Implementing user management features for collaborative scenarios.
+-   **Git Integration:** Connecting your project management and documentation directly to your source control for seamless tracking of changes and tasks.
 
 ---
 

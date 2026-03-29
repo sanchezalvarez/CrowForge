@@ -9,7 +9,7 @@
 
 Developed by indie game developers from **rembrosoft.com**, CrowForge is born from the need for a unified, local-first AI workspace. We understand the struggle of juggling disparate tools like spreadsheets, documents, Azure services, and Miro boards. That's why we're building CrowForge: a powerful, integrated platform designed to bring everything together, running entirely on your machine with robust local AI support.
 
-**Our core philosophy:** No annoying notifications, no unsolicited emails, and absolutely no complicated, bloated features that users only utilize 20% of. We're focused on providing a clean, efficient, and inspiring environment for creators.
+We're focused on providing a clean, efficient, and inspiring environment for creators with no annoying notifications, no unsolicited emails, and absolutely no complicated, bloated features that users only utilize 20% of.
 
 ## 🚫 No More Bloatware
 
@@ -23,15 +23,11 @@ Developed by indie game developers from **rembrosoft.com**, CrowForge is born fr
 -   **Blazing Fast:** As fast as your code. Experience an application without frustrating loading spinners.
 -   **Indie-First Philosophy:** Built for solo developers and small teams. CrowForge won't impose corporate processes or overhead you don't need.
 
-## 💡 Our Philosophy (Manifest)
-
-"We believe the best tool is one you don't notice. It gets out of your way, letting your ideas flow from mind to engine."
-
 ## 💰 Transparent & Free
 
 -   **For Individuals:** Forever free. All features unlocked.
 -   **For the Community:** No tracking, no data selling, no BS.
--   **For the Love of Games:** Built for creators who love making games, not for those who love spreadsheets.
+-   **For the Love of Games:** Built for creators who love making games.
 
 ## 🗺️ Roadmap
 

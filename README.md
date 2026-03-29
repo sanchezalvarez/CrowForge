@@ -1,4 +1,7 @@
-![Agent Crowner](src/assets/AgentCrowner_512.png)
+<div align="center">
+  <img src="src/assets/AgentCrowner_512.png" alt="Agent Crowner" width="250">
+  <p>Agent Crowner</p>
+</div>
 
 # CrowForge
 

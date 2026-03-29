@@ -75,6 +75,7 @@ export function useCanvasStore(canvasId?: string) {
       })
       .catch(console.error)
       .finally(() => setLoaded(true));
+    return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
   }, [activeCanvasId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── History push (throttled) ─────────────────────────────────────────────
@@ -159,18 +160,20 @@ export function useCanvasStore(canvasId?: string) {
   const triggerNode = useCallback(
     async (nodeId: string): Promise<void> => {
       if (runningNodesRef.current.has(nodeId)) return;
+      markRunning(nodeId); // claim slot immediately to prevent race on concurrent calls
 
       if (hasCycle(edgesRef.current)) {
         setToast("Cycle detected in flow — cannot run.");
+        markDone(nodeId);
         return;
       }
 
       const node = getNode(nodeId);
-      if (!node || node.type !== "ai") return;
+      if (!node || node.type !== "ai") { markDone(nodeId); return; }
 
       const prompt   = (node.data.prompt   as string | undefined)?.trim() ?? "";
       const behavior = (node.data.behavior as string | undefined) ?? "none";
-      if (!prompt) return;
+      if (!prompt) { markDone(nodeId); return; }
 
       const upstreamCtx = edgesRef.current
         .filter((e) => e.target === nodeId)
@@ -183,7 +186,6 @@ export function useCanvasStore(canvasId?: string) {
         }))
         .filter((c) => c.output.length > 0);
 
-      markRunning(nodeId);
       updateNodeData(nodeId, { output: "", error: null });
 
       let fullOutput = "";

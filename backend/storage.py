@@ -146,6 +146,11 @@ class DatabaseManager:
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (project_id) REFERENCES pm_projects(id) ON DELETE CASCADE
         )""")
+        # Migrate pm_tasks: add refs_json if missing
+        _pm_cols = {row["name"] for row in conn.execute("PRAGMA table_info(pm_tasks)").fetchall()}
+        if _pm_cols and "refs_json" not in _pm_cols:
+            conn.execute("ALTER TABLE pm_tasks ADD COLUMN refs_json TEXT NOT NULL DEFAULT '[]'")
+
         # Migrate pm_tasks: if old schema (has parent_task_id), recreate with new schema
         pm_tasks_cols = {row["name"] for row in conn.execute("PRAGMA table_info(pm_tasks)").fetchall()}
         if pm_tasks_cols and "item_type" not in pm_tasks_cols:
@@ -172,6 +177,7 @@ class DatabaseManager:
                 due_date TEXT DEFAULT NULL,
                 resolved_date TEXT DEFAULT NULL,
                 position INTEGER DEFAULT 0,
+                refs_json TEXT NOT NULL DEFAULT '[]',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )""")
@@ -209,6 +215,7 @@ class DatabaseManager:
                 due_date TEXT DEFAULT NULL,
                 resolved_date TEXT DEFAULT NULL,
                 position INTEGER DEFAULT 0,
+                refs_json TEXT NOT NULL DEFAULT '[]',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )""")

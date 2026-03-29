@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef } from "react";
-import { X, Trash2, Plus, ChevronDown, ChevronRight } from "lucide-react";
+import { X, Trash2, Plus, ChevronDown, ChevronRight, ChevronsUpDown } from "lucide-react";
 import axios from "axios";
-import { PMTask, PMTaskStatus, PMPriority, PMItemType, PMMember, PMSprint, PMActivity } from "../../types/pm";
+import { PMTask, PMTaskStatus, PMPriority, PMItemType, PMMember, PMSprint, PMActivity, PMRef } from "../../types/pm";
 import { StatusBadge } from "./StatusBadge";
 import { PriorityBadge } from "./PriorityBadge";
 import { WorkItemTypeBadge } from "./WorkItemTypeBadge";
 import { MemberAvatar } from "./MemberAvatar";
 import { DeadlineWarning } from "./DeadlineWarning";
+import { TaskRefs } from "./TaskRefs";
 import {
   Select,
   SelectContent,
@@ -20,6 +21,16 @@ import { Textarea } from "../ui/textarea";
 const API_BASE = "http://127.0.0.1:8000";
 const FIBONACCI = [1, 2, 3, 5, 8, 13, 21];
 
+// Valid parent types for each item type
+const VALID_PARENT_TYPES: Record<PMItemType, PMItemType[]> = {
+  epic:    [],
+  feature: ["epic"],
+  story:   ["feature"],
+  task:    ["story"],
+  bug:     ["story"],
+  spike:   ["story"],
+};
+
 interface TaskDetailPanelProps {
   task: PMTask | null;
   open: boolean;
@@ -28,6 +39,8 @@ interface TaskDetailPanelProps {
   onDelete: (id: number) => Promise<void>;
   members: PMMember[];
   sprints: PMSprint[];
+  allTasks?: PMTask[];
+  onNavigate?: (page: string, id?: string) => void;
 }
 
 function timeAgo(dateStr: string): string {
@@ -40,7 +53,7 @@ function timeAgo(dateStr: string): string {
   return `${Math.floor(diff / 86400)}d ago`;
 }
 
-export function TaskDetailPanel({ task, open, onClose, onUpdate, onDelete, members, sprints }: TaskDetailPanelProps) {
+export function TaskDetailPanel({ task, open, onClose, onUpdate, onDelete, members, sprints, allTasks = [], onNavigate }: TaskDetailPanelProps) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [acceptanceCriteria, setAcceptanceCriteria] = useState("");
@@ -50,6 +63,8 @@ export function TaskDetailPanel({ task, open, onClose, onUpdate, onDelete, membe
   const [showChildInput, setShowChildInput] = useState(false);
   const [childrenExpanded, setChildrenExpanded] = useState(true);
   const [parentTask, setParentTask] = useState<PMTask | null>(null);
+  const [parentPickerOpen, setParentPickerOpen] = useState(false);
+  const [parentPickerSearch, setParentPickerSearch] = useState("");
   const titleRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -103,11 +118,10 @@ export function TaskDetailPanel({ task, open, onClose, onUpdate, onDelete, membe
     await onUpdate(task.id, { acceptance_criteria: acceptanceCriteria });
   };
 
-  // Pick the default child type based on parent's type
   const defaultChildType = (parentType: string): string => {
     if (parentType === "epic") return "feature";
     if (parentType === "feature") return "story";
-    return "task"; // story, task, bug, spike → task children
+    return "task";
   };
 
   const handleAddChild = async () => {
@@ -135,11 +149,35 @@ export function TaskDetailPanel({ task, open, onClose, onUpdate, onDelete, membe
     } catch {}
   };
 
+  // Parent picker
+  const validParentTypes = task ? VALID_PARENT_TYPES[task.item_type] : [];
+  const parentCandidates = allTasks.filter((t) => {
+    if (!task) return false;
+    if (t.id === task.id) return false;
+    if (!validParentTypes.includes(t.item_type)) return false;
+    if (parentPickerSearch && !t.title.toLowerCase().includes(parentPickerSearch.toLowerCase())) return false;
+    return true;
+  });
+
+  const handleSelectParent = async (newParentId: number | null) => {
+    if (!task) return;
+    await onUpdate(task.id, { parent_id: newParentId });
+    if (newParentId) loadParent(newParentId);
+    else setParentTask(null);
+    setParentPickerOpen(false);
+  };
+
+  const handleRefsChange = async (refs: PMRef[]) => {
+    if (!task) return;
+    await onUpdate(task.id, { refs });
+  };
+
   if (!task) return null;
 
   const memberMap = Object.fromEntries(members.map((m) => [m.id, m]));
   const assignee = task.assignee_id ? memberMap[task.assignee_id] : null;
   const showAC = task.item_type === "story" || !!acceptanceCriteria;
+  const canHaveParent = validParentTypes.length > 0;
 
   return (
     <>
@@ -175,7 +213,7 @@ export function TaskDetailPanel({ task, open, onClose, onUpdate, onDelete, membe
         </div>
 
         <div className="flex-1 overflow-y-auto">
-          {/* Parent breadcrumb */}
+          {/* Breadcrumb */}
           {parentTask && (
             <div className="px-4 pt-3 pb-0">
               <span className="text-[10px] text-muted-foreground font-mono flex items-center gap-1">
@@ -215,6 +253,72 @@ export function TaskDetailPanel({ task, open, onClose, onUpdate, onDelete, membe
                 <SelectItem value="spike">Spike</SelectItem>
               </SelectContent>
             </Select>
+
+            {/* Parent row */}
+            {canHaveParent && (
+              <>
+                <span className="text-muted-foreground text-xs font-mono pt-1">Parent</span>
+                <div className="relative flex items-center gap-1">
+                  <div className="flex-1 flex items-center gap-1 min-w-0">
+                    {parentTask ? (
+                      <>
+                        <WorkItemTypeBadge type={parentTask.item_type} />
+                        <span className="text-xs truncate max-w-[140px]">{parentTask.title}</span>
+                      </>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">— none —</span>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => setParentPickerOpen((v) => !v)}
+                    className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
+                    title="Change parent"
+                  >
+                    <ChevronsUpDown size={12} />
+                  </button>
+                  {parentPickerOpen && (
+                    <div className="absolute top-full left-0 right-0 mt-1 z-20 bg-background border border-border rounded-md shadow-lg">
+                      <div className="p-1.5">
+                        <input
+                          autoFocus
+                          className="w-full text-xs border border-border rounded px-2 py-1 bg-muted focus:outline-none focus:ring-1 focus:ring-primary"
+                          placeholder="Search tasks…"
+                          value={parentPickerSearch}
+                          onChange={(e) => setParentPickerSearch(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === "Escape") setParentPickerOpen(false); }}
+                        />
+                      </div>
+                      <div className="max-h-48 overflow-y-auto">
+                        {task.parent_id && (
+                          <button
+                            className="w-full text-left px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted transition-colors italic"
+                            onClick={() => handleSelectParent(null)}
+                          >
+                            Remove parent (make root)
+                          </button>
+                        )}
+                        {parentCandidates.length === 0 ? (
+                          <p className="px-3 py-2 text-xs text-muted-foreground">
+                            No valid parent {validParentTypes.join("/")} items found.
+                          </p>
+                        ) : (
+                          parentCandidates.map((t) => (
+                            <button
+                              key={t.id}
+                              className="w-full text-left px-3 py-1.5 text-xs hover:bg-muted transition-colors flex items-center gap-1.5"
+                              onClick={() => handleSelectParent(t.id)}
+                            >
+                              <WorkItemTypeBadge type={t.item_type} />
+                              <span className="truncate">{t.title}</span>
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
 
             <span className="text-muted-foreground text-xs font-mono pt-1">Status</span>
             <Select value={task.status} onValueChange={(v) => onUpdate(task.id, { status: v as PMTaskStatus })}>
@@ -352,6 +456,13 @@ export function TaskDetailPanel({ task, open, onClose, onUpdate, onDelete, membe
               />
             </div>
           )}
+
+          {/* References */}
+          <TaskRefs
+            refs={task.refs ?? []}
+            onChange={handleRefsChange}
+            onNavigate={onNavigate}
+          />
 
           {/* Children */}
           <div className="px-4 py-3 border-b border-border">

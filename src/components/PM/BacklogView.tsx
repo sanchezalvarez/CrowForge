@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { ChevronRight, ChevronDown, Plus, Search } from "lucide-react";
 import { PMTask, PMTaskStatus, PMPriority, PMItemType, PMMember } from "../../types/pm";
 import { WorkItemTypeBadge } from "./WorkItemTypeBadge";
@@ -19,6 +19,7 @@ interface BacklogViewProps {
   onTaskClick: (task: PMTask) => void;
   onTaskCreate: (status: PMTaskStatus) => void;
   onTaskUpdate: (id: number, data: Partial<PMTask>) => Promise<PMTask | null>;
+  onChildCreate: (parentId: number, title: string, type: PMItemType) => Promise<void>;
 }
 
 type TreeNode = PMTask & { depth: number; children: TreeNode[] };
@@ -47,9 +48,14 @@ function flattenTree(nodes: TreeNode[], expandedIds: Set<number>): TreeNode[] {
 
 const ALL_TYPES: PMItemType[] = ["epic", "feature", "story", "task", "bug", "spike"];
 
-export function BacklogView({ tasks, members, onTaskClick, onTaskCreate, onTaskUpdate }: BacklogViewProps) {
+function defaultChildType(parentType: PMItemType): PMItemType {
+  if (parentType === "epic") return "feature";
+  if (parentType === "feature") return "story";
+  return "task";
+}
+
+export function BacklogView({ tasks, members, onTaskClick, onTaskCreate, onTaskUpdate, onChildCreate }: BacklogViewProps) {
   const [expandedIds, setExpandedIds] = useState<Set<number>>(() => {
-    // Default: expand tasks/bugs/spikes/stories, collapse epics/features
     const ids = new Set<number>();
     tasks.forEach((t) => {
       if (t.item_type === "story" || t.item_type === "task" || t.item_type === "bug" || t.item_type === "spike") {
@@ -63,6 +69,7 @@ export function BacklogView({ tasks, members, onTaskClick, onTaskCreate, onTaskU
   const [statusFilter, setStatusFilter] = useState<PMTaskStatus | "all">("all");
   const [assigneeFilter, setAssigneeFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
+  const [inlineParentId, setInlineParentId] = useState<number | null>(null);
 
   const memberMap = useMemo(() => Object.fromEntries(members.map((m) => [m.id, m])), [members]);
 
@@ -95,6 +102,21 @@ export function BacklogView({ tasks, members, onTaskClick, onTaskCreate, onTaskU
       else next.add(type);
       return next;
     });
+  };
+
+  const handleAddChildInline = (parentId: number) => {
+    // Auto-expand parent
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      next.add(parentId);
+      return next;
+    });
+    setInlineParentId(parentId);
+  };
+
+  const handleInlineSubmit = async (parentId: number, title: string, type: PMItemType) => {
+    setInlineParentId(null);
+    await onChildCreate(parentId, title, type);
   };
 
   return (
@@ -160,7 +182,8 @@ export function BacklogView({ tasks, members, onTaskClick, onTaskCreate, onTaskU
           <thead>
             <tr className="bg-muted/40 text-muted-foreground text-xs font-mono border-b border-border">
               <th className="text-left px-3 py-2 w-8" />
-              <th className="text-left px-2 py-2 w-20">Type</th>
+              <th className="text-left px-2 py-2 w-6" />
+              <th className="text-left px-2 py-2 w-24">Type</th>
               <th className="text-left px-2 py-2">Title</th>
               <th className="text-left px-2 py-2 w-28">Status</th>
               <th className="text-left px-2 py-2 w-24">Priority</th>
@@ -172,22 +195,36 @@ export function BacklogView({ tasks, members, onTaskClick, onTaskCreate, onTaskU
           <tbody>
             {visibleRows.length === 0 ? (
               <tr>
-                <td colSpan={8} className="text-center py-12 text-sm text-muted-foreground">
-                  No work items found. Click "+ New Task" to get started.
+                <td colSpan={9} className="text-center py-12 text-sm text-muted-foreground">
+                  No work items found. Click "+ New Item" to get started.
                 </td>
               </tr>
             ) : (
               visibleRows.map((row) => (
-                <BacklogRow
-                  key={row.id}
-                  row={row}
-                  expanded={expandedIds.has(row.id)}
-                  onToggleExpand={() => toggleExpand(row.id)}
-                  onClick={() => onTaskClick(row)}
-                  onUpdate={onTaskUpdate}
-                  members={members}
-                  memberMap={memberMap}
-                />
+                <>
+                  <BacklogRow
+                    key={row.id}
+                    row={row}
+                    expanded={expandedIds.has(row.id)}
+                    onToggleExpand={() => toggleExpand(row.id)}
+                    onClick={() => onTaskClick(row)}
+                    onUpdate={onTaskUpdate}
+                    members={members}
+                    memberMap={memberMap}
+                    onAddChild={() => handleAddChildInline(row.id)}
+                    isLeaf={row.item_type === "task" || row.item_type === "bug" || row.item_type === "spike"}
+                  />
+                  {inlineParentId === row.id && (
+                    <InlineAddRow
+                      key={`inline-${row.id}`}
+                      parentId={row.id}
+                      parentType={row.item_type}
+                      depth={row.depth + 1}
+                      onSubmit={handleInlineSubmit}
+                      onCancel={() => setInlineParentId(null)}
+                    />
+                  )}
+                </>
               ))
             )}
           </tbody>
@@ -205,6 +242,54 @@ export function BacklogView({ tasks, members, onTaskClick, onTaskCreate, onTaskU
   );
 }
 
+// ── Inline add row ──────────────────────────────────────────────────────────
+
+interface InlineAddRowProps {
+  parentId: number;
+  parentType: PMItemType;
+  depth: number;
+  onSubmit: (parentId: number, title: string, type: PMItemType) => void;
+  onCancel: () => void;
+}
+
+function InlineAddRow({ parentId, parentType, depth, onSubmit, onCancel }: InlineAddRowProps) {
+  const [value, setValue] = useState("");
+  const childType = defaultChildType(parentType);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  return (
+    <tr className="border-b border-border/50 bg-muted/10">
+      <td className="px-3 py-1.5" />
+      <td className="px-2 py-1.5" />
+      <td className="px-2 py-1.5">
+        <WorkItemTypeBadge type={childType} />
+      </td>
+      <td
+        className="px-2 py-1.5"
+        style={{ paddingLeft: `${8 + depth * 20}px` }}
+        colSpan={6}
+      >
+        <input
+          ref={inputRef}
+          autoFocus
+          className="w-full max-w-md text-xs border border-primary/40 rounded px-2 py-1 bg-background focus:outline-none focus:ring-1 focus:ring-primary"
+          placeholder={`New ${childType} title…`}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && value.trim()) onSubmit(parentId, value.trim(), childType);
+            if (e.key === "Escape") onCancel();
+          }}
+          onBlur={() => { if (!value.trim()) onCancel(); }}
+        />
+        <span className="ml-2 text-[10px] text-muted-foreground">Enter to save · Esc to cancel</span>
+      </td>
+    </tr>
+  );
+}
+
+// ── Backlog row ─────────────────────────────────────────────────────────────
+
 interface BacklogRowProps {
   row: TreeNode;
   expanded: boolean;
@@ -213,9 +298,11 @@ interface BacklogRowProps {
   onUpdate: (id: number, data: Partial<PMTask>) => Promise<PMTask | null>;
   members: PMMember[];
   memberMap: Record<number, PMMember>;
+  onAddChild: () => void;
+  isLeaf: boolean;
 }
 
-function BacklogRow({ row, expanded, onToggleExpand, onClick, onUpdate, members, memberMap }: BacklogRowProps) {
+function BacklogRow({ row, expanded, onToggleExpand, onClick, onUpdate, members, memberMap, onAddChild, isLeaf }: BacklogRowProps) {
   const assignee = row.assignee_id ? memberMap[row.assignee_id] : null;
   const hasChildren = row.children.length > 0 || row.child_count > 0;
   const isClosed = row.status === "closed";
@@ -236,6 +323,19 @@ function BacklogRow({ row, expanded, onToggleExpand, onClick, onUpdate, members,
         ) : null}
       </td>
 
+      {/* Inline add child button */}
+      <td className="px-1 py-2 w-6">
+        {!isLeaf && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onAddChild(); }}
+            className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-primary transition-all rounded hover:bg-primary/10 p-0.5"
+            title="Add child"
+          >
+            <Plus size={11} />
+          </button>
+        )}
+      </td>
+
       {/* Type */}
       <td className="px-2 py-2">
         <WorkItemTypeBadge type={row.item_type} />
@@ -252,6 +352,11 @@ function BacklogRow({ row, expanded, onToggleExpand, onClick, onUpdate, members,
         {row.labels?.length > 0 && (
           <span className="ml-2 text-[9px] font-mono text-muted-foreground">
             {row.labels.slice(0, 2).join(", ")}
+          </span>
+        )}
+        {row.refs?.length > 0 && (
+          <span className="ml-2 text-[9px] font-mono text-muted-foreground/60" title={`${row.refs.length} reference${row.refs.length > 1 ? "s" : ""}`}>
+            🔗{row.refs.length}
           </span>
         )}
       </td>

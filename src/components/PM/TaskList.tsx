@@ -10,18 +10,24 @@ interface TaskListProps {
   onTaskCreate: (status: PMTaskStatus) => void;
 }
 
-const STATUS_ORDER: PMTaskStatus[] = ["new", "active", "resolved", "closed"];
+const STATUS_ORDER: PMTaskStatus[] = ["new", "active", "ready_to_go", "needs_testing", "resolved", "rejected"];
 const STATUS_LABELS: Record<PMTaskStatus, string> = {
-  new: "New",
-  active: "Active",
-  resolved: "Resolved",
-  closed: "Closed",
+  new:           "New",
+  active:        "Active",
+  ready_to_go:   "Ready to Go",
+  needs_testing: "Needs Testing",
+  resolved:      "Resolved",
+  rejected:      "Rejected",
+  closed:        "Closed",
 };
 const STATUS_COLORS: Record<PMTaskStatus, string> = {
-  new: "bg-muted-foreground/30",
-  active: "bg-primary",
-  resolved: "bg-teal-500",
-  closed: "bg-muted-foreground/50",
+  new:           "bg-muted-foreground/30",
+  active:        "bg-primary",
+  ready_to_go:   "bg-blue-500",
+  needs_testing: "bg-amber-500",
+  resolved:      "bg-teal-500",
+  rejected:      "bg-destructive",
+  closed:        "bg-muted-foreground/50",
 };
 
 export function TaskList({ tasks, members, onTaskClick, onTaskCreate }: TaskListProps) {

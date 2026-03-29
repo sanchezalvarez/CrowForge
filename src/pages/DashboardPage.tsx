@@ -211,21 +211,27 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
         <div className="animate-blob-drift-d" style={{ position: 'absolute', width: 260, height: 260, borderRadius: '50%', background: 'var(--accent-teal)', opacity: 0.06, mixBlendMode: 'multiply', top: '35%', left: -100 }} />
 
         {/* ── 2. Registration crosshairs ── */}
-        <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} xmlns="http://www.w3.org/2000/svg">
-          {/* Top-right — teal */}
-          <line x1="calc(100% - 32)" y1="28" x2="calc(100% - 8)" y2="28" stroke="rgba(11,114,104,0.45)" strokeWidth="1.5" />
-          <line x1="calc(100% - 20)" y1="16" x2="calc(100% - 20)" y2="40" stroke="rgba(11,114,104,0.45)" strokeWidth="1.5" />
-          <circle cx="calc(100% - 20)" cy="28" r="5" stroke="rgba(11,114,104,0.3)" strokeWidth="1" fill="none" />
-          {/* Bottom-left — orange */}
-          <line x1="8" y1="calc(100% - 28)" x2="32" y2="calc(100% - 28)" stroke="rgba(224,78,14,0.45)" strokeWidth="1.5" />
-          <line x1="20" y1="calc(100% - 40)" x2="20" y2="calc(100% - 16)" stroke="rgba(224,78,14,0.45)" strokeWidth="1.5" />
-          <circle cx="20" cy="calc(100% - 28)" r="5" stroke="rgba(224,78,14,0.3)" strokeWidth="1" fill="none" />
-          {/* Top-left — violet */}
-          <line x1="8" y1="28" x2="32" y2="28" stroke="rgba(92,58,156,0.35)" strokeWidth="1.5" />
-          <line x1="20" y1="16" x2="20" y2="40" stroke="rgba(92,58,156,0.35)" strokeWidth="1.5" />
-          {/* Bottom-right — teal faint */}
-          <line x1="calc(100% - 32)" y1="calc(100% - 28)" x2="calc(100% - 8)" y2="calc(100% - 28)" stroke="rgba(11,114,104,0.25)" strokeWidth="1" />
-          <line x1="calc(100% - 20)" y1="calc(100% - 40)" x2="calc(100% - 20)" y2="calc(100% - 16)" stroke="rgba(11,114,104,0.25)" strokeWidth="1" />
+        {/* Top-right — teal */}
+        <svg style={{ position: 'absolute', top: 8, right: 8, width: 48, height: 48 }} xmlns="http://www.w3.org/2000/svg">
+          <line x1="4" y1="20" x2="28" y2="20" stroke="rgba(11,114,104,0.45)" strokeWidth="1.5" />
+          <line x1="16" y1="8" x2="16" y2="32" stroke="rgba(11,114,104,0.45)" strokeWidth="1.5" />
+          <circle cx="16" cy="20" r="5" stroke="rgba(11,114,104,0.3)" strokeWidth="1" fill="none" />
+        </svg>
+        {/* Bottom-left — orange */}
+        <svg style={{ position: 'absolute', bottom: 8, left: 8, width: 48, height: 48 }} xmlns="http://www.w3.org/2000/svg">
+          <line x1="4" y1="28" x2="28" y2="28" stroke="rgba(224,78,14,0.45)" strokeWidth="1.5" />
+          <line x1="16" y1="16" x2="16" y2="40" stroke="rgba(224,78,14,0.45)" strokeWidth="1.5" />
+          <circle cx="16" cy="28" r="5" stroke="rgba(224,78,14,0.3)" strokeWidth="1" fill="none" />
+        </svg>
+        {/* Top-left — violet */}
+        <svg style={{ position: 'absolute', top: 8, left: 8, width: 48, height: 48 }} xmlns="http://www.w3.org/2000/svg">
+          <line x1="4" y1="20" x2="28" y2="20" stroke="rgba(92,58,156,0.35)" strokeWidth="1.5" />
+          <line x1="16" y1="8" x2="16" y2="32" stroke="rgba(92,58,156,0.35)" strokeWidth="1.5" />
+        </svg>
+        {/* Bottom-right — teal faint */}
+        <svg style={{ position: 'absolute', bottom: 8, right: 8, width: 48, height: 48 }} xmlns="http://www.w3.org/2000/svg">
+          <line x1="4" y1="28" x2="28" y2="28" stroke="rgba(11,114,104,0.25)" strokeWidth="1" />
+          <line x1="16" y1="16" x2="16" y2="40" stroke="rgba(11,114,104,0.25)" strokeWidth="1" />
         </svg>
 
         {/* ── 3. Halftone dot clusters ── */}

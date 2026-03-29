@@ -237,8 +237,6 @@ export function TaskRefs({ refs, onChange, onNavigate }: TaskRefsProps) {
           {!addMode && (
             <div className="flex flex-wrap gap-1 mt-0.5">
               {([
-                { type: "link"     as PMRefType, label: "Link",     Icon: Link2    },
-                { type: "image"    as PMRefType, label: "Image",    Icon: Image    },
                 { type: "document" as PMRefType, label: "Document", Icon: FileText },
                 { type: "sheet"    as PMRefType, label: "Sheet",    Icon: Table2   },
                 { type: "canvas"   as PMRefType, label: "Canvas",   Icon: Workflow },

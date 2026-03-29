@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef } from "react";
-import { X, Trash2, Plus, ChevronDown, ChevronRight, ChevronsUpDown } from "lucide-react";
+import { useState, useEffect, useRef, useCallback, type ComponentPropsWithoutRef } from "react";
+import ReactMarkdown from "react-markdown";
+import { X, Trash2, ChevronRight, ChevronsUpDown, ImagePlus, Youtube, Loader2 } from "lucide-react";
 import axios from "axios";
 import { PMTask, PMTaskStatus, PMPriority, PMItemType, PMMember, PMSprint, PMActivity, PMRef } from "../../types/pm";
 import { StatusBadge } from "./StatusBadge";
@@ -15,8 +16,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../ui/select";
-import { Button } from "../ui/button";
 import { Textarea } from "../ui/textarea";
+import { toast } from "../../hooks/useToast";
 
 const API_BASE = "http://127.0.0.1:8000";
 const FIBONACCI = [1, 2, 3, 5, 8, 13, 21];
@@ -53,15 +54,227 @@ function timeAgo(dateStr: string): string {
   return `${Math.floor(diff / 86400)}d ago`;
 }
 
+// ── Markdown components for description preview ──────────────────────────────
+
+function MdImg({ src, alt }: ComponentPropsWithoutRef<"img">) {
+  return (
+    <img
+      src={src}
+      alt={alt || ""}
+      className="max-w-full rounded-lg border border-border cursor-pointer hover:opacity-90 transition-opacity my-1"
+      style={{ maxHeight: 280 }}
+      onClick={() => src && window.open(src, "_blank", "noopener,noreferrer")}
+    />
+  );
+}
+
+function MdAnchor({ href, children }: ComponentPropsWithoutRef<"a">) {
+  const ytMatch = href?.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+  if (ytMatch) {
+    return (
+      <div className="my-2 rounded-lg overflow-hidden border border-border" style={{ maxWidth: 380, aspectRatio: "16/9" }}>
+        <iframe
+          src={`https://www.youtube.com/embed/${ytMatch[1]}`}
+          className="w-full h-full"
+          allowFullScreen
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          title="YouTube video"
+        />
+      </div>
+    );
+  }
+  return <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary underline">{children}</a>;
+}
+
+const MD_COMPONENTS = { img: MdImg, a: MdAnchor };
+
+// ── DescriptionField ──────────────────────────────────────────────────────────
+
+function DescriptionField({ value, onChange, onBlur }: { value: string; onChange: (v: string) => void; onBlur: () => void }) {
+  const [editing, setEditing] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadCount, setUploadCount] = useState({ done: 0, total: 0 });
+  const [dragOver, setDragOver] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const valueRef = useRef(value);
+  useEffect(() => { valueRef.current = value; }, [value]);
+
+  const startEdit = useCallback(() => {
+    setEditing(true);
+    setTimeout(() => textareaRef.current?.focus(), 10);
+  }, []);
+
+  const handleBlur = (e: React.FocusEvent) => {
+    // Don't close edit mode if focus moves to toolbar buttons inside the field
+    const relatedTarget = e.relatedTarget as HTMLElement | null;
+    if (relatedTarget && e.currentTarget.contains(relatedTarget)) return;
+    setEditing(false);
+    onBlur();
+  };
+
+  const insertAtCursor = useCallback((text: string) => {
+    const ta = textareaRef.current;
+    if (!ta) {
+      onChange(valueRef.current + text);
+      return;
+    }
+    const start = ta.selectionStart ?? valueRef.current.length;
+    const end = ta.selectionEnd ?? valueRef.current.length;
+    const newVal = valueRef.current.slice(0, start) + text + valueRef.current.slice(end);
+    onChange(newVal);
+    setTimeout(() => {
+      ta.focus();
+      const pos = start + text.length;
+      ta.setSelectionRange(pos, pos);
+    }, 0);
+  }, [onChange]);
+
+  const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
+
+  const uploadFiles = useCallback(async (files: File[]) => {
+    const imageFiles = files.filter(f => f.type.startsWith("image/"));
+    if (imageFiles.length === 0) return;
+    setUploading(true);
+    setUploadCount({ done: 0, total: imageFiles.length });
+    for (let i = 0; i < imageFiles.length; i++) {
+      if (imageFiles[i].size > MAX_FILE_SIZE) {
+        toast(`"${imageFiles[i].name}" is too large (max 5 MB)`, "error");
+        setUploadCount({ done: i + 1, total: imageFiles.length });
+        continue;
+      }
+      try {
+        const formData = new FormData();
+        formData.append("file", imageFiles[i]);
+        const res = await axios.post(`${API_BASE}/pm/files/upload`, formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+        const url: string = res.data.url;
+        const alt = imageFiles[i].name.replace(/\.[^.]+$/, "") || "image";
+        insertAtCursor(`\n![${alt}](${url})\n`);
+      } catch {
+        // skip failed upload silently
+      }
+      setUploadCount({ done: i + 1, total: imageFiles.length });
+    }
+    setUploading(false);
+  }, [insertAtCursor]);
+
+  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = "";
+    uploadFiles(files);
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const imageItems = Array.from(e.clipboardData.items).filter(i => i.type.startsWith("image/"));
+    if (imageItems.length > 0) {
+      e.preventDefault();
+      uploadFiles(imageItems.map(i => i.getAsFile()!).filter(Boolean));
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    const files = Array.from(e.dataTransfer.files);
+    uploadFiles(files);
+  };
+
+  const handleYouTube = () => {
+    const url = prompt("YouTube URL:");
+    if (!url?.trim()) return;
+    insertAtCursor(`\n[▶ YouTube](${url.trim()})\n`);
+  };
+
+  return (
+    <div className="px-4 py-3 border-b border-border">
+      <p className="text-xs text-muted-foreground font-mono mb-1.5">Description</p>
+
+      {editing ? (
+        <div
+          className="flex flex-col gap-1.5"
+          onBlur={handleBlur}
+        >
+          {/* Toolbar */}
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              tabIndex={0}
+              disabled={uploading}
+              onClick={() => fileInputRef.current?.click()}
+              className="inline-flex items-center gap-1 text-[10px] font-mono text-muted-foreground hover:text-foreground border border-border rounded px-1.5 py-0.5 hover:bg-muted transition-colors disabled:opacity-50"
+            >
+              {uploading ? <Loader2 size={9} className="animate-spin" /> : <ImagePlus size={9} />}
+              {uploading ? `Uploading ${uploadCount.done}/${uploadCount.total}…` : "Add image"}
+            </button>
+            <button
+              type="button"
+              tabIndex={0}
+              onClick={handleYouTube}
+              className="inline-flex items-center gap-1 text-[10px] font-mono text-muted-foreground hover:text-foreground border border-border rounded px-1.5 py-0.5 hover:bg-muted transition-colors"
+            >
+              <Youtube size={9} /> YouTube
+            </button>
+          </div>
+
+          {/* Textarea */}
+          <div
+            className={`relative rounded-md transition-colors ${dragOver ? "ring-2 ring-primary bg-primary/5" : ""}`}
+            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={handleDrop}
+          >
+            <textarea
+              ref={textareaRef}
+              className="w-full text-sm resize-none rounded-md border-0 bg-muted px-3 py-2 focus:outline-none focus:ring-1 focus:ring-primary min-h-[120px]"
+              value={value}
+              onChange={(e) => onChange(e.target.value)}
+              onPaste={handlePaste}
+              placeholder={dragOver ? "Drop images here…" : "Add a description… (markdown, paste or drag images)"}
+            />
+            {dragOver && (
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none rounded-md">
+                <span className="text-xs text-primary font-medium bg-background/80 px-3 py-1.5 rounded-full border border-primary/30">
+                  Drop images here
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Hidden file input */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={handleFileInput}
+          />
+        </div>
+      ) : (
+        <div
+          className="cursor-text min-h-[40px] rounded-md bg-muted/50 px-3 py-2 hover:bg-muted transition-colors"
+          onClick={startEdit}
+        >
+          {value ? (
+            <div className="prose prose-sm dark:prose-invert max-w-none text-sm [&_a]:text-primary [&_a]:underline">
+              <ReactMarkdown components={MD_COMPONENTS}>{value}</ReactMarkdown>
+            </div>
+          ) : (
+            <span className="text-sm text-muted-foreground/60">Add a description… (supports images &amp; YouTube)</span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function TaskDetailPanel({ task, open, onClose, onUpdate, onDelete, members, sprints, allTasks = [], onNavigate }: TaskDetailPanelProps) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [acceptanceCriteria, setAcceptanceCriteria] = useState("");
   const [activity, setActivity] = useState<PMActivity[]>([]);
-  const [children, setChildren] = useState<PMTask[]>([]);
-  const [newChild, setNewChild] = useState("");
-  const [showChildInput, setShowChildInput] = useState(false);
-  const [childrenExpanded, setChildrenExpanded] = useState(true);
   const [parentTask, setParentTask] = useState<PMTask | null>(null);
   const [parentPickerOpen, setParentPickerOpen] = useState(false);
   const [parentPickerSearch, setParentPickerSearch] = useState("");
@@ -73,7 +286,6 @@ export function TaskDetailPanel({ task, open, onClose, onUpdate, onDelete, membe
       setDescription(task.description);
       setAcceptanceCriteria(task.acceptance_criteria ?? "");
       loadActivity(task.id);
-      loadChildren(task.id);
       if (task.parent_id) loadParent(task.parent_id);
       else setParentTask(null);
     }
@@ -85,13 +297,6 @@ export function TaskDetailPanel({ task, open, onClose, onUpdate, onDelete, membe
         params: { project_id: task?.project_id, limit: 20 },
       });
       setActivity(res.data.filter((a: PMActivity) => a.task_id === taskId));
-    } catch {}
-  };
-
-  const loadChildren = async (parentId: number) => {
-    try {
-      const res = await axios.get(`${API_BASE}/pm/tasks`, { params: { parent_id: parentId } });
-      setChildren(res.data);
     } catch {}
   };
 
@@ -116,37 +321,6 @@ export function TaskDetailPanel({ task, open, onClose, onUpdate, onDelete, membe
   const handleBlurAC = async () => {
     if (!task || acceptanceCriteria === (task.acceptance_criteria ?? "")) return;
     await onUpdate(task.id, { acceptance_criteria: acceptanceCriteria });
-  };
-
-  const defaultChildType = (parentType: string): string => {
-    if (parentType === "epic") return "feature";
-    if (parentType === "feature") return "story";
-    return "task";
-  };
-
-  const handleAddChild = async () => {
-    if (!task || !newChild.trim()) return;
-    try {
-      await axios.post(`${API_BASE}/pm/tasks`, {
-        project_id: task.project_id,
-        parent_id: task.id,
-        title: newChild.trim(),
-        item_type: defaultChildType(task.item_type),
-        status: "new",
-        priority: "medium",
-      });
-      setNewChild("");
-      setShowChildInput(false);
-      await loadChildren(task.id);
-    } catch {}
-  };
-
-  const handleChildToggle = async (child: PMTask) => {
-    const newStatus: PMTaskStatus = child.status === "closed" ? "new" : "closed";
-    try {
-      await axios.patch(`${API_BASE}/pm/tasks/${child.id}`, { status: newStatus });
-      setChildren((prev) => prev.map((c) => (c.id === child.id ? { ...c, status: newStatus } : c)));
-    } catch {}
   };
 
   // Parent picker
@@ -239,21 +413,6 @@ export function TaskDetailPanel({ task, open, onClose, onUpdate, onDelete, membe
 
           {/* Metadata grid */}
           <div className="px-4 py-2 grid grid-cols-[90px_1fr] gap-x-3 gap-y-2 text-sm border-b border-border pb-4">
-            <span className="text-muted-foreground text-xs font-mono pt-1">Type</span>
-            <Select value={task.item_type} onValueChange={(v) => onUpdate(task.id, { item_type: v as PMItemType })}>
-              <SelectTrigger className="h-7 text-xs border-0 bg-muted px-2">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="epic">Epic</SelectItem>
-                <SelectItem value="feature">Feature</SelectItem>
-                <SelectItem value="story">Story</SelectItem>
-                <SelectItem value="task">Task</SelectItem>
-                <SelectItem value="bug">Bug</SelectItem>
-                <SelectItem value="spike">Spike</SelectItem>
-              </SelectContent>
-            </Select>
-
             {/* Parent row */}
             {canHaveParent && (
               <>
@@ -328,8 +487,10 @@ export function TaskDetailPanel({ task, open, onClose, onUpdate, onDelete, membe
               <SelectContent>
                 <SelectItem value="new">New</SelectItem>
                 <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="ready_to_go">Ready to Go</SelectItem>
+                <SelectItem value="needs_testing">Needs Testing</SelectItem>
                 <SelectItem value="resolved">Resolved</SelectItem>
-                <SelectItem value="closed">Closed</SelectItem>
+                <SelectItem value="rejected">Rejected</SelectItem>
               </SelectContent>
             </Select>
 
@@ -432,16 +593,11 @@ export function TaskDetailPanel({ task, open, onClose, onUpdate, onDelete, membe
           </div>
 
           {/* Description */}
-          <div className="px-4 py-3 border-b border-border">
-            <p className="text-xs text-muted-foreground font-mono mb-1.5">Description</p>
-            <Textarea
-              className="text-sm resize-none border-0 bg-muted focus:ring-1 focus:ring-primary min-h-[80px]"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              onBlur={handleBlurDescription}
-              placeholder="Add a description…"
-            />
-          </div>
+          <DescriptionField
+            value={description}
+            onChange={setDescription}
+            onBlur={handleBlurDescription}
+          />
 
           {/* Acceptance Criteria (stories) */}
           {showAC && (
@@ -464,57 +620,6 @@ export function TaskDetailPanel({ task, open, onClose, onUpdate, onDelete, membe
             onNavigate={onNavigate}
           />
 
-          {/* Children */}
-          <div className="px-4 py-3 border-b border-border">
-            <button
-              className="flex items-center gap-1 text-xs text-muted-foreground font-mono mb-2 hover:text-foreground transition-colors"
-              onClick={() => setChildrenExpanded((v) => !v)}
-            >
-              {childrenExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-              Child Items ({children.filter((c) => c.status === "closed" || c.status === "resolved").length}/{children.length})
-            </button>
-            {childrenExpanded && (
-              <div className="flex flex-col gap-1">
-                {children.map((child) => (
-                  <div key={child.id} className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={child.status === "closed" || child.status === "resolved"}
-                      onChange={() => handleChildToggle(child)}
-                      className="rounded border-border accent-primary"
-                    />
-                    <WorkItemTypeBadge type={child.item_type} />
-                    <span className={`text-sm flex-1 ${child.status === "closed" ? "line-through text-muted-foreground" : ""}`}>
-                      {child.title}
-                    </span>
-                  </div>
-                ))}
-                {showChildInput ? (
-                  <div className="flex items-center gap-2 mt-1">
-                    <input
-                      autoFocus
-                      className="flex-1 text-sm border border-border rounded px-2 py-1 bg-background focus:outline-none focus:ring-1 focus:ring-primary"
-                      value={newChild}
-                      onChange={(e) => setNewChild(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") handleAddChild();
-                        if (e.key === "Escape") { setShowChildInput(false); setNewChild(""); }
-                      }}
-                      placeholder="Child item title…"
-                    />
-                    <Button size="sm" variant="ghost" onClick={handleAddChild}>Add</Button>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => setShowChildInput(true)}
-                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors mt-1"
-                  >
-                    <Plus size={11} /> Add child item
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
 
           {/* Activity */}
           <div className="px-4 py-3">

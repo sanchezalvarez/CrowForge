@@ -3,7 +3,7 @@ import { ChevronLeft, Plus, LayoutList, LayoutGrid, Zap, AlertTriangle, X, Spark
 import axios from "axios";
 import { useTasks } from "../hooks/useTasks";
 import { useSprints } from "../hooks/useSprints";
-import { PMProject, PMTask, PMTaskStatus, PMItemType, PMMember, PMSuggestedTask } from "../types/pm";
+import { PMProject, PMTask, PMTaskStatus, PMMember, PMSuggestedTask } from "../types/pm";
 import { BacklogView } from "../components/PM/BacklogView";
 import { KanbanBoard } from "../components/PM/KanbanBoard";
 import { SprintView } from "../components/PM/SprintView";
@@ -78,9 +78,9 @@ export function ProjectDetailPage({ projectId, onBack, onNavigate }: ProjectDeta
 
   // Deadline warning
   const today = new Date().toISOString().slice(0, 10);
-  const overdueTasks = tasks.filter((t) => t.due_date && t.due_date < today && t.status !== "resolved" && t.status !== "closed");
+  const overdueTasks = tasks.filter((t) => t.due_date && t.due_date < today && t.status !== "resolved" && t.status !== "closed" && t.status !== "rejected");
   const dueSoonTasks = tasks.filter((t) => {
-    if (!t.due_date || t.status === "resolved" || t.status === "closed") return false;
+    if (!t.due_date || t.status === "resolved" || t.status === "closed" || t.status === "rejected") return false;
     const diff = (new Date(t.due_date + "T00:00:00").getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24);
     return diff >= 0 && diff <= 2;
   });
@@ -124,11 +124,6 @@ export function ProjectDetailPage({ projectId, onBack, onNavigate }: ProjectDeta
   const handleTaskDelete = async (id: number) => {
     await removeTask(id);
     setPanelOpen(false);
-    await loadProject();
-  };
-
-  const handleChildCreate = async (parentId: number, title: string, type: PMItemType) => {
-    await createTask({ project_id: projectId, parent_id: parentId, title, item_type: type, status: "new", priority: "medium" } as PMTask & { project_id: number; title: string });
     await loadProject();
   };
 
@@ -263,7 +258,8 @@ export function ProjectDetailPage({ projectId, onBack, onNavigate }: ProjectDeta
                   onTaskClick={handleTaskClick}
                   onTaskCreate={handleTaskCreate}
                   onTaskUpdate={handleTaskUpdate}
-                  onChildCreate={handleChildCreate}
+                  onTaskDelete={handleTaskDelete}
+                  onTasksReload={loadTasks}
                 />
               )}
               <AIStandup projectId={projectId} />

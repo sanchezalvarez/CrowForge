@@ -33,6 +33,7 @@ interface AIControlPanelProps {
   onShowDebugChange: (show: boolean) => void;
   tuningParams: TuningParams;
   onTuningChange: (params: TuningParams) => void;
+  modelStatus?: "loaded" | "not_loaded" | "unloaded" | "no_local";
 }
 
 interface EngineInfo {
@@ -51,7 +52,7 @@ interface LocalModel {
 /**
  * Right-side AI control panel with 3 tabs: Engine & Model, Tuning, Debug.
  */
-export function AIControlPanel({ showDebug, onShowDebugChange, tuningParams, onTuningChange }: AIControlPanelProps) {
+export function AIControlPanel({ showDebug, onShowDebugChange, tuningParams, onTuningChange, modelStatus }: AIControlPanelProps) {
   // ── Backend status ────────────────────────────────────────────
   type BackendStatus = "online" | "offline" | "restarting";
   const [backendStatus, setBackendStatus] = useState<BackendStatus>("online");
@@ -391,6 +392,12 @@ export function AIControlPanel({ showDebug, onShowDebugChange, tuningParams, onT
         </span>
         <div className="ml-auto flex items-center gap-2">
           {isBusy && <Loader2 size={13} className="animate-spin text-muted-foreground" />}
+          {modelStatus && modelStatus !== "loaded" && modelStatus !== "no_local" && (
+            <div className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono bg-amber-500/10 text-amber-600 border border-amber-500/20 whitespace-nowrap">
+              <Cpu size={10} />
+              {modelStatus === "unloaded" ? "Model unloaded" : "No model"}
+            </div>
+          )}
         </div>
       </div>
 

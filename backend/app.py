@@ -2,12 +2,15 @@ import sys
 import asyncio
 import os
 import json
+import shutil
+import uuid
 import httpx
 from contextlib import asynccontextmanager
 from typing import List, Optional
 from time import time
 from fastapi import FastAPI, HTTPException, Request, BackgroundTasks, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from sse_starlette.sse import EventSourceResponse
 from dotenv import load_dotenv
 
@@ -194,6 +197,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+PM_FILES_DIR = os.path.join(get_app_data_dir(), "pm_files")
+os.makedirs(PM_FILES_DIR, exist_ok=True)
+app.mount("/pm_files", StaticFiles(directory=PM_FILES_DIR), name="pm_files")
 
 db = DatabaseManager(os.path.join(get_app_data_dir(), "crowforge.db"))
 db.initialize_schema(get_resource_path("backend/schema.sql"))
@@ -3108,12 +3115,12 @@ async def pm_list_projects():
     with db.get_connection() as conn:
         rows = conn.execute("""
             SELECT p.*,
-              COALESCE(SUM(CASE WHEN t.status IN ('resolved','closed') THEN 1 ELSE 0 END), 0) as closed_count,
+              COALESCE(SUM(CASE WHEN t.status IN ('resolved','closed','rejected') THEN 1 ELSE 0 END), 0) as closed_count,
               COUNT(t.id) as total_count,
               COALESCE(SUM(CASE WHEN t.status='new' THEN 1 ELSE 0 END), 0) as new_count,
               COALESCE(SUM(CASE WHEN t.status='active' THEN 1 ELSE 0 END), 0) as active_count,
               COALESCE(SUM(CASE WHEN t.status='resolved' THEN 1 ELSE 0 END), 0) as resolved_count,
-              COALESCE(SUM(CASE WHEN t.item_type='bug' AND t.status NOT IN ('resolved','closed') THEN 1 ELSE 0 END), 0) as open_bug_count
+              COALESCE(SUM(CASE WHEN t.item_type='bug' AND t.status NOT IN ('resolved','closed','rejected') THEN 1 ELSE 0 END), 0) as open_bug_count
             FROM pm_projects p
             LEFT JOIN pm_tasks t ON t.project_id = p.id AND t.parent_id IS NULL
             WHERE p.status != 'archived'
@@ -3129,7 +3136,7 @@ async def pm_list_projects():
             proj["active_sprint"] = dict(sprint) if sprint else None
             from datetime import date
             overdue = conn.execute(
-                "SELECT COUNT(*) as c FROM pm_tasks WHERE project_id = ? AND due_date < ? AND status NOT IN ('resolved','closed')",
+                "SELECT COUNT(*) as c FROM pm_tasks WHERE project_id = ? AND due_date < ? AND status NOT IN ('resolved','closed','rejected')",
                 (proj["id"], date.today().isoformat())
             ).fetchone()
             proj["overdue_count"] = overdue["c"] if overdue else 0
@@ -3211,7 +3218,7 @@ async def pm_delete_member(member_id: int):
     if member_id == 1:
         raise HTTPException(status_code=400, detail="Cannot delete the default member")
     active = db.get_connection().execute(
-        "SELECT COUNT(*) as c FROM pm_tasks WHERE assignee_id = ? AND status NOT IN ('resolved','closed')", (member_id,)
+        "SELECT COUNT(*) as c FROM pm_tasks WHERE assignee_id = ? AND status NOT IN ('resolved','closed','rejected')", (member_id,)
     ).fetchone()
     if active and active["c"] > 0:
         raise HTTPException(status_code=400, detail="Member has active tasks assigned")
@@ -3239,7 +3246,7 @@ async def pm_task_stats(project_id: Optional[int] = None):
         ).fetchall()
         total = conn.execute(f"SELECT COUNT(*) as c FROM pm_tasks {where}", params).fetchone()["c"]
         open_bugs = conn.execute(
-            f"SELECT COUNT(*) as c FROM pm_tasks {where} AND item_type='bug' AND status NOT IN ('resolved','closed')",
+            f"SELECT COUNT(*) as c FROM pm_tasks {where} AND item_type='bug' AND status NOT IN ('resolved','closed','rejected')",
             params
         ).fetchone()["c"]
         by_type = {r["item_type"]: r["c"] for r in type_rows}
@@ -3280,8 +3287,6 @@ async def pm_list_tasks(
     if parent_id is not None:
         clauses.append("t.parent_id = ?")
         params.append(parent_id)
-    else:
-        clauses.append("t.parent_id IS NULL")
 
     where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
     # Flat hierarchical sort: epics first, features, stories, then leaf types
@@ -3403,12 +3408,13 @@ async def pm_update_task(task_id: int, body: dict):
         if not fields:
             return _pm_task_with_meta(conn, task_id)
 
-        # Auto-set resolved_date when status → resolved or closed
+        # Auto-set resolved_date when status → resolved, closed, or rejected
+        _DONE_STATUSES = ("resolved", "closed", "rejected")
         new_status = body.get("status")
-        if new_status in ("resolved", "closed") and existing.get("status") not in ("resolved", "closed"):
+        if new_status in _DONE_STATUSES and existing.get("status") not in _DONE_STATUSES:
             fields.append("resolved_date = ?")
             params.append(date.today().isoformat())
-        elif new_status not in (None, "resolved", "closed") and existing.get("status") in ("resolved", "closed"):
+        elif new_status not in (None,) + _DONE_STATUSES and existing.get("status") in _DONE_STATUSES:
             fields.append("resolved_date = ?")
             params.append(None)
 
@@ -3470,9 +3476,9 @@ async def pm_list_sprints(project_id: Optional[int] = None, status: Optional[str
             sprint = dict(row)
             counts = conn.execute(
                 """SELECT COUNT(*) as total,
-                          COALESCE(SUM(CASE WHEN status IN ('resolved','closed') THEN 1 ELSE 0 END),0) as done,
+                          COALESCE(SUM(CASE WHEN status IN ('resolved','closed','rejected') THEN 1 ELSE 0 END),0) as done,
                           COALESCE(SUM(story_points),0) as total_sp,
-                          COALESCE(SUM(CASE WHEN status IN ('resolved','closed') THEN story_points ELSE 0 END),0) as done_sp
+                          COALESCE(SUM(CASE WHEN status IN ('resolved','closed','rejected') THEN story_points ELSE 0 END),0) as done_sp
                    FROM pm_tasks WHERE sprint_id = ?""",
                 (sprint["id"],)
             ).fetchone()
@@ -3541,11 +3547,11 @@ async def pm_complete_sprint(sprint_id: int):
         sprint = dict(sprint)
         # Count and move incomplete tasks to backlog
         incomplete = conn.execute(
-            "SELECT COUNT(*) as c FROM pm_tasks WHERE sprint_id = ? AND status NOT IN ('resolved','closed')", (sprint_id,)
+            "SELECT COUNT(*) as c FROM pm_tasks WHERE sprint_id = ? AND status NOT IN ('resolved','closed','rejected')", (sprint_id,)
         ).fetchone()["c"]
-        conn.execute("UPDATE pm_tasks SET sprint_id = NULL WHERE sprint_id = ? AND status NOT IN ('resolved','closed')", (sprint_id,))
+        conn.execute("UPDATE pm_tasks SET sprint_id = NULL WHERE sprint_id = ? AND status NOT IN ('resolved','closed','rejected')", (sprint_id,))
         done = conn.execute(
-            "SELECT COUNT(*) as c FROM pm_tasks WHERE sprint_id = ? AND status IN ('resolved','closed')", (sprint_id,)
+            "SELECT COUNT(*) as c FROM pm_tasks WHERE sprint_id = ? AND status IN ('resolved','closed','rejected')", (sprint_id,)
         ).fetchone()["c"]
         conn.execute("UPDATE pm_sprints SET status = 'completed' WHERE id = ?", (sprint_id,))
         conn.commit()
@@ -3572,6 +3578,25 @@ async def pm_list_activity(project_id: Optional[int] = None, limit: int = 50):
             ORDER BY a.created_at DESC LIMIT ?
         """, params).fetchall()
         return [dict(r) for r in rows]
+
+# ── PM File Upload ──
+
+_PM_IMAGE_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp", "image/bmp", "image/tiff"}
+
+@app.post("/pm/files/upload")
+async def pm_upload_file(file: UploadFile = File(...)):
+    """Upload an image file for use in PM task descriptions. Returns a URL."""
+    content_type = (file.content_type or "").split(";")[0].strip()
+    if content_type not in _PM_IMAGE_TYPES:
+        raise HTTPException(status_code=400, detail=f"Only image files are allowed (got {content_type})")
+    ext = os.path.splitext(file.filename or "image")[1].lower()
+    if ext not in (".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".tiff"):
+        ext = ".jpg"
+    filename = f"{uuid.uuid4().hex}{ext}"
+    dest = os.path.join(PM_FILES_DIR, filename)
+    with open(dest, "wb") as f:
+        shutil.copyfileobj(file.file, f)
+    return {"url": f"http://127.0.0.1:8000/pm_files/{filename}", "filename": filename}
 
 # ── AI Endpoints ──
 
@@ -3601,11 +3626,11 @@ async def pm_ai_standup(body: dict, request: Request):
                 "SELECT title, item_type FROM pm_tasks WHERE project_id=? AND status='active' AND parent_id IS NULL", (pid,)
             ).fetchall()
             overdue = conn.execute(
-                "SELECT title, due_date FROM pm_tasks WHERE project_id=? AND due_date < ? AND status NOT IN ('resolved','closed') AND parent_id IS NULL",
+                "SELECT title, due_date FROM pm_tasks WHERE project_id=? AND due_date < ? AND status NOT IN ('resolved','closed','rejected') AND parent_id IS NULL",
                 (pid, today)
             ).fetchall()
             closed_today = conn.execute(
-                "SELECT title, story_points FROM pm_tasks WHERE project_id=? AND status IN ('resolved','closed') AND date(updated_at)=? AND parent_id IS NULL",
+                "SELECT title, story_points FROM pm_tasks WHERE project_id=? AND status IN ('resolved','closed','rejected') AND date(updated_at)=? AND parent_id IS NULL",
                 (pid, today)
             ).fetchall()
             sprint = conn.execute(

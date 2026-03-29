@@ -1,5 +1,5 @@
 export type PMItemType = "epic" | "feature" | "story" | "task" | "bug" | "spike";
-export type PMTaskStatus = "new" | "active" | "resolved" | "closed";
+export type PMTaskStatus = "new" | "active" | "ready_to_go" | "needs_testing" | "resolved" | "rejected" | "closed";
 export type PMPriority = "critical" | "high" | "medium" | "low";
 export type PMView = "backlog" | "kanban" | "sprint";
 export type PMRefType = "link" | "image" | "document" | "sheet" | "canvas";

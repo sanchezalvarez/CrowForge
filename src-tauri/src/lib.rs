@@ -1,6 +1,11 @@
 use tauri::{image::Image, Manager};
 use tauri_plugin_shell::{process::CommandChild, ShellExt};
 use std::sync::Mutex;
+use std::net::TcpStream;
+
+fn is_backend_running() -> bool {
+    TcpStream::connect("127.0.0.1:8000").is_ok()
+}
 
 struct BackendProcess(Mutex<Option<CommandChild>>);
 
@@ -95,13 +100,20 @@ pub fn run() {
                 let _ = window.set_icon(icon);
             }
 
-            let shell = app.shell();
-            let sidecar_command = shell.sidecar("crowforge-backend")
-                .expect("crowforge-backend sidecar not found in bundle");
-            let (_rx, child) = sidecar_command.spawn()
-                .expect("failed to spawn crowforge-backend sidecar");
+            // Only spawn sidecar if no backend is already running on port 8000
+            // (allows running `python -m backend.app` manually in dev mode)
+            let child = if is_backend_running() {
+                None
+            } else {
+                let shell = app.shell();
+                let sidecar_command = shell.sidecar("crowforge-backend")
+                    .expect("crowforge-backend sidecar not found in bundle");
+                let (_rx, c) = sidecar_command.spawn()
+                    .expect("failed to spawn crowforge-backend sidecar");
+                Some(c)
+            };
 
-            app.manage(BackendProcess(Mutex::new(Some(child))));
+            app.manage(BackendProcess(Mutex::new(child)));
             Ok(())
         })
         .on_window_event(|window, event| {

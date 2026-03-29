@@ -13,18 +13,24 @@ interface KanbanBoardProps {
   onTaskCreate: (status: PMTaskStatus) => void;
 }
 
-const COLUMNS: PMTaskStatus[] = ["new", "active", "resolved", "closed"];
+const COLUMNS: PMTaskStatus[] = ["new", "active", "ready_to_go", "needs_testing", "resolved", "rejected"];
 const COLUMN_LABELS: Record<PMTaskStatus, string> = {
-  new:      "New",
-  active:   "Active",
-  resolved: "Resolved",
-  closed:   "Closed",
+  new:           "New",
+  active:        "Active",
+  ready_to_go:   "Ready to Go",
+  needs_testing: "Needs Testing",
+  resolved:      "Resolved",
+  rejected:      "Rejected",
+  closed:        "Closed",
 };
 const COLUMN_COLORS: Record<PMTaskStatus, string> = {
-  new:      "bg-muted-foreground/30",
-  active:   "bg-primary",
-  resolved: "bg-teal-500",
-  closed:   "bg-muted-foreground/50",
+  new:           "bg-muted-foreground/30",
+  active:        "bg-primary",
+  ready_to_go:   "bg-blue-500",
+  needs_testing: "bg-amber-500",
+  resolved:      "bg-teal-500",
+  rejected:      "bg-destructive",
+  closed:        "bg-muted-foreground/50",
 };
 
 const ALL_TYPES: PMItemType[] = ["epic", "feature", "story", "task", "bug", "spike"];
@@ -105,12 +111,12 @@ export function KanbanBoard({ tasks, members, onTaskClick, onStatusChange, onReo
       </div>
 
       <DragDropContext onDragEnd={onDragEnd}>
-        <div className="flex gap-4 overflow-x-auto pb-4 flex-1 min-h-0">
+        <div className="flex gap-3 overflow-x-auto pb-4 flex-1 min-h-0 w-full">
           {COLUMNS.map((status) => {
             const col = grouped[status];
             const totalSP = col.reduce((sum, t) => sum + (t.story_points ?? 0), 0);
             return (
-              <div key={status} className="flex flex-col flex-shrink-0 w-64">
+              <div key={status} className="flex flex-col flex-1 min-w-[160px]">
                 <div className="flex items-center gap-2 mb-3 px-1">
                   <span className={`w-2.5 h-2.5 rounded-full ${COLUMN_COLORS[status]}`} />
                   <span className="text-sm font-semibold text-foreground">{COLUMN_LABELS[status]}</span>

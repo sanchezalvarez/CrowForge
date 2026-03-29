@@ -48,52 +48,92 @@ export function ProjectsPage({ onNavigateToProject }: ProjectsPageProps) {
   };
 
   return (
-    <div className="flex-1 flex flex-col p-6 gap-6 overflow-y-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold font-display text-foreground">Projects</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {projects.length} project{projects.length !== 1 ? "s" : ""}
-          </p>
-        </div>
-        <Button onClick={() => setCreateOpen(true)} className="gap-1.5">
-          <Plus size={14} /> New Project
-        </Button>
-      </div>
+    <div className="h-full overflow-y-auto overflow-x-hidden relative riso-noise riso-noise-live">
+      {/* ── Riso background blob glows ── */}
+      <div className="absolute pointer-events-none animate-blob-drift-b" style={{ top: -120, right: -60, width: 520, height: 400, background: 'rgba(11,114,104,0.18)', borderRadius: '50%', mixBlendMode: 'multiply', filter: 'blur(80px)', zIndex: 0 }} />
+      <div className="absolute pointer-events-none animate-blob-drift-c" style={{ bottom: -80, left: -80, width: 480, height: 380, background: 'rgba(224,78,14,0.18)', borderRadius: '50%', mixBlendMode: 'multiply', filter: 'blur(70px)', zIndex: 0 }} />
+      <div className="absolute pointer-events-none animate-blob-drift" style={{ top: '40%', left: '40%', width: 400, height: 340, background: 'rgba(92,58,156,0.13)', borderRadius: '50%', mixBlendMode: 'multiply', filter: 'blur(60px)', zIndex: 0 }} />
 
-      {/* AI Standup */}
-      {projects.length > 0 && (
-        <AIStandup />
-      )}
+      {/* Registration crosshairs */}
+      <svg className="absolute pointer-events-none" style={{ top: 14, right: 14, opacity: 0.25, zIndex: 2 }} width="20" height="20" viewBox="0 0 20 20">
+        <line x1="10" y1="0" x2="10" y2="20" stroke="#E04E0E" strokeWidth="1" />
+        <line x1="0" y1="10" x2="20" y2="10" stroke="#E04E0E" strokeWidth="1" />
+        <circle cx="10" cy="10" r="4" fill="none" stroke="#E04E0E" strokeWidth="1" />
+      </svg>
+      <svg className="absolute pointer-events-none" style={{ bottom: 14, left: 14, opacity: 0.22, zIndex: 2 }} width="20" height="20" viewBox="0 0 20 20">
+        <line x1="10" y1="0" x2="10" y2="20" stroke="#0B7268" strokeWidth="1" />
+        <line x1="0" y1="10" x2="20" y2="10" stroke="#0B7268" strokeWidth="1" />
+        <circle cx="10" cy="10" r="4" fill="none" stroke="#0B7268" strokeWidth="1" />
+      </svg>
 
-      {/* Projects grid */}
-      {loading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="h-32 bg-muted/30 rounded-xl animate-pulse" />
-          ))}
-        </div>
-      ) : projects.length === 0 ? (
-        <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center py-16">
-          <FolderOpen size={40} className="text-muted-foreground/40" />
-          <p className="text-sm font-medium text-muted-foreground">No projects yet</p>
-          <p className="text-xs text-muted-foreground">Create your first project to get started.</p>
-          <Button onClick={() => setCreateOpen(true)} variant="outline" className="mt-2">
-            <Plus size={14} className="mr-1" /> New Project
+      {/* Halftone dot cluster — bottom right */}
+      <div className="absolute pointer-events-none" style={{ bottom: 0, right: 0, width: 220, height: 260, opacity: 0.06, backgroundImage: 'radial-gradient(circle, rgba(92,58,156,0.9) 1.8px, transparent 1.8px)', backgroundSize: '12px 12px', zIndex: 0 }} />
+
+      {/* Content */}
+      <div className="relative z-10 flex flex-col gap-6 p-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <h1
+              className="font-display font-black tracking-tight text-3xl text-foreground"
+              style={{ textShadow: '3px 3px 0 rgba(224,78,14,0.20), -1.5px -1.5px 0 rgba(11,114,104,0.16)' }}
+            >
+              Tasks
+            </h1>
+            {!loading && (
+              <span
+                className="riso-stamp riso-stamp-press font-mono-ui text-[11px] px-2 py-0.5 rounded-full select-none"
+                style={{ background: 'rgba(224,78,14,0.12)', color: 'var(--accent-orange)', border: '1.5px solid rgba(224,78,14,0.28)' }}
+              >
+                {projects.length}
+              </span>
+            )}
+          </div>
+          <Button onClick={() => setCreateOpen(true)} className="gap-1.5">
+            <Plus size={14} /> New Project
           </Button>
         </div>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {projects.map((project) => (
-            <ProjectCard
-              key={project.id}
-              project={project}
-              onClick={() => onNavigateToProject(project.id)}
-            />
-          ))}
-        </div>
-      )}
+
+        {/* AI Standup */}
+        {projects.length > 0 && (
+          <AIStandup />
+        )}
+
+        {/* Projects grid */}
+        {loading ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-32 bg-muted/30 rounded-xl animate-pulse" />
+            ))}
+          </div>
+        ) : projects.length === 0 ? (
+          <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center py-20">
+            <div className="riso-frame p-8 flex flex-col items-center gap-3" style={{ borderColor: 'rgba(224,78,14,0.20)' }}>
+              <FolderOpen size={40} className="text-muted-foreground/40" />
+              <p className="font-display font-black text-lg text-muted-foreground/70">No projects yet</p>
+              <p className="text-xs text-muted-foreground font-mono-ui">Create your first project to get started.</p>
+              <Button onClick={() => setCreateOpen(true)} variant="outline" className="mt-2">
+                <Plus size={14} className="mr-1" /> New Project
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            {projects.map((project, i) => (
+              <div
+                key={project.id}
+                className="animate-ink-in"
+                style={{ animationDelay: `${i * 60}ms` }}
+              >
+                <ProjectCard
+                  project={project}
+                  onClick={() => onNavigateToProject(project.id)}
+                />
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Create Project Dialog */}
       <Dialog open={createOpen} onOpenChange={(o) => !o && setCreateOpen(false)}>

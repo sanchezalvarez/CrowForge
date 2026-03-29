@@ -67,7 +67,7 @@ export function SprintView({ project, sprints, tasks, members, onTaskClick, onSp
   const [sprintEnd, setSprintEnd] = useState("");
   const [creating, setCreating] = useState(false);
 
-  const backlogTasks = tasks.filter((t) => !t.sprint_id);
+  const backlogTasks = tasks.filter((t) => !t.sprint_id && t.parent_id === null);
 
   const handleCreateSprint = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -102,8 +102,8 @@ export function SprintView({ project, sprints, tasks, members, onTaskClick, onSp
   return (
     <div className="flex flex-col gap-4">
       {sprints.map((sprint) => {
-        const sprintTasks = tasks.filter((t) => t.sprint_id === sprint.id);
-        const doneTasks = sprintTasks.filter((t) => t.status === "resolved" || t.status === "closed");
+        const sprintTasks = tasks.filter((t) => t.sprint_id === sprint.id && t.parent_id === null);
+        const doneTasks = sprintTasks.filter((t) => t.status === "resolved" || t.status === "closed" || t.status === "rejected");
         const totalSP = sprintTasks.reduce((s, t) => s + (t.story_points ?? 0), 0);
         const doneSP = doneTasks.reduce((s, t) => s + (t.story_points ?? 0), 0);
         const isExpanded = expanded[sprint.id] !== false;

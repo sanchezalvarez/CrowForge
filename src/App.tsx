@@ -9,14 +9,12 @@ import {
   Settings,
   PanelRightClose,
   PanelRightOpen,
-  CpuIcon,
   Bot,
   Wrench,
   Workflow,
   HelpCircle,
   KanbanSquare,
 } from "lucide-react";
-import agentCrowner from "./assets/AgentCrowner_512.png";
 import { cn } from "./lib/utils";
 import DashboardPage from "./pages/DashboardPage";
 import { BenchmarkPage } from "./pages/BenchmarkPage";
@@ -122,12 +120,12 @@ export default function App() {
 
 
   useEffect(() => {
-    function handleUnload() {
+    function handleHide() {
       // Best-effort: tell backend to exit when the window closes
       navigator.sendBeacon("http://127.0.0.1:8000/shutdown");
     }
-    window.addEventListener("unload", handleUnload);
-    return () => window.removeEventListener("unload", handleUnload);
+    window.addEventListener("pagehide", handleHide);
+    return () => window.removeEventListener("pagehide", handleHide);
   }, []);
 
   useEffect(() => {
@@ -260,10 +258,10 @@ export default function App() {
     { page: "home", label: "Home", icon: Home },
     { page: "chat", label: "Chat", icon: MessageSquare },
     { page: "agent", label: "Agent", icon: Bot },
+    { page: "projects", label: "Tasks", icon: KanbanSquare },
     { page: "documents", label: "Documents", icon: FileText },
     { page: "sheets", label: "Sheets", icon: Table2 },
     { page: "canvas", label: "Canvas", icon: Workflow },
-    { page: "projects", label: "Projects", icon: KanbanSquare },
     { page: "tools", label: "Tools", icon: Wrench },
   ];
 
@@ -353,7 +351,7 @@ export default function App() {
           <div className="p-3 space-y-0.5">
             {navItems.map(({ page, label, icon: Icon }) => (
               <Fragment key={page}>
-                {page === "documents" && <div className="mx-1 my-1.5" style={{ borderTop: '1px solid var(--topbar-border)' }} />}
+                {page === "projects" && <div className="mx-1 my-1.5" style={{ borderTop: '1px solid var(--topbar-border)' }} />}
                 <button
                   onClick={() => setCurrentPage(page)}
                   className={cn("w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-sm transition-colors", currentPage === page ? "font-semibold" : "")}
@@ -410,7 +408,7 @@ export default function App() {
 
       {/* MAIN + AI CONTROLS */}
       <div className="flex flex-1 min-w-0 flex-col lg:flex-row overflow-hidden">
-        <main className={`flex-1 min-w-0 ${["canvas", "settings", "chat", "agent", "tools", "help", "project_detail"].includes(currentPage) ? "overflow-hidden" : "overflow-y-auto"}`}>
+        <main className={`flex-1 min-w-0 ${["canvas", "settings", "chat", "agent", "tools", "help", "project_detail", "projects"].includes(currentPage) ? "overflow-hidden" : "overflow-y-auto"}`}>
           <PageErrorBoundary page={currentPage}>
           {currentPage === "home" ? (
             <DashboardPage onNavigate={handleNavigate} />
@@ -470,6 +468,7 @@ export default function App() {
                 onShowDebugChange={setShowDebug}
                 tuningParams={tuningParams}
                 onTuningChange={setTuningParams}
+                modelStatus={modelStatus}
               />
             )}
             <div className="mt-auto p-2 border-t">
@@ -487,13 +486,6 @@ export default function App() {
 
       <Toaster />
 
-      {/* Model status indicator — bottom-center, only shown when not loaded */}
-      {modelStatus !== "loaded" && modelStatus !== "no_local" && (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-2 rounded-full text-xs font-medium bg-background border shadow-md text-muted-foreground pointer-events-none">
-          <CpuIcon size={14} className={modelStatus === "unloaded" ? "text-amber-500" : "text-muted-foreground/60"} />
-          {modelStatus === "unloaded" ? "Model unloaded (idle)" : "No model loaded"}
-        </div>
-      )}
       </div>
     </div>
     </ChatStreamProvider>

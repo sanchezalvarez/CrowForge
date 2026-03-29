@@ -6,7 +6,7 @@ interface DeadlineWarningProps {
 }
 
 export function DeadlineWarning({ dueDate, status }: DeadlineWarningProps) {
-  if (!dueDate || status === "resolved" || status === "closed") return null;
+  if (!dueDate || status === "resolved" || status === "closed" || status === "rejected") return null;
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);

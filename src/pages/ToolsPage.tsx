@@ -305,7 +305,7 @@ function CalculatorWidget({ id, title, isActive, onActivate }: CalcWidgetProps) 
 
   return (
     <Card className={cn(
-      "flex flex-col shadow-md border-border/60 overflow-hidden transition-all duration-300 h-full",
+      "card-riso card-riso-orange flex flex-col shadow-md border-border/60 overflow-hidden transition-all duration-300 h-full",
       isActive ? "ring-2 ring-primary/20 border-primary/40 shadow-lg" : "opacity-95"
     )} onClick={onActivate}>
       <CardHeader className="py-3 px-5 border-b bg-muted/10 flex flex-row items-center justify-between space-y-0 shrink-0">
@@ -448,7 +448,7 @@ function ConverterWidget() {
   };
 
   return (
-    <Card className="flex flex-col shadow-md border-border/60 h-full overflow-hidden">
+    <Card className="card-riso card-riso-violet flex flex-col shadow-md border-border/60 h-full overflow-hidden">
       <CardHeader className="py-3 px-5 border-b bg-muted/10">
         <CardTitle className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
           <ArrowRightLeft className="h-3.5 w-3.5 text-emerald-500" />
@@ -671,7 +671,7 @@ function CurrencyWidget() {
   const others = ALL_CURRENCY_CODES.filter(c => c !== base);
 
   return (
-    <Card className="flex flex-col shadow-md border-border/60 h-full overflow-hidden">
+    <Card className="card-riso flex flex-col shadow-md border-border/60 h-full overflow-hidden">
       <CardHeader className="py-3 px-5 border-b bg-muted/10">
         <div className="flex items-center justify-between">
           <CardTitle className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
@@ -859,11 +859,12 @@ function TimeStrip() {
           <div
             key={c.name}
             className={cn(
-              "flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-xs",
+              "flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-xs font-mono-ui",
               isUser
-                ? "bg-primary/10 border-primary/30 text-primary"
+                ? "border-[var(--accent-teal)]/30"
                 : "bg-muted/40 border-border/50 text-foreground",
             )}
+            style={isUser ? { background: 'color-mix(in srgb, var(--accent-teal) 12%, transparent)', color: 'var(--accent-teal)' } : {}}
           >
             <span className="text-[10px] text-muted-foreground shrink-0">
               {day ? "☀️" : "🌙"}
@@ -899,17 +900,23 @@ export function ToolsPage() {
         <div className="animate-blob-drift-b" style={{ position: 'absolute', width: 500, height: 500, borderRadius: '50%', background: 'var(--accent-orange)', opacity: 0.09, mixBlendMode: 'multiply', bottom: -160, left: -160 }} />
         <div className="animate-blob-drift-c" style={{ position: 'absolute', width: 380, height: 380, borderRadius: '50%', background: 'var(--accent-violet)', opacity: 0.07, mixBlendMode: 'multiply', bottom: 80, right: -100 }} />
         <div className="animate-blob-drift-d" style={{ position: 'absolute', width: 260, height: 260, borderRadius: '50%', background: 'var(--accent-teal)', opacity: 0.06, mixBlendMode: 'multiply', top: '35%', left: -100 }} />
-        <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} xmlns="http://www.w3.org/2000/svg">
-          <line x1="calc(100% - 32)" y1="28" x2="calc(100% - 8)" y2="28" stroke="rgba(11,114,104,0.45)" strokeWidth="1.5" />
-          <line x1="calc(100% - 20)" y1="16" x2="calc(100% - 20)" y2="40" stroke="rgba(11,114,104,0.45)" strokeWidth="1.5" />
-          <circle cx="calc(100% - 20)" cy="28" r="5" stroke="rgba(11,114,104,0.3)" strokeWidth="1" fill="none" />
-          <line x1="8" y1="calc(100% - 28)" x2="32" y2="calc(100% - 28)" stroke="rgba(224,78,14,0.45)" strokeWidth="1.5" />
-          <line x1="20" y1="calc(100% - 40)" x2="20" y2="calc(100% - 16)" stroke="rgba(224,78,14,0.45)" strokeWidth="1.5" />
-          <circle cx="20" cy="calc(100% - 28)" r="5" stroke="rgba(224,78,14,0.3)" strokeWidth="1" fill="none" />
-          <line x1="8" y1="28" x2="32" y2="28" stroke="rgba(92,58,156,0.35)" strokeWidth="1.5" />
-          <line x1="20" y1="16" x2="20" y2="40" stroke="rgba(92,58,156,0.35)" strokeWidth="1.5" />
-          <line x1="calc(100% - 32)" y1="calc(100% - 28)" x2="calc(100% - 8)" y2="calc(100% - 28)" stroke="rgba(11,114,104,0.25)" strokeWidth="1" />
-          <line x1="calc(100% - 20)" y1="calc(100% - 40)" x2="calc(100% - 20)" y2="calc(100% - 16)" stroke="rgba(11,114,104,0.25)" strokeWidth="1" />
+        <svg style={{ position: 'absolute', top: 8, right: 8, width: 48, height: 48 }} xmlns="http://www.w3.org/2000/svg">
+          <line x1="4" y1="20" x2="28" y2="20" stroke="rgba(11,114,104,0.45)" strokeWidth="1.5" />
+          <line x1="16" y1="8" x2="16" y2="32" stroke="rgba(11,114,104,0.45)" strokeWidth="1.5" />
+          <circle cx="16" cy="20" r="5" stroke="rgba(11,114,104,0.3)" strokeWidth="1" fill="none" />
+        </svg>
+        <svg style={{ position: 'absolute', bottom: 8, left: 8, width: 48, height: 48 }} xmlns="http://www.w3.org/2000/svg">
+          <line x1="4" y1="28" x2="28" y2="28" stroke="rgba(224,78,14,0.45)" strokeWidth="1.5" />
+          <line x1="16" y1="16" x2="16" y2="40" stroke="rgba(224,78,14,0.45)" strokeWidth="1.5" />
+          <circle cx="16" cy="28" r="5" stroke="rgba(224,78,14,0.3)" strokeWidth="1" fill="none" />
+        </svg>
+        <svg style={{ position: 'absolute', top: 8, left: 8, width: 48, height: 48 }} xmlns="http://www.w3.org/2000/svg">
+          <line x1="4" y1="20" x2="28" y2="20" stroke="rgba(92,58,156,0.35)" strokeWidth="1.5" />
+          <line x1="16" y1="8" x2="16" y2="32" stroke="rgba(92,58,156,0.35)" strokeWidth="1.5" />
+        </svg>
+        <svg style={{ position: 'absolute', bottom: 8, right: 8, width: 48, height: 48 }} xmlns="http://www.w3.org/2000/svg">
+          <line x1="4" y1="28" x2="28" y2="28" stroke="rgba(11,114,104,0.25)" strokeWidth="1" />
+          <line x1="16" y1="16" x2="16" y2="40" stroke="rgba(11,114,104,0.25)" strokeWidth="1" />
         </svg>
         <svg style={{ position: 'absolute', right: 40, top: 120, width: 100, height: 100 }} viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
           {[[20,20,3.5],[38,14,2.5],[12,38,2],[30,35,3],[48,28,2],[55,42,1.5],[22,52,2],[40,50,1.5],[60,30,1],[15,60,1.5]].map(([x,y,r],i) => <circle key={i} cx={x} cy={y} r={r} fill="rgba(224,78,14,0.28)" />)}
@@ -926,14 +933,14 @@ export function ToolsPage() {
           <circle cx="10%" cy="70%" r="2" fill="rgba(11,114,104,0.16)" />
         </svg>
       </div>
-      <header className="flex flex-col gap-3 shrink-0" style={{ position: 'relative', zIndex: 1 }}>
+      <header className="flex flex-col gap-3 shrink-0 animate-ink-in" style={{ position: 'relative', zIndex: 1 }}>
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-primary/10 rounded-xl">
-            <Wrench className="h-6 w-6 text-primary" />
+          <div className="p-2 rounded-xl" style={{ background: 'color-mix(in srgb, var(--accent-orange) 12%, transparent)' }}>
+            <Wrench className="h-6 w-6" style={{ color: 'var(--accent-orange)' }} />
           </div>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Workspace Tools</h1>
-            <p className="text-muted-foreground text-xs font-medium uppercase tracking-[0.2em] opacity-60">Productivity Powerhouse</p>
+            <h1 className="font-display font-black tracking-tight" style={{ fontSize: 'clamp(1.4rem, 3vw, 2rem)', textShadow: '2px 2px 0 rgba(224,78,14,0.18), -1px -1px 0 rgba(11,114,104,0.12)' }}>Workspace Tools</h1>
+            <p className="font-mono-ui text-muted-foreground uppercase opacity-60" style={{ fontSize: 10, letterSpacing: '0.20em' }}>Productivity Powerhouse</p>
           </div>
         </div>
         <TimeStrip />

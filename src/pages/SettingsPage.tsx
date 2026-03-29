@@ -377,7 +377,7 @@ function NewsFeedsSection() {
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-lg font-semibold">News Feeds</h2>
+        <h2 className="font-display font-bold" style={{ fontSize: '1.2rem', letterSpacing: '-0.01em' }}>News Feeds</h2>
         <p className="text-sm text-muted-foreground mt-1">
           Manage RSS feeds for your AI news digest. Active feeds are fetched when you generate a digest.
         </p>
@@ -456,9 +456,9 @@ function NewsFeedsSection() {
                 <button
                   onClick={handleAdd}
                   disabled={adding || !urlInput.trim()}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
+                  className="btn-tactile btn-tactile-teal"
                 >
-                  {adding ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+                  {adding ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
                   Add Feed
                 </button>
               </div>
@@ -843,16 +843,17 @@ export function SettingsPage({ theme, setTheme }: SettingsPageProps) {
       )}
 
       {/* Top tabs */}
-      <nav className="shrink-0 border-b flex items-center justify-center gap-1 px-6 py-2">
+      <nav className="shrink-0 border-b flex items-center justify-center gap-1 px-6 py-2" style={{ position: 'relative', zIndex: 1 }}>
         {navItems.map((item) => (
           <button
             key={item.id}
             onClick={() => setSection(item.id)}
-            className={`px-4 py-1.5 rounded-md text-sm transition-colors ${
+            className={`px-4 py-1.5 rounded-md text-sm transition-colors font-mono-ui ${
               section === item.id
-                ? "bg-primary/10 text-primary font-semibold"
+                ? "font-semibold"
                 : "text-muted-foreground hover:bg-muted hover:text-foreground"
             }`}
+            style={section === item.id ? { background: 'color-mix(in srgb, var(--accent-orange) 12%, transparent)', color: 'var(--accent-orange)' } : {}}
           >
             {item.label}
           </button>
@@ -860,13 +861,13 @@ export function SettingsPage({ theme, setTheme }: SettingsPageProps) {
       </nav>
 
       {/* Content */}
-      <div className={`flex-1 overflow-y-auto p-6 ${["ai", "news", "preferences"].includes(section) ? "" : "max-w-2xl mx-auto w-full"} space-y-6`}>
+      <div className={`flex-1 overflow-y-auto p-6 animate-ink-in ${["ai", "news", "preferences"].includes(section) ? "" : "max-w-2xl mx-auto w-full"} space-y-6`} style={{ position: 'relative', zIndex: 1 }}>
         {section === "ai" && (
           <>
             <div className="grid gap-8 items-start" style={{ gridTemplateColumns: "360px 1fr" }}>
             {/* Left: AI Configuration */}
             <div className="space-y-6">
-            <h2 className="text-lg font-semibold">AI Configuration</h2>
+            <h2 className="font-display font-bold" style={{ fontSize: '1.2rem', letterSpacing: '-0.01em' }}>AI Configuration</h2>
 
             <label className="flex items-center gap-3 cursor-pointer">
               <input
@@ -982,13 +983,14 @@ export function SettingsPage({ theme, setTheme }: SettingsPageProps) {
             <button
               onClick={handleSave}
               disabled={saving}
-              className="rounded-md bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
+              className="btn-tactile btn-tactile-orange"
+              style={{ fontSize: 13, padding: '6px 18px' }}
             >
               {saving ? "Saving…" : "Save Changes"}
             </button>
             {/* PC Specs */}
-            <div className="rounded-lg border bg-muted/30 p-4 space-y-4">
-              <h3 className="text-sm font-semibold">Your PC Specs</h3>
+            <div className="card-riso rounded-lg border bg-muted/30 p-4 space-y-4">
+              <h3 className="riso-section-label">Your PC Specs</h3>
               {!specs ? (
                 <div className="flex items-center gap-2 text-xs text-muted-foreground"><Loader2 size={12} className="animate-spin" />Detecting hardware…</div>
               ) : (
@@ -1008,7 +1010,7 @@ export function SettingsPage({ theme, setTheme }: SettingsPageProps) {
               <div className="space-y-6">
                 <div className="space-y-6">
                   <div className="space-y-1">
-                    <h2 className="text-lg font-semibold">Free GGUF Models</h2>
+                    <h2 className="font-display font-bold" style={{ fontSize: '1.2rem', letterSpacing: '-0.01em' }}>Free GGUF Models</h2>
                     <p className="text-xs text-muted-foreground">
                       {config.engine === "local"
                         ? <>Downloads go to <span className="font-mono text-foreground">{config.models_dir || "Models Directory"}</span>.</>
@@ -1018,7 +1020,9 @@ export function SettingsPage({ theme, setTheme }: SettingsPageProps) {
                   <div className="flex flex-wrap gap-1.5">
                     {ALL_TAGS.map((tag) => (
                       <button key={tag} onClick={() => setTagFilter(tag)}
-                        className={`px-2.5 py-0.5 rounded-full text-xs font-medium transition-colors ${tagFilter === tag ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80"}`}>
+                        className={`px-2.5 py-0.5 rounded-full font-mono-ui font-medium transition-colors ${tagFilter === tag ? "" : "bg-muted text-muted-foreground hover:bg-muted/80"}`}
+                        style={tagFilter === tag ? { fontSize: 11, background: 'var(--accent-orange)', color: '#fff', borderRadius: 9999 } : { fontSize: 11 }}
+                      >
                         {tag}
                       </button>
                     ))}
@@ -1035,7 +1039,7 @@ export function SettingsPage({ theme, setTheme }: SettingsPageProps) {
                               <div className="flex items-center gap-1.5 flex-wrap">
                                 <p className="text-sm font-medium">{m.name}</p>
                                 {m.recommended && (
-                                  <span className="px-1.5 py-0 rounded-full text-[10px] font-semibold bg-primary/15 text-primary border border-primary/25">Recommended</span>
+                                  <span className="riso-stamp" style={{ color: 'var(--accent-teal)', fontSize: 9 }}>Recommended</span>
                                 )}
                                 {m.infoUrl && (
                                   <button onClick={() => openUrl(m.infoUrl!)} className="text-muted-foreground hover:text-foreground transition-colors" title="More info on HuggingFace">
@@ -1056,15 +1060,15 @@ export function SettingsPage({ theme, setTheme }: SettingsPageProps) {
                             <div className="shrink-0">
                               {installed && !dl?.running ? (
                                 <div className="flex items-center gap-2">
-                                  <span className="flex items-center gap-1 text-xs font-medium text-green-600"><CheckCircle2 size={14} />Installed</span>
-                                  <button onClick={() => handleDeleteModel(m.filename)} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive transition-colors" title="Delete model"><Trash2 size={13} /></button>
+                                  <span className="riso-stamp" style={{ color: 'var(--accent-teal)', fontSize: 9 }}><CheckCircle2 size={11} />Installed</span>
+                                  <button onClick={() => handleDeleteModel(m.filename)} className="btn-tactile btn-tactile-outline" style={{ padding: '2px 6px', fontSize: 10 }} title="Delete model"><Trash2 size={11} /></button>
                                 </div>
                               ) : dl?.running ? (
                                 <button onClick={() => handleCancelDownload(m.filename)} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive transition-colors"><X size={13} />Cancel</button>
                               ) : dl?.error ? (
-                                <button onClick={() => handleDownload(m)} className="flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium hover:bg-muted transition-colors text-destructive border-destructive/30"><AlertCircle size={13} />Retry</button>
+                                <button onClick={() => handleDownload(m)} className="btn-tactile" style={{ color: 'var(--destructive)', borderColor: 'rgba(220,38,38,0.3)' }}><AlertCircle size={13} />Retry</button>
                               ) : (
-                                <button onClick={() => handleDownload(m)} className="flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium hover:bg-muted transition-colors"><Download size={13} />Download</button>
+                                <button onClick={() => handleDownload(m)} className="btn-tactile"><Download size={13} />Download</button>
                               )}
                             </div>
                           </div>
@@ -1096,7 +1100,7 @@ export function SettingsPage({ theme, setTheme }: SettingsPageProps) {
           <div className="grid grid-cols-2 gap-8 items-start">
             {/* ── Left: Appearance ── */}
             <div className="space-y-6">
-              <h2 className="text-lg font-semibold">Appearance</h2>
+              <h2 className="font-display font-bold" style={{ fontSize: '1.2rem', letterSpacing: '-0.01em' }}>Appearance</h2>
               <div className="space-y-4">
                 <div>
                   <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Theme</label>
@@ -1104,7 +1108,8 @@ export function SettingsPage({ theme, setTheme }: SettingsPageProps) {
                     {/* Light mode preview */}
                     <button
                       onClick={() => setTheme("light")}
-                      className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${theme === "light" ? "border-primary bg-primary/5 shadow-sm" : "border-transparent bg-muted/30 hover:bg-muted/50"}`}
+                      className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${theme === "light" ? "bg-muted/30 shadow-sm" : "border-transparent bg-muted/30 hover:bg-muted/50"}`}
+                      style={theme === "light" ? { borderColor: 'var(--accent-orange)' } : {}}
                     >
                       <div className="w-full aspect-video rounded-md overflow-hidden shadow-sm border" style={{ borderColor: "rgba(20,16,10,0.12)" }}>
                         <div className="w-full h-full flex" style={{ background: "#F0E8DC" }}>
@@ -1130,7 +1135,8 @@ export function SettingsPage({ theme, setTheme }: SettingsPageProps) {
                     {/* Dark mode preview */}
                     <button
                       onClick={() => setTheme("dark")}
-                      className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${theme === "dark" ? "border-primary bg-primary/5 shadow-sm" : "border-transparent bg-muted/30 hover:bg-muted/50"}`}
+                      className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${theme === "dark" ? "bg-muted/30 shadow-sm" : "border-transparent bg-muted/30 hover:bg-muted/50"}`}
+                      style={theme === "dark" ? { borderColor: 'var(--accent-orange)' } : {}}
                     >
                       <div className="w-full aspect-video rounded-md overflow-hidden shadow-sm border" style={{ borderColor: "rgba(240,232,220,0.10)" }}>
                         <div className="w-full h-full flex" style={{ background: "#2C2418" }}>
@@ -1179,13 +1185,13 @@ export function SettingsPage({ theme, setTheme }: SettingsPageProps) {
             {/* ── Plugins ── */}
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold">Plugins</h2>
+                <h2 className="font-display font-bold" style={{ fontSize: '1.2rem', letterSpacing: '-0.01em' }}>Plugins</h2>
                 <button
                   onClick={reloadPlugins}
                   disabled={pluginsReloading}
-                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md border border-border hover:bg-muted transition-colors disabled:opacity-50"
+                  className="btn-tactile"
                 >
-                  {pluginsReloading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                  {pluginsReloading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
                   Reload
                 </button>
               </div>
@@ -1276,7 +1282,7 @@ def initialize_plugin(registry):
 
             {/* ── Data Management ── */}
             <div className="space-y-4">
-              <h2 className="text-lg font-semibold">Data Management</h2>
+              <h2 className="font-display font-bold" style={{ fontSize: '1.2rem', letterSpacing: '-0.01em' }}>Data Management</h2>
               <p className="text-xs text-muted-foreground">Permanently delete stored data. This cannot be undone.</p>
               <div className="space-y-3">
                 {([
@@ -1353,7 +1359,7 @@ def initialize_plugin(registry):
         {section === "about" && (
           <div className="space-y-6 max-w-lg">
             <div>
-              <h2 className="text-lg font-semibold">About CrowForge</h2>
+              <h2 className="font-display font-bold" style={{ fontSize: '1.2rem', letterSpacing: '-0.01em' }}>About CrowForge</h2>
               <div className="mt-2 space-y-1 text-sm text-muted-foreground">
                 <p><span className="text-foreground font-medium">Version</span>&nbsp; 0.1.0</p>
                 <p><span className="text-foreground font-medium">Data storage</span>&nbsp; Local SQLite (crowforge.db)</p>
@@ -1362,7 +1368,7 @@ def initialize_plugin(registry):
             </div>
 
             {/* Developer card */}
-            <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
+            <div className="card-riso card-riso-orange rounded-lg border bg-muted/30 p-4 space-y-3">
               <div className="flex items-center gap-3">
                 <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-base shrink-0">
                   LT
@@ -1398,7 +1404,7 @@ def initialize_plugin(registry):
             </div>
 
             {/* Built with Claude */}
-            <div className="rounded-lg border bg-muted/30 p-4 flex items-center gap-3">
+            <div className="card-riso card-riso-violet rounded-lg border bg-muted/30 p-4 flex items-center gap-3">
               <svg viewBox="0 0 24 24" className="h-8 w-8 shrink-0 text-[#D97757]" fill="currentColor" aria-label="Claude">
                 <path d="M17.304 3.541 12.836 16.37H10.31L5.842 3.54h2.725l3.017 9.645L14.6 3.54h2.704zM5 20.459h2.548v-2.394H5v2.394zm11.452 0H19v-2.394h-2.548v2.394z"/>
               </svg>

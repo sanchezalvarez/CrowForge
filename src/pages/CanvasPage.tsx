@@ -37,8 +37,8 @@ export function CanvasPage(_props: { onNavigate?: (page: any, id?: string) => vo
 
   if (!ready) {
     return (
-      <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
-        Loading…
+      <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm riso-noise riso-noise-live">
+        <span className="font-mono-ui text-xs tracking-widest uppercase opacity-60 animate-ink-in">Loading canvas…</span>
       </div>
     );
   }

@@ -74,7 +74,7 @@ export function HelpPage() {
 
       {/* Header */}
       <div className="h-16 flex items-center px-6 border-b shrink-0" style={{ position: 'relative', zIndex: 1 }}>
-        <h1 className="text-xl font-bold tracking-tight">Help</h1>
+        <h1 className="font-display font-black tracking-tight" style={{ fontSize: '1.35rem', textShadow: '1.5px 1.5px 0 rgba(224,78,14,0.18), -0.75px -0.75px 0 rgba(11,114,104,0.12)' }}>Help</h1>
       </div>
 
       {/* Main Content */}
@@ -83,10 +83,10 @@ export function HelpPage() {
 
           <div className="space-y-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-xl bg-primary/10 text-primary">
-                <Zap size={24} />
+              <div className="p-2 rounded-xl" style={{ background: 'color-mix(in srgb, var(--accent-orange) 12%, transparent)' }}>
+                <Zap size={24} style={{ color: 'var(--accent-orange)' }} />
               </div>
-              <h2 className="text-3xl font-extrabold tracking-tight">Master CrowForge</h2>
+              <h2 className="font-display font-black tracking-tight" style={{ fontSize: 'clamp(1.8rem, 4vw, 2.5rem)', textShadow: '2px 2px 0 rgba(224,78,14,0.20), -1px -1px 0 rgba(11,114,104,0.14)' }}>Master CrowForge</h2>
             </div>
             <p className="text-lg text-muted-foreground leading-relaxed">
               CrowForge is your private, local-first AI command center.
@@ -113,10 +113,10 @@ export function HelpPage() {
             {/* ── OVERVIEW ─────────────────────────────────────────────────── */}
             <TabsContent value="overview" className="space-y-8 animate-in fade-in slide-in-from-bottom-2">
               <div className="grid gap-6 md:grid-cols-3">
-                <Card className="bg-card/50 backdrop-blur-sm">
+                <Card className="card-riso bg-card/50 backdrop-blur-sm animate-ink-in" style={{ animationDelay: '50ms' }}>
                   <CardHeader>
-                    <ShieldCheck className="h-8 w-8 text-emerald-500 mb-2" />
-                    <CardTitle className="text-lg">Local-First</CardTitle>
+                    <ShieldCheck className="h-8 w-8 mb-2" style={{ color: 'var(--accent-teal)' }} />
+                    <CardTitle className="text-lg font-display">Local-First</CardTitle>
                     <CardDescription>Privacy by design.</CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -127,10 +127,10 @@ export function HelpPage() {
                     </p>
                   </CardContent>
                 </Card>
-                <Card className="bg-card/50 backdrop-blur-sm">
+                <Card className="card-riso card-riso-orange bg-card/50 backdrop-blur-sm animate-ink-in" style={{ animationDelay: '100ms' }}>
                   <CardHeader>
-                    <Cpu className="h-8 w-8 text-blue-500 mb-2" />
-                    <CardTitle className="text-lg">Local LLM</CardTitle>
+                    <Cpu className="h-8 w-8 mb-2" style={{ color: 'var(--accent-orange)' }} />
+                    <CardTitle className="text-lg font-display">Local LLM</CardTitle>
                     <CardDescription>No API keys required.</CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -140,10 +140,10 @@ export function HelpPage() {
                     </p>
                   </CardContent>
                 </Card>
-                <Card className="bg-card/50 backdrop-blur-sm">
+                <Card className="card-riso card-riso-violet bg-card/50 backdrop-blur-sm animate-ink-in" style={{ animationDelay: '150ms' }}>
                   <CardHeader>
-                    <Zap className="h-8 w-8 text-amber-500 mb-2" />
-                    <CardTitle className="text-lg">Universal Tools</CardTitle>
+                    <Zap className="h-8 w-8 mb-2" style={{ color: 'var(--accent-violet)' }} />
+                    <CardTitle className="text-lg font-display">Universal Tools</CardTitle>
                     <CardDescription>Cross-module synergy.</CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -185,9 +185,9 @@ export function HelpPage() {
                 <p className="text-muted-foreground">Chat is the heart of CrowForge, designed for multi-session persistence and context awareness.</p>
               </div>
               <div className="grid gap-6 md:grid-cols-2">
-                <Card>
+                <Card className="card-riso">
                   <CardHeader>
-                    <CardTitle className="text-base">Context Personas</CardTitle>
+                    <CardTitle className="text-base font-display">Context Personas</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-3">
                     {[
@@ -203,9 +203,9 @@ export function HelpPage() {
                     ))}
                   </CardContent>
                 </Card>
-                <Card>
+                <Card className="card-riso card-riso-orange">
                   <CardHeader>
-                    <CardTitle className="text-base">Advanced Features</CardTitle>
+                    <CardTitle className="text-base font-display">Advanced Features</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <ul className="text-sm text-muted-foreground list-disc list-inside space-y-2">
@@ -226,9 +226,9 @@ export function HelpPage() {
               </div>
 
               {/* Inline AI actions */}
-              <Card>
+              <Card className="card-riso card-riso-orange">
                 <CardHeader>
-                  <CardTitle className="text-base flex items-center gap-2">
+                  <CardTitle className="text-base font-display flex items-center gap-2">
                     <Sparkles size={16} className="text-primary" />
                     Inline AI Actions
                   </CardTitle>
@@ -257,7 +257,7 @@ export function HelpPage() {
               </Card>
 
               {/* Suggestions panel */}
-              <Card>
+              <Card className="card-riso">
                 <CardHeader>
                   <CardTitle className="text-base">AI Suggestions Panel</CardTitle>
                   <CardDescription>Appears in the right sidebar after any AI action completes.</CardDescription>
@@ -270,7 +270,7 @@ export function HelpPage() {
               </Card>
 
               {/* Export */}
-              <Card>
+              <Card className="card-riso">
                 <CardHeader>
                   <CardTitle className="text-base">Exports &amp; Formatting</CardTitle>
                 </CardHeader>
@@ -296,7 +296,7 @@ export function HelpPage() {
               <div className="grid gap-4 md:grid-cols-2">
 
                 {/* Ask AI */}
-                <Card>
+                <Card className="card-riso">
                   <CardHeader>
                     <CardTitle className="text-base flex items-center gap-2">
                       <MessageCircle size={15} className="text-blue-500" />
@@ -317,7 +317,7 @@ export function HelpPage() {
                 </Card>
 
                 {/* Formula Wizard */}
-                <Card>
+                <Card className="card-riso">
                   <CardHeader>
                     <CardTitle className="text-base flex items-center gap-2">
                       <FunctionSquare size={15} className="text-emerald-500" />
@@ -338,7 +338,7 @@ export function HelpPage() {
                 </Card>
 
                 {/* Explain Formula */}
-                <Card>
+                <Card className="card-riso">
                   <CardHeader>
                     <CardTitle className="text-base flex items-center gap-2">
                       <HelpCircle size={15} className="text-amber-500" />
@@ -353,7 +353,7 @@ export function HelpPage() {
                 </Card>
 
                 {/* AI Fill */}
-                <Card>
+                <Card className="card-riso">
                   <CardHeader>
                     <CardTitle className="text-base flex items-center gap-2">
                       <Sparkles size={15} className="text-violet-500" />
@@ -373,7 +373,7 @@ export function HelpPage() {
                 </Card>
 
                 {/* Range Operation */}
-                <Card>
+                <Card className="card-riso">
                   <CardHeader>
                     <CardTitle className="text-base flex items-center gap-2">
                       <LayoutGrid size={15} className="text-primary" />
@@ -392,7 +392,7 @@ export function HelpPage() {
                 </Card>
 
                 {/* Generate Rows */}
-                <Card>
+                <Card className="card-riso">
                   <CardHeader>
                     <CardTitle className="text-base flex items-center gap-2">
                       <PlusSquare size={15} className="text-emerald-500" />
@@ -408,7 +408,7 @@ export function HelpPage() {
               </div>
 
               {/* Standard features */}
-              <Card>
+              <Card className="card-riso">
                 <CardHeader>
                   <CardTitle className="text-base">Standard Spreadsheet Features</CardTitle>
                 </CardHeader>
@@ -426,7 +426,7 @@ export function HelpPage() {
                 <h3 className="text-2xl font-bold">The ReAct Agent</h3>
                 <p className="text-muted-foreground">An autonomous assistant that can reason and use tools to manage your workspace.</p>
               </div>
-              <Card className="border-violet-500/20 bg-violet-500/5">
+              <Card className="card-riso card-riso-violet border-violet-500/20 bg-violet-500/5">
                 <CardHeader>
                   <CardTitle className="text-base flex items-center gap-2">
                     <Bot size={18} className="text-violet-500" />
@@ -461,7 +461,7 @@ export function HelpPage() {
                 <p className="text-muted-foreground">The right sidebar gives you granular control over the engine, model, and generation parameters.</p>
               </div>
               <div className="grid gap-6 md:grid-cols-2">
-                <Card>
+                <Card className="card-riso">
                   <CardHeader>
                     <CardTitle className="text-base">Engine &amp; Model Management</CardTitle>
                   </CardHeader>
@@ -471,7 +471,7 @@ export function HelpPage() {
                     <p><strong>Status Banner:</strong> Real-time backend health monitoring with Start / Stop / Restart controls.</p>
                   </CardContent>
                 </Card>
-                <Card>
+                <Card className="card-riso">
                   <CardHeader>
                     <CardTitle className="text-base">Hyperparameter Tuning</CardTitle>
                   </CardHeader>
@@ -483,7 +483,7 @@ export function HelpPage() {
                   </CardContent>
                 </Card>
               </div>
-              <Card className="border-red-500/20 bg-red-500/5">
+              <Card className="card-riso border-red-500/20 bg-red-500/5">
                 <CardHeader>
                   <CardTitle className="text-base flex items-center gap-2">
                     <Bug size={18} className="text-red-500" />
@@ -505,7 +505,7 @@ export function HelpPage() {
                 <p className="text-muted-foreground">Stay informed with an automated, AI-curated summary of your favourite RSS feeds.</p>
               </div>
               <div className="grid gap-6 md:grid-cols-2">
-                <Card>
+                <Card className="card-riso">
                   <CardHeader>
                     <CardTitle className="text-base">Feed Management</CardTitle>
                   </CardHeader>
@@ -515,7 +515,7 @@ export function HelpPage() {
                     <p>Toggle individual feeds on/off to control which sources appear in the digest.</p>
                   </CardContent>
                 </Card>
-                <Card>
+                <Card className="card-riso">
                   <CardHeader>
                     <CardTitle className="text-base">Smart Digest</CardTitle>
                   </CardHeader>
@@ -526,7 +526,7 @@ export function HelpPage() {
                   </CardContent>
                 </Card>
               </div>
-              <Card className="border-blue-500/20 bg-blue-500/5">
+              <Card className="card-riso card-riso-violet border-blue-500/20 bg-blue-500/5">
                 <CardHeader>
                   <CardTitle className="text-base flex items-center gap-2">
                     <Cpu size={16} className="text-blue-500" />
@@ -544,7 +544,7 @@ export function HelpPage() {
             {/* ── ADVANCED ──────────────────────────────────────────────────── */}
             <TabsContent value="advanced" className="space-y-6 animate-in fade-in slide-in-from-bottom-2">
               <div className="grid gap-6 md:grid-cols-2">
-                <Card>
+                <Card className="card-riso">
                   <CardHeader>
                     <Workflow className="h-6 w-6 text-primary mb-2" />
                     <CardTitle className="text-lg">Infinite Canvas</CardTitle>
@@ -554,7 +554,7 @@ export function HelpPage() {
                     <p>Canvas states are saved to the local database and restored on reload.</p>
                   </CardContent>
                 </Card>
-                <Card>
+                <Card className="card-riso">
                   <CardHeader>
                     <Gauge className="h-6 w-6 text-primary mb-2" />
                     <CardTitle className="text-lg">AI Benchmarking</CardTitle>

@@ -895,7 +895,7 @@ export function SheetGrid({
                 </th>
               </tr>
             </thead>
-            <tbody className="paper-surface">
+            <tbody>
               {/* Virtual scroll spacer top */}
               {filteredRowIndices.length > ROW_RENDER_LIMIT && scrollRowStart > 0 && (
                 <tr><td colSpan={activeSheet.columns.length + 2} style={{ height: filteredRowIndices.slice(0, scrollRowStart).reduce((sum, ri) => sum + (rowHeights[ri] ?? DEFAULT_ROW_HEIGHT) + 1, 0), padding: 0, border: "none" }} /></tr>

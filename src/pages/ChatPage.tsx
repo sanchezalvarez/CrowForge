@@ -11,7 +11,6 @@ import {
 } from "lucide-react";
 import type { AgentEvent } from "../hooks/useFetchSSE";
 import { useChatStream } from "../contexts/ChatStreamContext";
-import { Button } from "../components/ui/button";
 import { Textarea } from "../components/ui/textarea";
 import { ScrollArea } from "../components/ui/scroll-area";
 import { Card } from "../components/ui/card";
@@ -631,12 +630,12 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
   return (
     <div className="flex h-full">
       {/* Sessions sidebar */}
-      <div className="shrink-0 border-r bg-background flex flex-col relative" style={{ width: sidebarWidth }}>
+      <div className="shrink-0 border-r flex flex-col relative" style={{ width: sidebarWidth, background: 'var(--background-2)' }}>
         <div className="h-20 flex items-center px-3 border-b">
-          <Button variant="outline" size="sm" className="w-full" onClick={createSession}>
-            <PlusCircle className="h-4 w-4 mr-1.5" />
+          <button className="btn-tactile btn-tactile-teal w-full justify-center" onClick={createSession}>
+            <PlusCircle className="h-3.5 w-3.5" />
             New Chat
-          </Button>
+          </button>
         </div>
         <ScrollArea className="flex-1">
           <div className="p-2 space-y-0.5">
@@ -999,10 +998,8 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
                     className="hidden"
                     onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileSelect(f); e.target.value = ""; }}
                   />
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="shrink-0 h-[44px] w-[44px]"
+                  <button
+                    className="btn-tactile shrink-0 h-[44px] w-[44px] justify-center"
                     onClick={() => fileInputRef.current?.click()}
                     disabled={uploadingFile}
                     title="Attach PDF"
@@ -1010,7 +1007,7 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
                     {uploadingFile
                       ? <Loader2 className="h-4 w-4 animate-spin" />
                       : <Paperclip className="h-4 w-4" />}
-                  </Button>
+                  </button>
 
                   <Textarea
                     value={input}
@@ -1022,23 +1019,21 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
                     disabled={sending}
                   />
                   {sending ? (
-                    <Button
+                    <button
                       onClick={stopStreaming}
-                      variant="destructive"
-                      size="icon"
-                      className="shrink-0 h-[44px] w-[44px]"
+                      className="btn-tactile shrink-0 h-[44px] w-[44px] justify-center"
+                      style={{ background: 'var(--destructive)', color: '#fff', borderColor: 'rgba(0,0,0,0.18)' }}
                     >
                       <Square className="h-4 w-4" />
-                    </Button>
+                    </button>
                   ) : (
-                    <Button
+                    <button
                       onClick={sendMessage}
                       disabled={!input.trim()}
-                      size="icon"
-                      className="shrink-0 h-[44px] w-[44px]"
+                      className="btn-tactile btn-tactile-teal shrink-0 h-[44px] w-[44px] justify-center"
                     >
                       <Send className="h-4 w-4" />
-                    </Button>
+                    </button>
                   )}
                 </div>
               </div>

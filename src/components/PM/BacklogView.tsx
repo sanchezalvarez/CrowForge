@@ -30,6 +30,15 @@ const COL_LABELS: Record<ColKey, string> = {
   type: "Type", title: "Title", status: "Status", priority: "Priority", sp: "SP", assignee: "Assignee", due: "Due",
 };
 
+// Valid parent types for drag & drop reparenting
+const VALID_PARENT_TYPES: Partial<Record<PMItemType, PMItemType[]>> = {
+  feature: ["epic"],
+  story:   ["feature"],
+  task:    ["story", "feature"],
+  bug:     ["story", "feature"],
+  spike:   ["story", "feature"],
+};
+
 // Depth tree-line colors: depth 1 = orange, 2 = teal, 3+ = violet
 const DEPTH_COLORS = [
   "rgba(224,78,14,0.55)",
@@ -244,19 +253,14 @@ export function BacklogView({
     const srcId = dragRowId;
     setDragRowId(null);
     setDragOverRowId(null);
-    if (srcId && srcId !== targetId) {
-      await onTaskUpdate(srcId, { parent_id: targetId });
-    }
-  }, [dragRowId, onTaskUpdate]);
-
-  const handleRootDrop = useCallback(async () => {
-    const srcId = dragRowId;
-    setDragRowId(null);
-    setDragOverRowId(null);
-    if (srcId) {
-      await onTaskUpdate(srcId, { parent_id: null });
-    }
-  }, [dragRowId, onTaskUpdate]);
+    if (!srcId || srcId === targetId) return;
+    const src = tasks.find(t => t.id === srcId);
+    const tgt = tasks.find(t => t.id === targetId);
+    if (!src || !tgt) return;
+    const validParents = VALID_PARENT_TYPES[src.item_type] ?? [];
+    if (!validParents.includes(tgt.item_type)) return;
+    await onTaskUpdate(srcId, { parent_id: targetId });
+  }, [dragRowId, tasks, onTaskUpdate]);
 
   return (
     <div className="flex flex-col gap-3 h-full" onClick={() => setCtxMenu(null)}>
@@ -387,7 +391,10 @@ export function BacklogView({
                   isRenaming={renameId === row.id}
                   onRenameSubmit={async (title) => { setRenameId(null); await onTaskUpdate(row.id, { title }); }}
                   onRenameCancel={() => setRenameId(null)}
-                  isDragOver={dragOverRowId === row.id && dragRowId !== row.id}
+                  isDragOver={dragOverRowId === row.id && dragRowId !== null && dragRowId !== row.id && (() => {
+                    const src = tasks.find(t => t.id === dragRowId);
+                    return (VALID_PARENT_TYPES[src?.item_type ?? "epic"] ?? []).includes(row.item_type);
+                  })()}
                   isDragging={dragRowId === row.id}
                   onDragStart={() => setDragRowId(row.id)}
                   onDragOver={(e) => { e.preventDefault(); setDragOverRowId(row.id); }}
@@ -409,15 +416,6 @@ export function BacklogView({
         >
           <Plus size={12} /> New work item
         </button>
-        {dragRowId !== null && (
-          <div
-            className="flex-1 flex items-center justify-center py-1.5 border border-dashed border-primary/40 rounded text-xs text-muted-foreground hover:border-primary hover:text-foreground transition-colors cursor-pointer"
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={handleRootDrop}
-          >
-            Drop here to make root (remove parent)
-          </div>
-        )}
       </div>
 
       {/* Context menu */}
@@ -565,6 +563,7 @@ function BacklogRow({
       case "status":
         return (
           <td key="status" className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
+            <div onDragStart={(e) => e.stopPropagation()}>
             <Select value={row.status} onValueChange={(v) => onUpdate(row.id, { status: v as PMTaskStatus })}>
               <SelectTrigger className="h-6 text-[11px] border-0 bg-transparent px-0 w-auto gap-1 hover:bg-muted rounded transition-colors">
                 <StatusBadge status={row.status} />
@@ -578,12 +577,14 @@ function BacklogRow({
                 <SelectItem value="rejected">Rejected</SelectItem>
               </SelectContent>
             </Select>
+            </div>
           </td>
         );
 
       case "priority":
         return (
           <td key="priority" className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
+            <div onDragStart={(e) => e.stopPropagation()}>
             <Select value={row.priority} onValueChange={(v) => onUpdate(row.id, { priority: v as PMPriority })}>
               <SelectTrigger className="h-6 text-[11px] border-0 bg-transparent px-0 w-auto gap-1 hover:bg-muted rounded transition-colors">
                 <PriorityBadge priority={row.priority} />
@@ -595,6 +596,7 @@ function BacklogRow({
                 <SelectItem value="low">Low</SelectItem>
               </SelectContent>
             </Select>
+            </div>
           </td>
         );
 
@@ -608,6 +610,7 @@ function BacklogRow({
       case "assignee":
         return (
           <td key="assignee" className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
+            <div onDragStart={(e) => e.stopPropagation()}>
             <Select
               value={row.assignee_id?.toString() ?? "none"}
               onValueChange={(v) => onUpdate(row.id, { assignee_id: v !== "none" ? parseInt(v) : null })}
@@ -627,6 +630,7 @@ function BacklogRow({
                 ))}
               </SelectContent>
             </Select>
+            </div>
           </td>
         );
 
@@ -642,6 +646,8 @@ function BacklogRow({
     }
   };
 
+  const isDraggable = !!(VALID_PARENT_TYPES[row.item_type]?.length);
+
   return (
     <tr
       className="border-b border-border/50 hover:bg-muted/20 transition-colors group"
@@ -649,18 +655,22 @@ function BacklogRow({
         opacity: isDragging ? 0.45 : 1,
         outline: isDragOver ? "2px dashed var(--accent-orange)" : undefined,
         outlineOffset: isDragOver ? "-2px" : undefined,
+        cursor: isDraggable ? "grab" : undefined,
+      }}
+      draggable={isDraggable}
+      onDragStart={(e) => {
+        if (!isDraggable) { e.preventDefault(); return; }
+        onDragStart();
       }}
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={(e) => { e.preventDefault(); onDrop(); }}
       onContextMenu={(e) => onContextMenu(e, row)}
     >
-      {/* Drag handle */}
+      {/* Drag handle — visual affordance only, drag is on <tr> */}
       <td className="py-2 w-5" style={{ paddingLeft: 4 }}>
         <span
-          draggable
-          onDragStart={(e) => { e.stopPropagation(); onDragStart(); }}
-          className="flex items-center text-muted-foreground/25 hover:text-muted-foreground/60 transition-colors cursor-grab active:cursor-grabbing"
+          className={`flex items-center transition-colors ${isDraggable ? "text-muted-foreground/25 group-hover:text-muted-foreground/60" : "text-transparent"}`}
         >
           <GripVertical size={12} />
         </span>

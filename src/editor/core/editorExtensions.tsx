@@ -12,7 +12,6 @@ import StarterKit from "@tiptap/starter-kit";
 import { Markdown } from "tiptap-markdown";
 import { Color } from "@tiptap/extension-color";
 import { TextStyle } from "@tiptap/extension-text-style";
-import Underline from "@tiptap/extension-underline";
 import TextAlign from "@tiptap/extension-text-align";
 import Highlight from "@tiptap/extension-highlight";
 import FontFamily from "@tiptap/extension-font-family";
@@ -22,7 +21,6 @@ import CharacterCount from "@tiptap/extension-character-count";
 import Typography from "@tiptap/extension-typography";
 import Dropcursor from "@tiptap/extension-dropcursor";
 import Gapcursor from "@tiptap/extension-gapcursor";
-import Link from "@tiptap/extension-link";
 import { Table } from "@tiptap/extension-table";
 import { TableRow } from "@tiptap/extension-table-row";
 import { TableCell } from "@tiptap/extension-table-cell";
@@ -204,7 +202,6 @@ export const editorExtensions = [
   Markdown,
   FontSize,
   Color,
-  Underline,
   TextAlign.configure({ types: ["heading", "paragraph"] }),
   Highlight.configure({ multicolor: false }),
   FontFamily,
@@ -214,10 +211,6 @@ export const editorExtensions = [
   Typography,
   Dropcursor.configure({ color: "var(--primary)", width: 2 }),
   Gapcursor,
-  Link.configure({
-    openOnClick: false,
-    HTMLAttributes: { class: "text-primary underline cursor-pointer" },
-  }),
   Placeholder.configure({ placeholder: "Start writing..." }),
   LineHeight,
   ResizableImage,

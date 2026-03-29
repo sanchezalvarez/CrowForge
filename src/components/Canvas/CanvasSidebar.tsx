@@ -1,7 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import axios from "axios";
 import { PlusCircle, Trash2, Loader2, Pencil, Copy, Workflow } from "lucide-react";
-import { Button } from "../ui/button";
 import { ScrollArea } from "../ui/scroll-area";
 import { cn } from "../../lib/utils";
 
@@ -110,13 +109,13 @@ export function CanvasSidebar({ activeId, onSelect }: CanvasSidebarProps) {
   }, [renamingId, renameValue]);
 
   return (
-    <div className="w-[220px] shrink-0 flex flex-col border-r bg-background">
+    <div className="w-[220px] shrink-0 flex flex-col border-r" style={{ background: 'var(--background-2)' }}>
       {/* Header */}
       <div className="h-20 flex items-center px-3 border-b">
-        <Button variant="outline" size="sm" className="w-full justify-start gap-1.5" onClick={handleCreate}>
-          <PlusCircle className="h-4 w-4" />
+        <button className="btn-tactile btn-tactile-orange w-full justify-center" onClick={handleCreate}>
+          <PlusCircle className="h-3.5 w-3.5" />
           New Canvas
-        </Button>
+        </button>
       </div>
 
       {/* List */}
@@ -136,9 +135,10 @@ export function CanvasSidebar({ activeId, onSelect }: CanvasSidebarProps) {
               className={cn(
                 "group flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-sm cursor-pointer transition-colors",
                 activeId === canvas.id
-                  ? "bg-primary/10 text-primary font-medium"
+                  ? "font-medium"
                   : "text-muted-foreground hover:bg-muted hover:text-foreground",
               )}
+              style={activeId === canvas.id ? { background: 'color-mix(in srgb, var(--accent-orange) 15%, transparent)', color: 'var(--accent-orange)' } : {}}
               onClick={() => onSelect(canvas.id)}
               onContextMenu={(e) => {
                 e.preventDefault();

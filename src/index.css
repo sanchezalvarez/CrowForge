@@ -359,6 +359,12 @@ input, textarea, [contenteditable] {
   border-color: rgba(0,0,0,0.15);
   color: #fff;
 }
+.btn-tactile-violet {
+  background: var(--accent-violet);
+  background-image: var(--noise-btn);
+  border-color: rgba(0,0,0,0.15);
+  color: #fff;
+}
 .btn-tactile-outline {
   background: transparent;
   background-image: none;
@@ -750,6 +756,34 @@ input[type="range"]:focus-visible::-webkit-slider-thumb {
 }
 .animate-msg-in {
   animation: riso-msg-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* ── Projects page — hide scrollbar until overflow ─────────────────────── */
+.projects-scroll {
+  scrollbar-width: none;
+}
+.projects-scroll::-webkit-scrollbar {
+  display: none;
+}
+.projects-scroll:hover {
+  scrollbar-width: thin;
+  scrollbar-color: var(--background-3) transparent;
+}
+.projects-scroll:hover::-webkit-scrollbar {
+  display: block;
+  width: 6px;
+}
+.projects-scroll:hover::-webkit-scrollbar-thumb {
+  background: var(--background-3);
+  border-radius: 9999px;
+  border: 1px solid var(--border);
+}
+
+/* ── TipTap editor link styles ──────────────────────────────────────────── */
+.ProseMirror a {
+  color: var(--primary);
+  text-decoration: underline;
+  cursor: pointer;
 }
 
 /* ── Scrollbars ─────────────────────────────────────────────────────────── */

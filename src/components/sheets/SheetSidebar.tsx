@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
 import { PlusCircle, Sparkles, Upload, Loader2, Table2, FileSpreadsheet, ChevronDown } from "lucide-react";
-import { Button } from "../ui/button";
 import { ScrollArea } from "../ui/scroll-area";
 import { cn } from "../../lib/utils";
 import { SHEET_IMPORT_ACCEPT } from "../../lib/fileService";
@@ -56,7 +55,7 @@ export function SheetSidebar({
   }, [showNewMenu]);
 
   return (
-    <div className="w-[220px] shrink-0 border-r bg-background flex flex-col">
+    <div className="w-[220px] shrink-0 border-r flex flex-col" style={{ background: 'var(--background-2)' }}>
       <div className="h-20 flex items-center px-3 border-b">
         {/* Hidden file input */}
         <input
@@ -68,19 +67,17 @@ export function SheetSidebar({
         />
 
         {/* New Sheet button + dropdown */}
-        <div className="relative" ref={newMenuRef}>
-          <Button
-            variant="outline"
-            size="sm"
-            className="w-full justify-between"
+        <div className="relative w-full" ref={newMenuRef}>
+          <button
+            className="btn-tactile btn-tactile-teal w-full justify-between"
             onClick={() => setShowNewMenu((v) => !v)}
           >
             <span className="flex items-center gap-1.5">
-              <PlusCircle className="h-4 w-4" />
+              <PlusCircle className="h-3.5 w-3.5" />
               New Sheet
             </span>
-            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-          </Button>
+            <ChevronDown className="h-3 w-3 opacity-70" />
+          </button>
 
           {showNewMenu && (
             <div className="absolute left-0 right-0 top-[calc(100%+4px)] z-50 bg-background border border-border rounded-md shadow-lg py-1 text-sm">
@@ -130,9 +127,10 @@ export function SheetSidebar({
               className={cn(
                 "group flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-sm cursor-pointer transition-colors",
                 activeSheetId === sheet.id
-                  ? "bg-primary/10 text-primary font-medium"
+                  ? "font-medium"
                   : "text-muted-foreground hover:bg-muted hover:text-foreground"
               )}
+              style={activeSheetId === sheet.id ? { background: 'color-mix(in srgb, var(--accent-teal) 15%, transparent)', color: 'var(--accent-teal)' } : {}}
               onClick={() => setActiveSheetId(sheet.id)}
               onContextMenu={(e) => {
                 e.preventDefault();

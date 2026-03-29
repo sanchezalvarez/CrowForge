@@ -3,7 +3,6 @@ import { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { Play, Loader2, Check, Zap, FileText, ChevronDown, ChevronRight, History, RotateCcw, CheckCircle2, XCircle, Trash2, Info } from "lucide-react";
 import { Card, CardContent } from "../components/ui/card";
-import { Button } from "../components/ui/button";
 import { Label } from "../components/ui/label";
 import { Textarea } from "../components/ui/textarea";
 import {
@@ -296,8 +295,8 @@ export function BenchmarkPage() {
         </svg>
       </div>
       <div className="h-full overflow-y-auto overflow-x-hidden px-4 sm:px-6 py-6 sm:py-8 space-y-6" style={{ position: 'relative', zIndex: 1 }}>
-      <div>
-        <h1 className="text-lg font-semibold">Benchmark</h1>
+      <div className="animate-ink-in">
+        <h1 className="font-display font-black tracking-tight" style={{ fontSize: 'clamp(1.4rem, 3vw, 2rem)', textShadow: '2px 2px 0 rgba(224,78,14,0.18), -1px -1px 0 rgba(11,114,104,0.12)' }}>Benchmark</h1>
         <p className="text-sm text-muted-foreground mt-1">
           Compare AI engines and models side-by-side. Send the same prompt
           to multiple models, compare latency and output quality.
@@ -308,7 +307,7 @@ export function BenchmarkPage() {
       <div className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-6">
         {/* ── Left: Controls ──────────────────────── */}
         <div className="space-y-4">
-          <Card>
+          <Card className="card-riso card-riso-orange">
             <CardContent className="p-4 space-y-4">
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium text-muted-foreground">
@@ -459,14 +458,15 @@ export function BenchmarkPage() {
               </div>
 
               <div className="flex gap-2">
-                <Button
+                <button
                   onClick={handleRun}
                   disabled={running || !canRun}
-                  className="flex-1"
+                  className="btn-tactile btn-tactile-orange flex-1 justify-center"
+                  style={{ fontSize: 13, padding: '7px 16px' }}
                 >
                   {running ? (
                     <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin shrink-0" />
+                      <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" />
                       <span className="truncate">
                         {runningLabel
                           ? `Running… (${runningLabel.match(/\((\d+\/\d+)\)/)?.[1] ?? ""})`
@@ -475,24 +475,23 @@ export function BenchmarkPage() {
                     </>
                   ) : (
                     <>
-                      <Play className="mr-2 h-4 w-4" />
+                      <Play className="h-3.5 w-3.5" />
                       Run Benchmark
                     </>
                   )}
-                </Button>
+                </button>
                 {running && (
-                  <Button
-                    variant="outline"
+                  <button
+                    className="btn-tactile btn-tactile-outline"
                     onClick={() => { abortRef.current = true; abortControllerRef.current?.abort(); }}
                   >
-                    <XCircle className="mr-2 h-4 w-4" />
+                    <XCircle className="h-3.5 w-3.5" />
                     Cancel
-                  </Button>
+                  </button>
                 )}
                 {currentBatchIds.size > 0 && !running && (
-                  <Button
-                    variant="outline"
-                    size="icon"
+                  <button
+                    className="btn-tactile btn-tactile-outline"
                     onClick={(e) => {
                       e.stopPropagation();
                       setRuns((prev) => prev.filter((r) => !currentBatchIds.has(r.id)));
@@ -503,7 +502,7 @@ export function BenchmarkPage() {
                     title="Clear last run from view"
                   >
                     <Trash2 size={14} />
-                  </Button>
+                  </button>
                 )}
               </div>
             </CardContent>
@@ -511,7 +510,7 @@ export function BenchmarkPage() {
 
           {/* ── Past Sessions ──────────────────────── */}
           {sessions.length > 0 && (
-            <Card>
+            <Card className="card-riso">
               <CardContent className="p-3 space-y-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
@@ -635,7 +634,7 @@ export function BenchmarkPage() {
             </div>
           )}
 
-          <Card>
+          <Card className="card-riso card-riso-violet">
             {selectedSessionKey && (
               <div className="px-4 pt-3 pb-0 flex items-center justify-between">
                 <div className="text-xs text-muted-foreground min-w-0">

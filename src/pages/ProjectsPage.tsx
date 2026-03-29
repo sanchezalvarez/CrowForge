@@ -48,7 +48,7 @@ export function ProjectsPage({ onNavigateToProject }: ProjectsPageProps) {
   };
 
   return (
-    <div className="h-full overflow-y-auto overflow-x-hidden relative riso-noise riso-noise-live">
+    <div className="h-full overflow-y-auto overflow-x-hidden relative riso-noise riso-noise-live projects-scroll">
       {/* ── Riso background blob glows ── */}
       <div className="absolute pointer-events-none animate-blob-drift-b" style={{ top: -120, right: -60, width: 520, height: 400, background: 'rgba(11,114,104,0.18)', borderRadius: '50%', mixBlendMode: 'multiply', filter: 'blur(80px)', zIndex: 0 }} />
       <div className="absolute pointer-events-none animate-blob-drift-c" style={{ bottom: -80, left: -80, width: 480, height: 380, background: 'rgba(224,78,14,0.18)', borderRadius: '50%', mixBlendMode: 'multiply', filter: 'blur(70px)', zIndex: 0 }} />

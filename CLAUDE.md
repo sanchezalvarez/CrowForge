@@ -2,6 +2,22 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## UI Changes
+
+When fixing UI issues, ONLY change the specific element requested. Do not modify surrounding elements (toolbar height, widths, layouts) unless explicitly asked.
+
+## Code Quality
+
+After implementing any fix, do a self-review pass checking for: stale state closures, camelCase/snake_case mismatches, off-by-one errors in loops, and missing visual edge cases before presenting the result.
+
+## Build & Release
+
+Use semver format (e.g., `0.3.0` not `0.3`) for all version strings. Always validate version format before committing.
+
+## Problem Solving
+
+When a CSS/visual approach fails twice, stop and propose an alternative architecture instead of iterating on the same broken approach. Especially for complex layout problems like page pagination and text flow.
+
 ## Project Overview
 
 **CrowForge** is a local-first AI Workspace with Chat, Documents, Canvas, Sheets, Agent, and Tools. Three-layer architecture: Tauri v2 (Rust shell) → React/TypeScript frontend → Python FastAPI backend. All communication between frontend and backend is via HTTP/SSE (no Tauri IPC for app logic).

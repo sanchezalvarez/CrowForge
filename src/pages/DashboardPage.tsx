@@ -75,14 +75,14 @@ function DigestSection() {
     <section>
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-base font-bold flex items-center gap-2">
-          <Newspaper className="h-4 w-4 text-primary" />
+          <Newspaper className="h-4 w-4" style={{ color: 'var(--accent-orange)' }} />
           <span className="riso-section-label" style={{ fontSize: 12, letterSpacing: '0.08em' }}>Today's Digest</span>
         </h2>
         <div className="flex items-center gap-2">
           <button
             onClick={handleFetch}
             disabled={isFetching || isGenerating}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-muted text-foreground hover:bg-muted/80 transition-colors disabled:opacity-50"
+            className="btn-tactile"
           >
             {isFetching ? <Loader2 className="h-3 w-3 animate-spin" /> : <Rss className="h-3 w-3" />}
             {isFetching ? "Fetching…" : "Fetch"}
@@ -90,7 +90,7 @@ function DigestSection() {
           <button
             onClick={generateDigest}
             disabled={isGenerating || isFetching}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-colors disabled:opacity-50"
+            className="btn-tactile btn-tactile-orange"
           >
             {isGenerating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
             {isGenerating ? "Summarizing…" : "Summarize"}
@@ -158,41 +158,41 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
   const quickActions = [
     {
       title: "New Chat", desc: "Ask AI anything",
-      icon: MessageSquare, color: "text-blue-500", bg: "bg-blue-500/10", ring: "ring-blue-500/20",
+      icon: MessageSquare, color: "text-[var(--accent-teal)]", bg: "bg-[var(--accent-teal)]/10", ring: "ring-[var(--accent-teal)]/20",
       onClick: async () => {
         try { const r = await axios.post(`${API_BASE}/chat/session`); onNavigate("chat", String(r.data.id)); } catch { /**/ }
       },
     },
     {
       title: "New Document", desc: "Write with AI",
-      icon: FileText, color: "text-purple-500", bg: "bg-purple-500/10", ring: "ring-purple-500/20",
+      icon: FileText, color: "text-[var(--accent-violet)]", bg: "bg-[var(--accent-violet)]/10", ring: "ring-[var(--accent-violet)]/20",
       onClick: async () => {
         try { const r = await axios.post(`${API_BASE}/documents`, { title: "Untitled Document" }); onNavigate("documents", r.data.id); } catch { /**/ }
       },
     },
     {
       title: "New Sheet", desc: "Data & formulas",
-      icon: Table2, color: "text-emerald-500", bg: "bg-emerald-500/10", ring: "ring-emerald-500/20",
+      icon: Table2, color: "text-[var(--accent-teal)]", bg: "bg-[var(--accent-teal)]/10", ring: "ring-[var(--accent-teal)]/20",
       onClick: async () => {
         try { const r = await axios.post(`${API_BASE}/sheets`, { title: "Untitled Sheet", columns: [{ name: "Column 1", type: "text" }] }); onNavigate("sheets", r.data.id); } catch { /**/ }
       },
     },
     {
       title: "New Canvas", desc: "Visual flow diagrams",
-      icon: Workflow, color: "text-orange-500", bg: "bg-orange-500/10", ring: "ring-orange-500/20",
+      icon: Workflow, color: "text-[var(--accent-orange)]", bg: "bg-[var(--accent-orange)]/10", ring: "ring-[var(--accent-orange)]/20",
       onClick: () => { onNavigate("canvas"); },
     },
   ];
 
   const typeIcon = (type: "doc" | "sheet" | "chat") => {
-    if (type === "doc") return <FileText className="h-4 w-4 text-purple-500" />;
-    if (type === "sheet") return <Table2 className="h-4 w-4 text-emerald-500" />;
-    return <MessageSquare className="h-4 w-4 text-blue-500" />;
+    if (type === "doc") return <FileText className="h-4 w-4" style={{ color: 'var(--accent-violet)' }} />;
+    if (type === "sheet") return <Table2 className="h-4 w-4" style={{ color: 'var(--accent-teal)' }} />;
+    return <MessageSquare className="h-4 w-4" style={{ color: 'var(--accent-orange)' }} />;
   };
   const typeBg = (type: "doc" | "sheet" | "chat") => {
-    if (type === "doc") return "bg-purple-500/10";
-    if (type === "sheet") return "bg-emerald-500/10";
-    return "bg-blue-500/10";
+    if (type === "doc") return "bg-[var(--accent-violet)]/10";
+    if (type === "sheet") return "bg-[var(--accent-teal)]/10";
+    return "bg-[var(--accent-orange)]/10";
   };
 
   if (loading) {

@@ -14,7 +14,6 @@ import {
 import type { AgentEvent } from "../hooks/useFetchSSE";
 import type { AgentScope } from "../contexts/ChatStreamContext";
 import { useChatStream } from "../contexts/ChatStreamContext";
-import { Button } from "../components/ui/button";
 import { Textarea } from "../components/ui/textarea";
 import { ScrollArea } from "../components/ui/scroll-area";
 import { Card } from "../components/ui/card";
@@ -26,15 +25,6 @@ const API_BASE = "http://127.0.0.1:8000";
 
 // ── Accent color utilities ─────────────────────────────────────────
 // The agent page uses violet instead of the app's primary color.
-const ACCENT = {
-  bg: "bg-violet-500/10",
-  bgSolid: "bg-violet-600 dark:bg-violet-500",
-  text: "text-violet-600 dark:text-violet-400",
-  textFg: "text-white",
-  border: "border-violet-500/30",
-  hoverBg: "hover:bg-violet-500/15",
-  ring: "focus-visible:ring-violet-500",
-};
 
 // ── Types ───────────────────────────────────────────────────────────
 interface ChatSession {
@@ -770,17 +760,16 @@ export function AgentPage({ tuningParams }: AgentPageProps) {
   return (
     <div className="flex h-full">
       {/* Sessions sidebar */}
-      <div className="shrink-0 border-r bg-background flex flex-col relative" style={{ width: sidebarWidth }}>
+      <div className="shrink-0 border-r flex flex-col relative" style={{ width: sidebarWidth, background: 'var(--background-2)' }}>
         <div className="h-20 flex items-center px-3 border-b">
-          <Button
-            variant="outline"
-            size="sm"
-            className={cn("w-full border-violet-500/30", ACCENT.text, ACCENT.hoverBg)}
+          <button
+            className="btn-tactile w-full justify-center"
+            style={{ background: 'var(--accent-violet)', color: '#fff', borderColor: 'rgba(0,0,0,0.15)' }}
             onClick={createSession}
           >
-            <PlusCircle className="h-4 w-4 mr-1.5" />
+            <PlusCircle className="h-3.5 w-3.5" />
             New Agent Chat
-          </Button>
+          </button>
         </div>
         <ScrollArea className="flex-1">
           <div className="p-2 space-y-0.5">
@@ -864,17 +853,23 @@ export function AgentPage({ tuningParams }: AgentPageProps) {
           <div className="animate-blob-drift-b" style={{ position: 'absolute', width: 500, height: 500, borderRadius: '50%', background: 'var(--accent-orange)', opacity: 0.09, mixBlendMode: 'multiply', bottom: -160, left: -160 }} />
           <div className="animate-blob-drift-c" style={{ position: 'absolute', width: 380, height: 380, borderRadius: '50%', background: 'var(--accent-teal)', opacity: 0.07, mixBlendMode: 'multiply', bottom: 80, right: -100 }} />
           <div className="animate-blob-drift-d" style={{ position: 'absolute', width: 260, height: 260, borderRadius: '50%', background: 'var(--accent-violet)', opacity: 0.06, mixBlendMode: 'multiply', top: '35%', left: -100 }} />
-          <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} xmlns="http://www.w3.org/2000/svg">
-            <line x1="calc(100% - 32)" y1="28" x2="calc(100% - 8)" y2="28" stroke="rgba(139,98,212,0.45)" strokeWidth="1.5" />
-            <line x1="calc(100% - 20)" y1="16" x2="calc(100% - 20)" y2="40" stroke="rgba(139,98,212,0.45)" strokeWidth="1.5" />
-            <circle cx="calc(100% - 20)" cy="28" r="5" stroke="rgba(139,98,212,0.3)" strokeWidth="1" fill="none" />
-            <line x1="8" y1="calc(100% - 28)" x2="32" y2="calc(100% - 28)" stroke="rgba(224,78,14,0.45)" strokeWidth="1.5" />
-            <line x1="20" y1="calc(100% - 40)" x2="20" y2="calc(100% - 16)" stroke="rgba(224,78,14,0.45)" strokeWidth="1.5" />
-            <circle cx="20" cy="calc(100% - 28)" r="5" stroke="rgba(224,78,14,0.3)" strokeWidth="1" fill="none" />
-            <line x1="8" y1="28" x2="32" y2="28" stroke="rgba(11,114,104,0.35)" strokeWidth="1.5" />
-            <line x1="20" y1="16" x2="20" y2="40" stroke="rgba(11,114,104,0.35)" strokeWidth="1.5" />
-            <line x1="calc(100% - 32)" y1="calc(100% - 28)" x2="calc(100% - 8)" y2="calc(100% - 28)" stroke="rgba(139,98,212,0.25)" strokeWidth="1" />
-            <line x1="calc(100% - 20)" y1="calc(100% - 40)" x2="calc(100% - 20)" y2="calc(100% - 16)" stroke="rgba(139,98,212,0.25)" strokeWidth="1" />
+          <svg style={{ position: 'absolute', top: 8, right: 8, width: 48, height: 48 }} xmlns="http://www.w3.org/2000/svg">
+            <line x1="4" y1="20" x2="28" y2="20" stroke="rgba(139,98,212,0.45)" strokeWidth="1.5" />
+            <line x1="16" y1="8" x2="16" y2="32" stroke="rgba(139,98,212,0.45)" strokeWidth="1.5" />
+            <circle cx="16" cy="20" r="5" stroke="rgba(139,98,212,0.3)" strokeWidth="1" fill="none" />
+          </svg>
+          <svg style={{ position: 'absolute', bottom: 8, left: 8, width: 48, height: 48 }} xmlns="http://www.w3.org/2000/svg">
+            <line x1="4" y1="28" x2="28" y2="28" stroke="rgba(224,78,14,0.45)" strokeWidth="1.5" />
+            <line x1="16" y1="16" x2="16" y2="40" stroke="rgba(224,78,14,0.45)" strokeWidth="1.5" />
+            <circle cx="16" cy="28" r="5" stroke="rgba(224,78,14,0.3)" strokeWidth="1" fill="none" />
+          </svg>
+          <svg style={{ position: 'absolute', top: 8, left: 8, width: 48, height: 48 }} xmlns="http://www.w3.org/2000/svg">
+            <line x1="4" y1="20" x2="28" y2="20" stroke="rgba(11,114,104,0.35)" strokeWidth="1.5" />
+            <line x1="16" y1="8" x2="16" y2="32" stroke="rgba(11,114,104,0.35)" strokeWidth="1.5" />
+          </svg>
+          <svg style={{ position: 'absolute', bottom: 8, right: 8, width: 48, height: 48 }} xmlns="http://www.w3.org/2000/svg">
+            <line x1="4" y1="28" x2="28" y2="28" stroke="rgba(139,98,212,0.25)" strokeWidth="1" />
+            <line x1="16" y1="16" x2="16" y2="40" stroke="rgba(139,98,212,0.25)" strokeWidth="1" />
           </svg>
           <svg style={{ position: 'absolute', right: 40, top: 120, width: 100, height: 100 }} viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
             {[[20,20,3.5],[38,14,2.5],[12,38,2],[30,35,3],[48,28,2],[55,42,1.5],[22,52,2],[40,50,1.5],[60,30,1],[15,60,1.5]].map(([x,y,r],i) => <circle key={i} cx={x} cy={y} r={r} fill="rgba(139,98,212,0.28)" />)}
@@ -1182,23 +1177,22 @@ export function AgentPage({ tuningParams }: AgentPageProps) {
                     disabled={sending}
                   />
                   {sending ? (
-                    <Button
+                    <button
                       onClick={stopStreaming}
-                      variant="destructive"
-                      size="icon"
-                      className="shrink-0 h-[44px] w-[44px]"
+                      className="btn-tactile shrink-0 h-[44px] w-[44px] justify-center"
+                      style={{ background: 'var(--destructive)', color: '#fff', borderColor: 'rgba(0,0,0,0.18)' }}
                     >
                       <Square className="h-4 w-4" />
-                    </Button>
+                    </button>
                   ) : (
-                    <Button
+                    <button
                       onClick={sendMessage}
                       disabled={!input.trim()}
-                      size="icon"
-                      className={cn("shrink-0 h-[44px] w-[44px]", ACCENT.bgSolid, ACCENT.textFg, "hover:bg-violet-700 dark:hover:bg-violet-600")}
+                      className="btn-tactile shrink-0 h-[44px] w-[44px] justify-center"
+                      style={{ background: 'var(--accent-violet)', color: '#fff', borderColor: 'rgba(0,0,0,0.15)' }}
                     >
                       <Send className="h-4 w-4" />
-                    </Button>
+                    </button>
                   )}
                 </div>
               </div>

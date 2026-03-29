@@ -539,7 +539,7 @@ export function DocumentEditor({
         )}
 
         {/* Editor scroll area */}
-        <div ref={editorScrollRef} className="flex-1 overflow-auto" style={{ background: 'var(--background-2)' }}>
+        <div ref={editorScrollRef} className="flex-1 overflow-auto doc-riso-bg">
           <div className="max-w-[900px] mx-auto min-h-full shadow-[0_0_24px_rgba(0,0,0,0.12)] px-[95px] py-16 paper-surface">
             <EditorContent editor={editor} />
           </div>

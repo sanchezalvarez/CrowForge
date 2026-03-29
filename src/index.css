@@ -190,10 +190,20 @@
     0deg,
     transparent,
     transparent 27px,
-    rgba(20,16,10,0.016) 27px,
-    rgba(20,16,10,0.016) 28px
+    rgba(20,16,10,0.035) 27px,
+    rgba(20,16,10,0.035) 28px
   ), #F0E8DC !important;
   color: #14100A;
+}
+
+/* ── Risograph circles — document editor outer area ─────────────────────── */
+.doc-riso-bg {
+  background-color: var(--background-2);
+  background-image:
+    radial-gradient(circle 420px at 12% 18%, rgba(220, 70, 50, 0.13) 0%, transparent 70%),
+    radial-gradient(circle 420px at 16% 24%, rgba(25, 150, 170, 0.10) 0%, transparent 70%),
+    radial-gradient(circle 380px at 88% 82%, rgba(25, 150, 170, 0.11) 0%, transparent 70%),
+    radial-gradient(circle 380px at 84% 76%, rgba(220, 70, 50, 0.09) 0%, transparent 70%);
 }
 
 /* Disable spellcheck red underlines globally */

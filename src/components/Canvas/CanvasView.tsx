@@ -215,10 +215,19 @@ export function CanvasView({ canvasId }: CanvasViewProps) {
             onEdgeClick={closeContextMenu}
           >
             <Background
+              id="riso-layer1"
               variant={BackgroundVariant.Dots}
               gap={24}
-              size={1.5}
-              color="color-mix(in srgb, var(--muted-foreground) 18%, transparent)"
+              size={2.2}
+              color="rgba(220, 70, 50, 0.22)"
+            />
+            <Background
+              id="riso-layer2"
+              variant={BackgroundVariant.Dots}
+              gap={24}
+              size={2.2}
+              offset={[3, 2]}
+              color="rgba(25, 150, 170, 0.18)"
             />
             <Controls
               showInteractive={false}

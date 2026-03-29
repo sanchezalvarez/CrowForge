@@ -95,6 +95,10 @@ CrowForge is built on the principle of **User Sovereignty**.
 
 ## 📜 License
 
-MIT — see [LICENSE](LICENSE) for details.
+**Business Source License 1.1 (BSL 1.1)** — see [LICENSE](LICENSE) for details.
+
+-   **Development & Commercial Use:** You are free to use CrowForge for any purpose, including creating and selling video games.
+-   **Prohibited:** You may not sell, sublicense, or redistribute CrowForge itself as a standalone product, development tool, or SaaS.
+-   **Open Source Conversion:** This software will automatically convert to the **Apache License 2.0** on **January 1st, 2029**.
 
 **Made by Lubomir Timko** ([sanchez.sk](https://www.sanchez.sk))

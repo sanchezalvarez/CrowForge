@@ -3,9 +3,8 @@ import { timeAgo } from "../../lib/pmUtils";
 import ReactMarkdown from "react-markdown";
 import { X, Trash2, ChevronRight, ChevronsUpDown, ImagePlus, Youtube, Loader2 } from "lucide-react";
 import axios from "axios";
-import { PMTask, PMTaskStatus, PMPriority, PMItemType, PMMember, PMSprint, PMActivity, PMRef } from "../../types/pm";
+import { PMTask, PMTaskStatus, PMItemType, PMMember, PMSprint, PMActivity, PMRef } from "../../types/pm";
 import { StatusBadge } from "./StatusBadge";
-import { PriorityBadge } from "./PriorityBadge";
 import { WorkItemTypeBadge } from "./WorkItemTypeBadge";
 import { MemberAvatar } from "./MemberAvatar";
 import { DeadlineWarning } from "./DeadlineWarning";
@@ -21,7 +20,6 @@ import { Textarea } from "../ui/textarea";
 import { toast } from "../../hooks/useToast";
 
 const API_BASE = "http://127.0.0.1:8000";
-const FIBONACCI = [1, 2, 3, 5, 8, 13, 21];
 
 // Valid parent types for each item type
 const VALID_PARENT_TYPES: Record<PMItemType, PMItemType[]> = {
@@ -363,7 +361,6 @@ export function TaskDetailPanel({ task, open, onClose, onUpdate, onDelete, membe
           <div className="flex items-center gap-2 min-w-0 flex-1">
             <WorkItemTypeBadge type={task.item_type} />
             <StatusBadge status={task.status} />
-            <PriorityBadge priority={task.priority} />
           </div>
           <div className="flex items-center gap-1">
             <button
@@ -487,44 +484,6 @@ export function TaskDetailPanel({ task, open, onClose, onUpdate, onDelete, membe
               </SelectContent>
             </Select>
 
-            <span className="text-muted-foreground text-xs font-mono pt-1">Priority</span>
-            <Select value={task.priority} onValueChange={(v) => onUpdate(task.id, { priority: v as PMPriority })}>
-              <SelectTrigger className="h-7 text-xs border-0 bg-muted px-2">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="critical">Critical</SelectItem>
-                <SelectItem value="high">High</SelectItem>
-                <SelectItem value="medium">Medium</SelectItem>
-                <SelectItem value="low">Low</SelectItem>
-              </SelectContent>
-            </Select>
-
-            <span className="text-muted-foreground text-xs font-mono pt-1">Story Pts</span>
-            <div className="flex items-center gap-1 flex-wrap pt-0.5">
-              {FIBONACCI.map((n) => (
-                <button
-                  key={n}
-                  onClick={() => onUpdate(task.id, { story_points: task.story_points === n ? null : n })}
-                  className={`text-[11px] font-mono rounded px-2 py-0.5 border transition-colors ${
-                    task.story_points === n
-                      ? "bg-primary text-primary-foreground border-primary"
-                      : "bg-muted text-muted-foreground border-border hover:border-primary/40"
-                  }`}
-                >
-                  {n}
-                </button>
-              ))}
-              {task.story_points != null && (
-                <button
-                  onClick={() => onUpdate(task.id, { story_points: null })}
-                  className="text-[10px] text-muted-foreground hover:text-foreground font-mono ml-1"
-                >
-                  clear
-                </button>
-              )}
-            </div>
-
             <span className="text-muted-foreground text-xs font-mono pt-1">Assignee</span>
             <div className="flex items-center gap-2">
               <MemberAvatar member={assignee} size="sm" />
@@ -570,19 +529,6 @@ export function TaskDetailPanel({ task, open, onClose, onUpdate, onDelete, membe
                 ))}
               </SelectContent>
             </Select>
-
-            {task.labels && task.labels.length > 0 && (
-              <>
-                <span className="text-muted-foreground text-xs font-mono pt-1">Labels</span>
-                <div className="flex flex-wrap gap-1 pt-0.5">
-                  {task.labels.map((l) => (
-                    <span key={l} className="px-1.5 py-0.5 rounded bg-muted text-[10px] text-muted-foreground border border-border font-mono">
-                      {l}
-                    </span>
-                  ))}
-                </div>
-              </>
-            )}
           </div>
 
           {/* Description */}

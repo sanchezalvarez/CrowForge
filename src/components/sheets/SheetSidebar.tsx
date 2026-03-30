@@ -1,9 +1,10 @@
-import React, { useState, useRef, useEffect } from "react";
-import { PlusCircle, Sparkles, Upload, Loader2, Table2, FileSpreadsheet, ChevronDown } from "lucide-react";
+import React, { useState } from "react";
+import { PlusCircle, Sparkles, Upload, Loader2, Table2, X } from "lucide-react";
 import { ScrollArea } from "../ui/scroll-area";
 import { cn } from "../../lib/utils";
 import { SHEET_IMPORT_ACCEPT } from "../../lib/fileService";
 import { type Sheet } from "../../lib/cellUtils";
+import { SHEET_TEMPLATES, type SheetTemplate } from "../../lib/sheetTemplates";
 
 interface SheetSidebarProps {
   sheets: Sheet[];
@@ -21,6 +22,7 @@ interface SheetSidebarProps {
   importInputRef: React.RefObject<HTMLInputElement | null>;
   handleImportFile: (file: File) => void;
   importing: boolean;
+  createFromTemplate: (t: SheetTemplate) => void;
 }
 
 export function SheetSidebar({
@@ -34,25 +36,13 @@ export function SheetSidebar({
   renameSheetRef,
   sheetRenameCommit,
   setSheetMenu,
-  setTemplatePickerOpen,
   setAiGenOpen,
   importInputRef,
   handleImportFile,
   importing,
+  createFromTemplate,
 }: SheetSidebarProps) {
-  const [showNewMenu, setShowNewMenu] = useState(false);
-  const newMenuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!showNewMenu) return;
-    const close = (e: MouseEvent) => {
-      if (newMenuRef.current && !newMenuRef.current.contains(e.target as Node)) {
-        setShowNewMenu(false);
-      }
-    };
-    document.addEventListener("mousedown", close);
-    return () => document.removeEventListener("mousedown", close);
-  }, [showNewMenu]);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   return (
     <div className="w-[220px] shrink-0 border-r flex flex-col" style={{ background: 'var(--background-2)' }}>
@@ -66,57 +56,14 @@ export function SheetSidebar({
           onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImportFile(f); }}
         />
 
-        {/* New Sheet button + dropdown */}
-        <div className="relative w-full" ref={newMenuRef}>
-          <button
-            className="btn-tactile btn-tactile-teal w-full justify-between"
-            onClick={() => setShowNewMenu((v) => !v)}
-          >
-            <span className="flex items-center gap-1.5">
-              <PlusCircle className="h-3.5 w-3.5" />
-              New Sheet
-            </span>
-            <ChevronDown className="h-3 w-3 opacity-70" />
-          </button>
-
-          {showNewMenu && (
-            <div className="absolute left-0 right-0 top-[calc(100%+4px)] z-50 bg-background border border-border rounded-md shadow-lg py-1 text-sm">
-              <button
-                className="w-full px-3 py-2 text-left hover:bg-muted flex items-center gap-2.5"
-                onClick={() => { setTemplatePickerOpen(true); setShowNewMenu(false); }}
-              >
-                <FileSpreadsheet className="h-4 w-4 text-muted-foreground shrink-0" />
-                <div>
-                  <div className="font-medium text-xs">Blank / Template</div>
-                  <div className="text-[11px] text-muted-foreground">Start from scratch or a preset</div>
-                </div>
-              </button>
-              <button
-                className="w-full px-3 py-2 text-left hover:bg-muted flex items-center gap-2.5"
-                onClick={() => { setAiGenOpen(true); setShowNewMenu(false); }}
-              >
-                <Sparkles className="h-4 w-4 text-muted-foreground shrink-0" />
-                <div>
-                  <div className="font-medium text-xs">AI Generate</div>
-                  <div className="text-[11px] text-muted-foreground">Describe a sheet, AI builds it</div>
-                </div>
-              </button>
-              <button
-                className="w-full px-3 py-2 text-left hover:bg-muted flex items-center gap-2.5"
-                disabled={importing}
-                onClick={() => { importInputRef.current?.click(); setShowNewMenu(false); }}
-              >
-                {importing
-                  ? <Loader2 className="h-4 w-4 text-muted-foreground shrink-0 animate-spin" />
-                  : <Upload className="h-4 w-4 text-muted-foreground shrink-0" />}
-                <div>
-                  <div className="font-medium text-xs">Import</div>
-                  <div className="text-[11px] text-muted-foreground">XLSX / CSV / TSV file</div>
-                </div>
-              </button>
-            </div>
-          )}
-        </div>
+        {/* New Sheet button */}
+        <button
+          className="btn-tactile btn-tactile-teal w-full justify-center"
+          onClick={() => setPickerOpen(true)}
+        >
+          <PlusCircle className="h-3.5 w-3.5" />
+          New Sheet
+        </button>
       </div>
 
       <ScrollArea className="flex-1">
@@ -163,6 +110,76 @@ export function SheetSidebar({
           )}
         </div>
       </ScrollArea>
+
+      {/* New Sheet Picker modal */}
+      {pickerOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+          onClick={() => setPickerOpen(false)}
+        >
+          <div
+            className="bg-background border border-border rounded-lg shadow-xl w-[520px] p-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-semibold">New Sheet</h3>
+              <button
+                onClick={() => setPickerOpen(false)}
+                className="p-1 rounded hover:bg-muted text-muted-foreground transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2">
+              {/* Templates */}
+              {SHEET_TEMPLATES.map((t) => {
+                const Icon = t.icon;
+                return (
+                  <button
+                    key={t.id}
+                    onClick={() => { createFromTemplate(t); setPickerOpen(false); }}
+                    className="flex flex-col items-start gap-1.5 p-3 rounded-md border border-border hover:border-primary/40 hover:bg-primary/5 text-left transition-colors"
+                  >
+                    <Icon className="h-5 w-5 text-muted-foreground" />
+                    <div className="min-w-0 w-full">
+                      <p className="text-xs font-medium text-foreground truncate">{t.name}</p>
+                      <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-2">{t.description}</p>
+                    </div>
+                  </button>
+                );
+              })}
+
+              {/* AI Generate */}
+              <button
+                onClick={() => { setAiGenOpen(true); setPickerOpen(false); }}
+                className="flex flex-col items-start gap-1.5 p-3 rounded-md border border-border hover:border-primary/40 hover:bg-primary/5 text-left transition-colors"
+              >
+                <Sparkles className="h-5 w-5 text-muted-foreground" />
+                <div className="min-w-0 w-full">
+                  <p className="text-xs font-medium text-foreground">AI Generate</p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">Describe a sheet, AI builds it</p>
+                </div>
+              </button>
+
+              {/* Import */}
+              <button
+                disabled={importing}
+                onClick={() => { importInputRef.current?.click(); setPickerOpen(false); }}
+                className="flex flex-col items-start gap-1.5 p-3 rounded-md border border-border hover:border-primary/40 hover:bg-primary/5 text-left transition-colors disabled:opacity-50"
+              >
+                {importing
+                  ? <Loader2 className="h-5 w-5 text-muted-foreground animate-spin" />
+                  : <Upload className="h-5 w-5 text-muted-foreground" />}
+                <div className="min-w-0 w-full">
+                  <p className="text-xs font-medium text-foreground">Import</p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">XLSX / CSV / TSV file</p>
+                </div>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

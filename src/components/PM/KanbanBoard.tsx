@@ -114,16 +114,12 @@ export function KanbanBoard({ tasks, members, onTaskClick, onStatusChange, onReo
         <div className="flex gap-3 overflow-x-auto pb-4 flex-1 min-h-0 w-full">
           {COLUMNS.map((status) => {
             const col = grouped[status];
-            const totalSP = col.reduce((sum, t) => sum + (t.story_points ?? 0), 0);
             return (
               <div key={status} className="flex flex-col flex-1 min-w-[160px]">
                 <div className="flex items-center gap-2 mb-3 px-1">
                   <span className={`w-2.5 h-2.5 rounded-full ${COLUMN_COLORS[status]}`} />
                   <span className="text-sm font-semibold text-foreground">{COLUMN_LABELS[status]}</span>
                   <span className="text-xs text-muted-foreground font-mono ml-1">{col.length}</span>
-                  {totalSP > 0 && (
-                    <span className="text-[10px] text-muted-foreground font-mono ml-auto">({totalSP} SP)</span>
-                  )}
                 </div>
 
                 <Droppable droppableId={status}>
@@ -150,12 +146,6 @@ export function KanbanBoard({ tasks, members, onTaskClick, onStatusChange, onReo
                         </Draggable>
                       ))}
                       {provided.placeholder}
-                      <button
-                        onClick={() => onTaskCreate(status)}
-                        className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded px-2 py-1.5 transition-colors"
-                      >
-                        <Plus size={12} /> Add item
-                      </button>
                     </div>
                   )}
                 </Droppable>

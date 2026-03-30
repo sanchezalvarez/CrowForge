@@ -27,11 +27,8 @@ interface SprintViewProps {
 
 // formatDate and velocity imported from pmUtils
 
-function ProgressBar({ done, total, doneSP, totalSP }: { done: number; total: number; doneSP: number; totalSP: number }) {
-  const useSP = totalSP > 0;
-  const pct = useSP
-    ? (totalSP > 0 ? Math.round((doneSP / totalSP) * 100) : 0)
-    : (total > 0 ? Math.round((done / total) * 100) : 0);
+function ProgressBar({ done, total }: { done: number; total: number }) {
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-center gap-2">
@@ -40,11 +37,7 @@ function ProgressBar({ done, total, doneSP, totalSP }: { done: number; total: nu
         </div>
         <span className="text-[10px] text-muted-foreground font-mono">{pct}%</span>
       </div>
-      {useSP ? (
-        <span className="text-[10px] text-muted-foreground font-mono">{doneSP}/{totalSP} SP</span>
-      ) : (
-        <span className="text-[10px] text-muted-foreground font-mono">{done}/{total} items</span>
-      )}
+      <span className="text-[10px] text-muted-foreground font-mono">{done}/{total} items</span>
     </div>
   );
 }
@@ -96,10 +89,7 @@ export function SprintView({ project, sprints, tasks, members, onTaskClick, onSp
       {sprints.map((sprint) => {
         const sprintTasks = tasks.filter((t) => t.sprint_id === sprint.id && t.parent_id === null);
         const doneTasks = sprintTasks.filter((t) => t.status === "resolved" || t.status === "closed" || t.status === "rejected");
-        const totalSP = sprintTasks.reduce((s, t) => s + (t.story_points ?? 0), 0);
-        const doneSP = doneTasks.reduce((s, t) => s + (t.story_points ?? 0), 0);
         const isExpanded = expanded[sprint.id] !== false;
-        const vel = velocity({ ...sprint, done_sp: doneSP });
 
         return (
           <div key={sprint.id} className="border border-border rounded-lg overflow-hidden">
@@ -121,12 +111,11 @@ export function SprintView({ project, sprints, tasks, members, onTaskClick, onSp
                   <span className="text-xs text-muted-foreground font-mono">
                     {formatDate(sprint.start_date)} → {formatDate(sprint.end_date)}
                   </span>
-                  {vel && <span className="text-[10px] text-muted-foreground font-mono">{vel}</span>}
                 </div>
                 {sprint.goal && <p className="text-xs text-muted-foreground mt-0.5 truncate">{sprint.goal}</p>}
               </div>
               <div className="flex-shrink-0 w-28">
-                <ProgressBar done={doneTasks.length} total={sprintTasks.length} doneSP={doneSP} totalSP={totalSP} />
+                <ProgressBar done={doneTasks.length} total={sprintTasks.length} />
               </div>
               {sprint.status !== "completed" && (
                 <Button
@@ -179,11 +168,6 @@ export function SprintView({ project, sprints, tasks, members, onTaskClick, onSp
         <div className="flex items-center gap-2 px-4 py-3 bg-muted/20">
           <span className="text-sm font-semibold">Backlog</span>
           <span className="text-xs text-muted-foreground font-mono">({backlogTasks.length})</span>
-          {backlogTasks.length > 0 && (
-            <span className="text-xs text-muted-foreground font-mono ml-1">
-              · {backlogTasks.reduce((s, t) => s + (t.story_points ?? 0), 0)} SP
-            </span>
-          )}
         </div>
         <div className="p-3 flex flex-col gap-2">
           {backlogTasks.map((task) => (

@@ -1,6 +1,5 @@
 export type PMItemType = "epic" | "feature" | "story" | "task" | "bug" | "spike";
 export type PMTaskStatus = "new" | "active" | "ready_to_go" | "needs_testing" | "resolved" | "rejected" | "closed";
-export type PMPriority = "critical" | "high" | "medium" | "low";
 export type PMView = "backlog" | "kanban" | "sprint";
 export type PMRefType = "link" | "image" | "document" | "sheet" | "canvas";
 
@@ -45,16 +44,13 @@ export interface PMTask {
   description: string;
   acceptance_criteria: string;
   status: PMTaskStatus;
-  priority: PMPriority;
   assignee_id: number | null;
   assignee_name?: string | null;
   assignee_color?: string | null;
   assignee_initials?: string | null;
-  story_points: number | null;
   due_date: string | null;
   resolved_date: string | null;
   position: number;
-  labels: string[];
   refs: PMRef[];
   child_count: number;
   created_at: string;
@@ -72,8 +68,6 @@ export interface PMSprint {
   created_at: string;
   task_count?: number;
   done_count?: number;
-  total_sp?: number;
-  done_sp?: number;
 }
 
 export interface PMActivity {
@@ -90,9 +84,7 @@ export interface PMActivity {
 
 export interface PMSuggestedTask {
   title: string;
-  priority: PMPriority;
   item_type: PMItemType;
-  story_points?: number | null;
 }
 
 export interface PMTaskStats {

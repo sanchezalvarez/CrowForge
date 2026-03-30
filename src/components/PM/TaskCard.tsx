@@ -33,10 +33,9 @@ export function TaskCard({ task, members, onClick, dragHandleProps, compact }: T
       )}
 
       <div className={dragHandleProps ? "pl-2" : ""}>
-        {/* Type badge + priority */}
+        {/* Type badge */}
         <div className="flex items-center gap-1.5 mb-1.5">
           <WorkItemTypeBadge type={task.item_type} />
-          <PriorityBadge priority={task.priority} />
         </div>
 
         {/* Title */}
@@ -46,16 +45,6 @@ export function TaskCard({ task, members, onClick, dragHandleProps, compact }: T
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 flex-wrap">
             <DeadlineWarning dueDate={task.due_date} status={task.status} />
-            {task.story_points != null && (
-              <span className="text-[10px] font-mono text-muted-foreground bg-muted/60 border border-border rounded px-1.5 py-0.5">
-                {task.story_points} SP
-              </span>
-            )}
-            {!compact && task.labels?.slice(0, 2).map((l) => (
-              <span key={l} className="px-1.5 py-0.5 rounded bg-muted text-[9px] text-muted-foreground border border-border font-mono">
-                {l}
-              </span>
-            ))}
           </div>
           <MemberAvatar member={assignee} size="sm" className="flex-shrink-0" />
         </div>

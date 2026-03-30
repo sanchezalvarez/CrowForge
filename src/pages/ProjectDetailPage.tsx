@@ -46,6 +46,7 @@ export function ProjectDetailPage({ projectId, onBack, onNavigate }: ProjectDeta
   const [panelOpen, setPanelOpen] = useState(false);
   const [taskFormOpen, setTaskFormOpen] = useState(false);
   const [taskFormStatus, setTaskFormStatus] = useState<PMTaskStatus>("new");
+  const [taskFormRestrict, setTaskFormRestrict] = useState(false);
   const [deadlineDismissed, setDeadlineDismissed] = useState(() => !!localStorage.getItem(LS_DISMISSED_KEY()));
   const [suggestOpen, setSuggestOpen] = useState(false);
   const [suggestContext, setSuggestContext] = useState("");
@@ -104,8 +105,9 @@ export function ProjectDetailPage({ projectId, onBack, onNavigate }: ProjectDeta
     setPanelOpen(true);
   };
 
-  const handleTaskCreate = (status: PMTaskStatus) => {
+  const handleTaskCreate = (status: PMTaskStatus, restrict = false) => {
     setTaskFormStatus(status);
+    setTaskFormRestrict(restrict);
     setTaskFormOpen(true);
   };
 
@@ -198,7 +200,7 @@ export function ProjectDetailPage({ projectId, onBack, onNavigate }: ProjectDeta
           <Button size="sm" variant="outline" className="gap-1 h-7 text-xs" onClick={() => setSuggestOpen(true)}>
             <Sparkles size={11} /> AI Suggest
           </Button>
-          <Button size="sm" className="gap-1 h-7 text-xs" onClick={() => handleTaskCreate("new")}>
+          <Button size="sm" className="gap-1 h-7 text-xs" onClick={() => handleTaskCreate("new", true)}>
             <Plus size={12} /> New Item
           </Button>
         </div>
@@ -324,6 +326,7 @@ export function ProjectDetailPage({ projectId, onBack, onNavigate }: ProjectDeta
         members={members}
         sprints={sprints}
         projectId={projectId}
+        restrictTypes={taskFormRestrict}
       />
 
       {/* AI Suggest Tasks Dialog */}

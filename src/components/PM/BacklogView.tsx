@@ -19,16 +19,16 @@ const API_BASE = "http://127.0.0.1:8000";
 
 // ── Column definitions ──────────────────────────────────────────────────────
 
-type ColKey = "type" | "title" | "status" | "priority" | "sp" | "assignee" | "due";
+type ColKey = "type" | "title" | "status" | "assignee" | "due";
 
-const DEFAULT_COL_ORDER: ColKey[] = ["title", "status", "priority", "sp", "assignee", "due"];
+const DEFAULT_COL_ORDER: ColKey[] = ["title", "status", "assignee", "due"];
 
 const DEFAULT_COL_WIDTHS: Record<ColKey, number> = {
-  type: 96, title: 320, status: 112, priority: 96, sp: 48, assignee: 112, due: 112,
+  type: 96, title: 320, status: 112, assignee: 112, due: 112,
 };
 
 const COL_LABELS: Record<ColKey, string> = {
-  type: "Type", title: "Title", status: "Status", priority: "Priority", sp: "SP", assignee: "Assignee", due: "Due",
+  type: "Type", title: "Title", status: "Status", assignee: "Assignee", due: "Due",
 };
 
 // Valid parent types for drag & drop reparenting
@@ -87,12 +87,6 @@ export function BacklogView({
       setExpandedIds((prev) => {
         const next = new Set(prev);
         tasks.forEach((t) => { if (t.child_count > 0) next.add(t.id); });
-        return next;
-      });
-    } else if (expandInitialized.current) {
-      setExpandedIds((prev) => {
-        const next = new Set(prev);
-        tasks.forEach((t) => { if (t.child_count > 0 && !next.has(t.id)) next.add(t.id); });
         return next;
       });
     }
@@ -326,7 +320,6 @@ export function BacklogView({
         >
           <colgroup>
             <col style={{ width: 20 }} />
-            <col style={{ width: 36 }} />
             <col style={{ width: 24 }} />
             {colOrder.map((col) => (
               <col key={col} style={{ width: colWidths[col] }} />
@@ -335,7 +328,6 @@ export function BacklogView({
           <thead>
             <tr className="bg-muted/40 text-muted-foreground text-xs font-mono border-b border-border">
               <th className="w-5" />
-              <th className="px-3 py-2" />
               <th className="w-6" />
               {colOrder.map((col) => (
                 <th
@@ -484,28 +476,28 @@ function InlineAddRow({ parentId, parentType, depth, colCount, onSubmit, onCance
     <tr className="border-b border-border/50 bg-muted/10">
       <td />
       <td />
-      <td />
-      <td className="px-2 py-1.5">
-        <WorkItemTypeBadge type={childType} />
-      </td>
       <td
-        className="px-2 py-1.5"
-        style={{ paddingLeft: `${8 + depth * 24}px` }}
-        colSpan={colCount - 1}
+        className="py-1.5"
+        style={{ paddingLeft: `${8 + depth * 20}px` }}
+        colSpan={colCount}
       >
-        <input
-          ref={inputRef}
-          className="w-full max-w-md text-xs border border-primary/40 rounded px-2 py-1 bg-background focus:outline-none focus:ring-1 focus:ring-primary"
-          placeholder={`New ${childType} title…`}
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && value.trim()) onSubmit(parentId, value.trim(), childType);
-            if (e.key === "Escape") onCancel();
-          }}
-          onBlur={() => { if (!value.trim()) onCancel(); }}
-        />
-        <span className="ml-2 text-[10px] text-muted-foreground">Enter to save · Esc to cancel</span>
+        <div className="flex items-center gap-1.5">
+          <span className="w-4 shrink-0" />
+          <WorkItemTypeBadge type={childType} />
+          <input
+            ref={inputRef}
+            className="w-full max-w-md text-xs border border-primary/40 rounded px-2 py-1 bg-background focus:outline-none focus:ring-1 focus:ring-primary"
+            placeholder={`New ${childType} title…`}
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && value.trim()) onSubmit(parentId, value.trim(), childType);
+              if (e.key === "Escape") onCancel();
+            }}
+            onBlur={() => { if (!value.trim()) onCancel(); }}
+          />
+          <span className="text-[10px] text-muted-foreground whitespace-nowrap">Enter · Esc</span>
+        </div>
       </td>
     </tr>
   );
@@ -547,7 +539,6 @@ function BacklogRow({
   const assignee = row.assignee_id ? memberMap[row.assignee_id] : null;
   const hasChildren = row.children.length > 0 || row.child_count > 0;
   const isDone = row.status === "closed" || row.status === "resolved" || row.status === "rejected";
-  const depthColor = row.depth > 0 ? DEPTH_COLORS[Math.min(row.depth, 3) - 1] : undefined;
 
   useEffect(() => {
     if (isRenaming) {
@@ -562,22 +553,18 @@ function BacklogRow({
         return (
           <td
             key="title"
-            className="px-2 py-2 overflow-hidden"
-            style={{ paddingLeft: `${8 + row.depth * 24}px` }}
+            className="py-2 overflow-hidden"
+            style={{ paddingLeft: `${8 + row.depth * 20}px` }}
           >
-            <div className="flex items-center gap-1.5 min-w-0">
-              {row.depth > 0 && (
-                <span
-                  className="flex-shrink-0 rounded-full"
-                  style={{
-                    display: "inline-block",
-                    width: 3,
-                    height: 14,
-                    backgroundColor: depthColor,
-                    verticalAlign: "middle",
-                  }}
-                />
-              )}
+            <div className="flex items-center gap-1 min-w-0">
+              {/* Chevron inline — fixed width so title stays aligned */}
+              <button
+                className="shrink-0 w-4 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                style={{ visibility: hasChildren ? "visible" : "hidden" }}
+                onClick={(e) => { e.stopPropagation(); onToggleExpand(); }}
+              >
+                {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+              </button>
               <WorkItemTypeBadge type={row.item_type} />
               {isRenaming ? (
                 <input
@@ -602,11 +589,6 @@ function BacklogRow({
                   >
                     {row.title}
                   </span>
-                  {row.labels?.length > 0 && (
-                    <span className="flex-shrink-0 text-[9px] font-mono text-muted-foreground">
-                      {row.labels.slice(0, 2).join(", ")}
-                    </span>
-                  )}
                   {row.refs?.length > 0 && (
                     <span className="flex-shrink-0 text-[9px] font-mono text-muted-foreground/60" title={`${row.refs.length} reference${row.refs.length > 1 ? "s" : ""}`}>
                       🔗{row.refs.length}
@@ -636,32 +618,6 @@ function BacklogRow({
               </SelectContent>
             </Select>
             </div>
-          </td>
-        );
-
-      case "priority":
-        return (
-          <td key="priority" className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
-            <div onDragStart={(e) => e.stopPropagation()}>
-            <Select value={row.priority} onValueChange={(v) => onUpdate(row.id, { priority: v as PMPriority })}>
-              <SelectTrigger className="h-6 text-[11px] border-0 bg-transparent px-0 w-auto gap-1 hover:bg-muted rounded transition-colors">
-                <PriorityBadge priority={row.priority} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="critical">Critical</SelectItem>
-                <SelectItem value="high">High</SelectItem>
-                <SelectItem value="medium">Medium</SelectItem>
-                <SelectItem value="low">Low</SelectItem>
-              </SelectContent>
-            </Select>
-            </div>
-          </td>
-        );
-
-      case "sp":
-        return (
-          <td key="sp" className="px-2 py-2 text-xs font-mono text-muted-foreground">
-            {row.story_points != null ? row.story_points : <span className="text-border">—</span>}
           </td>
         );
 
@@ -732,21 +688,6 @@ function BacklogRow({
         >
           <GripVertical size={12} />
         </span>
-      </td>
-
-      {/* Expand toggle — fixed first column, indented by depth */}
-      <td
-        className="px-3 py-2"
-        style={{ paddingLeft: `${10 + row.depth * 24}px` }}
-      >
-        {hasChildren ? (
-          <button
-            onClick={(e) => { e.stopPropagation(); onToggleExpand(); }}
-            className="text-muted-foreground hover:text-foreground transition-colors"
-          >
-            {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-          </button>
-        ) : null}
       </td>
 
       {/* Inline add child button */}

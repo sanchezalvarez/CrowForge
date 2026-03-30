@@ -72,7 +72,6 @@ To run the project in development with live logs:
 
 ## Key Files
 - `CLAUDE.md`: Detailed dev guide and architecture overview for AI assistants.
-- `PLAN.md`: Current development roadmap and sprint progress.
 - `backend/app.py`: Main API entry point and route definitions.
 - `backend/schema.sql`: Database structure and initial data.
 - `src/App.tsx`: Frontend routing and main application layout.

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { PMTask, PMTaskStatus, PMPriority, PMItemType, PMMember, PMSprint } from "../../types/pm";
+import { PMTask, PMTaskStatus, PMItemType, PMMember, PMSprint } from "../../types/pm";
 import {
   Dialog,
   DialogContent,
@@ -18,8 +18,6 @@ import {
   SelectValue,
 } from "../ui/select";
 
-const FIBONACCI = [1, 2, 3, 5, 8, 13, 21];
-
 interface TaskFormProps {
   open: boolean;
   onClose: () => void;
@@ -28,20 +26,18 @@ interface TaskFormProps {
   members: PMMember[];
   sprints: PMSprint[];
   projectId: number;
+  restrictTypes?: boolean;
 }
 
-export function TaskForm({ open, onClose, onSubmit, initialData, members, sprints, projectId }: TaskFormProps) {
+export function TaskForm({ open, onClose, onSubmit, initialData, members, sprints, projectId, restrictTypes }: TaskFormProps) {
   const [title, setTitle] = useState(initialData?.title ?? "");
   const [description, setDescription] = useState(initialData?.description ?? "");
   const [acceptanceCriteria, setAcceptanceCriteria] = useState(initialData?.acceptance_criteria ?? "");
-  const [itemType, setItemType] = useState<PMItemType>(initialData?.item_type ?? "task");
+  const [itemType, setItemType] = useState<PMItemType>(initialData?.item_type ?? (restrictTypes ? "epic" : "task"));
   const [status, setStatus] = useState<PMTaskStatus>(initialData?.status ?? "new");
-  const [priority, setPriority] = useState<PMPriority>(initialData?.priority ?? "medium");
   const [assigneeId, setAssigneeId] = useState<string>(initialData?.assignee_id?.toString() ?? "none");
   const [dueDate, setDueDate] = useState(initialData?.due_date ?? "");
-  const [storyPoints, setStoryPoints] = useState<string>(initialData?.story_points?.toString() ?? "none");
   const [sprintId, setSprintId] = useState<string>(initialData?.sprint_id?.toString() ?? "none");
-  const [labels, setLabels] = useState((initialData?.labels ?? []).join(", "));
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -49,16 +45,13 @@ export function TaskForm({ open, onClose, onSubmit, initialData, members, sprint
       setTitle(initialData?.title ?? "");
       setDescription(initialData?.description ?? "");
       setAcceptanceCriteria(initialData?.acceptance_criteria ?? "");
-      setItemType(initialData?.item_type ?? "task");
+      setItemType(initialData?.item_type ?? (restrictTypes ? "epic" : "task"));
       setStatus(initialData?.status ?? "new");
-      setPriority(initialData?.priority ?? "medium");
       setAssigneeId(initialData?.assignee_id?.toString() ?? "none");
       setDueDate(initialData?.due_date ?? "");
-      setStoryPoints(initialData?.story_points?.toString() ?? "none");
       setSprintId(initialData?.sprint_id?.toString() ?? "none");
-      setLabels((initialData?.labels ?? []).join(", "));
     }
-  }, [open, initialData]);
+  }, [open, initialData, restrictTypes]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -72,12 +65,9 @@ export function TaskForm({ open, onClose, onSubmit, initialData, members, sprint
         acceptance_criteria: acceptanceCriteria,
         item_type: itemType,
         status,
-        priority,
         assignee_id: assigneeId !== "none" ? parseInt(assigneeId) : null,
         due_date: dueDate || null,
-        story_points: storyPoints !== "none" ? parseInt(storyPoints) : null,
         sprint_id: sprintId !== "none" ? parseInt(sprintId) : null,
-        labels: labels.split(",").map((l) => l.trim()).filter(Boolean),
       });
       onClose();
     } finally {
@@ -102,10 +92,14 @@ export function TaskForm({ open, onClose, onSubmit, initialData, members, sprint
                 <SelectContent>
                   <SelectItem value="epic">Epic</SelectItem>
                   <SelectItem value="feature">Feature</SelectItem>
-                  <SelectItem value="story">Story</SelectItem>
-                  <SelectItem value="task">Task</SelectItem>
-                  <SelectItem value="bug">Bug</SelectItem>
-                  <SelectItem value="spike">Spike</SelectItem>
+                  {!restrictTypes && (
+                    <>
+                      <SelectItem value="story">Story</SelectItem>
+                      <SelectItem value="task">Task</SelectItem>
+                      <SelectItem value="bug">Bug</SelectItem>
+                      <SelectItem value="spike">Spike</SelectItem>
+                    </>
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -157,22 +151,6 @@ export function TaskForm({ open, onClose, onSubmit, initialData, members, sprint
               </Select>
             </div>
             <div className="flex flex-col gap-1">
-              <Label>Priority</Label>
-              <Select value={priority} onValueChange={(v) => setPriority(v as PMPriority)}>
-                <SelectTrigger className="h-8 text-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="critical">Critical</SelectItem>
-                  <SelectItem value="high">High</SelectItem>
-                  <SelectItem value="medium">Medium</SelectItem>
-                  <SelectItem value="low">Low</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1">
               <Label>Assignee</Label>
               <Select value={assigneeId} onValueChange={setAssigneeId}>
                 <SelectTrigger className="h-8 text-sm">
@@ -186,6 +164,8 @@ export function TaskForm({ open, onClose, onSubmit, initialData, members, sprint
                 </SelectContent>
               </Select>
             </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1">
               <Label>Sprint</Label>
               <Select value={sprintId} onValueChange={setSprintId}>
@@ -200,8 +180,6 @@ export function TaskForm({ open, onClose, onSubmit, initialData, members, sprint
                 </SelectContent>
               </Select>
             </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1">
               <Label>Due Date</Label>
               <input
@@ -211,29 +189,6 @@ export function TaskForm({ open, onClose, onSubmit, initialData, members, sprint
                 onChange={(e) => setDueDate(e.target.value)}
               />
             </div>
-            <div className="flex flex-col gap-1">
-              <Label>Story Points</Label>
-              <Select value={storyPoints} onValueChange={setStoryPoints}>
-                <SelectTrigger className="h-8 text-sm">
-                  <SelectValue placeholder="—" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">—</SelectItem>
-                  {FIBONACCI.map((n) => (
-                    <SelectItem key={n} value={n.toString()}>{n}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div className="flex flex-col gap-1">
-            <Label>Labels (comma separated)</Label>
-            <input
-              className="w-full rounded-md border border-border bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-              value={labels}
-              onChange={(e) => setLabels(e.target.value)}
-              placeholder="bug, frontend, urgent"
-            />
           </div>
           <DialogFooter className="pt-2">
             <Button type="button" variant="ghost" onClick={onClose} disabled={submitting}>

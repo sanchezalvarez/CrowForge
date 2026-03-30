@@ -1474,6 +1474,7 @@ export function SheetsPage({ tuningParams, initialSheetId }: SheetsPageProps) {
         importInputRef={importInputRef}
         handleImportFile={handleImportFile}
         importing={importing}
+        createFromTemplate={createFromTemplate}
       />
 
       {/* Main area */}

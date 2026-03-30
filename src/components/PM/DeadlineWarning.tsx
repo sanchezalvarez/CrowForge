@@ -8,10 +8,11 @@ interface DeadlineWarningProps {
 export function DeadlineWarning({ dueDate, status }: DeadlineWarningProps) {
   if (!dueDate || status === "resolved" || status === "closed" || status === "rejected") return null;
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const due = new Date(dueDate + "T00:00:00");
-  const diffDays = Math.floor((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const [dy, dm, dd] = dueDate.split("-").map(Number);
+  const due = new Date(dy, dm - 1, dd);
+  const diffDays = Math.round((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 
   if (diffDays > 3) return null;
 

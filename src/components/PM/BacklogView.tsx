@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect, useCallback } from "react";
+import React, { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { ChevronRight, ChevronDown, Plus, Search, Copy, Trash2, Pencil, GripVertical } from "lucide-react";
 import axios from "axios";
 import { PMTask, PMTaskStatus, PMPriority, PMItemType, PMMember } from "../../types/pm";
@@ -21,10 +21,10 @@ const API_BASE = "http://127.0.0.1:8000";
 
 type ColKey = "type" | "title" | "status" | "priority" | "sp" | "assignee" | "due";
 
-const DEFAULT_COL_ORDER: ColKey[] = ["type", "title", "status", "priority", "sp", "assignee", "due"];
+const DEFAULT_COL_ORDER: ColKey[] = ["title", "status", "priority", "sp", "assignee", "due"];
 
 const DEFAULT_COL_WIDTHS: Record<ColKey, number> = {
-  type: 96, title: 280, status: 112, priority: 96, sp: 48, assignee: 112, due: 112,
+  type: 96, title: 320, status: 112, priority: 96, sp: 48, assignee: 112, due: 112,
 };
 
 const COL_LABELS: Record<ColKey, string> = {
@@ -57,6 +57,7 @@ interface BacklogViewProps {
   onTaskUpdate: (id: number, data: Partial<PMTask>) => Promise<PMTask | null>;
   onTaskDelete?: (id: number) => Promise<void>;
   onTasksReload?: () => Promise<void>;
+  onChildCreate?: (parentId: number, title: string, type: PMItemType) => Promise<void>;
 }
 
 interface CtxMenu { x: number; y: number; task: PMTask }
@@ -65,10 +66,16 @@ interface CtxMenu { x: number; y: number; task: PMTask }
 
 const ALL_TYPES: PMItemType[] = ["epic", "feature", "story", "task", "bug", "spike"];
 
+function defaultChildType(parentType: PMItemType): PMItemType {
+  if (parentType === "epic") return "feature";
+  if (parentType === "feature") return "story";
+  return "task";
+}
+
 // ── Main BacklogView ─────────────────────────────────────────────────────────
 
 export function BacklogView({
-  tasks, members, onTaskClick, onTaskCreate, onTaskUpdate, onTaskDelete, onTasksReload,
+  tasks, members, onTaskClick, onTaskCreate, onTaskUpdate, onTaskDelete, onTasksReload, onChildCreate,
 }: BacklogViewProps) {
   // Expand state
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
@@ -96,6 +103,19 @@ export function BacklogView({
   const [statusFilter, setStatusFilter] = useState<PMTaskStatus | "all">("all");
   const [assigneeFilter, setAssigneeFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
+
+  // Inline child creation
+  const [inlineParentId, setInlineParentId] = useState<number | null>(null);
+
+  const handleAddChildInline = (parentId: number) => {
+    setExpandedIds((prev) => { const next = new Set(prev); next.add(parentId); return next; });
+    setInlineParentId(parentId);
+  };
+
+  const handleInlineSubmit = async (parentId: number, title: string, type: PMItemType) => {
+    setInlineParentId(null);
+    if (onChildCreate) await onChildCreate(parentId, title, type);
+  };
 
   // Context menu / rename
   const [ctxMenu, setCtxMenu] = useState<CtxMenu | null>(null);
@@ -307,6 +327,7 @@ export function BacklogView({
           <colgroup>
             <col style={{ width: 20 }} />
             <col style={{ width: 36 }} />
+            <col style={{ width: 24 }} />
             {colOrder.map((col) => (
               <col key={col} style={{ width: colWidths[col] }} />
             ))}
@@ -315,6 +336,7 @@ export function BacklogView({
             <tr className="bg-muted/40 text-muted-foreground text-xs font-mono border-b border-border">
               <th className="w-5" />
               <th className="px-3 py-2" />
+              <th className="w-6" />
               {colOrder.map((col) => (
                 <th
                   key={col}
@@ -350,8 +372,8 @@ export function BacklogView({
               </tr>
             ) : (
               visibleRows.map((row) => (
+                <React.Fragment key={row.id}>
                 <BacklogRow
-                  key={row.id}
                   row={row}
                   colOrder={colOrder}
                   expanded={expandedIds.has(row.id)}
@@ -377,7 +399,20 @@ export function BacklogView({
                   onDragOver={(e) => { e.preventDefault(); setDragOverRowId(row.id); }}
                   onDragLeave={() => { if (dragOverRowId === row.id) setDragOverRowId(null); }}
                   onDrop={() => handleRowDrop(row.id)}
+                  onAddChild={onChildCreate ? () => handleAddChildInline(row.id) : undefined}
+                  isLeaf={row.item_type === "task" || row.item_type === "bug" || row.item_type === "spike"}
                 />
+                {inlineParentId === row.id && (
+                  <InlineAddRow
+                    parentId={row.id}
+                    parentType={row.item_type}
+                    depth={row.depth + 1}
+                    colCount={colOrder.length}
+                    onSubmit={handleInlineSubmit}
+                    onCancel={() => setInlineParentId(null)}
+                  />
+                )}
+                </React.Fragment>
               ))
             )}
           </tbody>
@@ -427,6 +462,55 @@ export function BacklogView({
   );
 }
 
+// ── Inline add child row ─────────────────────────────────────────────────────
+
+interface InlineAddRowProps {
+  parentId: number;
+  parentType: PMItemType;
+  depth: number;
+  colCount: number;
+  onSubmit: (parentId: number, title: string, type: PMItemType) => void;
+  onCancel: () => void;
+}
+
+function InlineAddRow({ parentId, parentType, depth, colCount, onSubmit, onCancel }: InlineAddRowProps) {
+  const [value, setValue] = useState("");
+  const childType = defaultChildType(parentType);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => { setTimeout(() => inputRef.current?.focus(), 10); }, []);
+
+  return (
+    <tr className="border-b border-border/50 bg-muted/10">
+      <td />
+      <td />
+      <td />
+      <td className="px-2 py-1.5">
+        <WorkItemTypeBadge type={childType} />
+      </td>
+      <td
+        className="px-2 py-1.5"
+        style={{ paddingLeft: `${8 + depth * 24}px` }}
+        colSpan={colCount - 1}
+      >
+        <input
+          ref={inputRef}
+          className="w-full max-w-md text-xs border border-primary/40 rounded px-2 py-1 bg-background focus:outline-none focus:ring-1 focus:ring-primary"
+          placeholder={`New ${childType} title…`}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && value.trim()) onSubmit(parentId, value.trim(), childType);
+            if (e.key === "Escape") onCancel();
+          }}
+          onBlur={() => { if (!value.trim()) onCancel(); }}
+        />
+        <span className="ml-2 text-[10px] text-muted-foreground">Enter to save · Esc to cancel</span>
+      </td>
+    </tr>
+  );
+}
+
 // ── Backlog row ─────────────────────────────────────────────────────────────
 
 interface BacklogRowProps {
@@ -442,6 +526,8 @@ interface BacklogRowProps {
   isRenaming: boolean;
   onRenameSubmit: (title: string) => void;
   onRenameCancel: () => void;
+  onAddChild?: () => void;
+  isLeaf?: boolean;
   isDragOver: boolean;
   isDragging: boolean;
   onDragStart: () => void;
@@ -454,6 +540,7 @@ function BacklogRow({
   row, colOrder, expanded, onToggleExpand, onClick, onUpdate, members, memberMap,
   onContextMenu, isRenaming, onRenameSubmit, onRenameCancel,
   isDragOver, isDragging, onDragStart, onDragOver, onDragLeave, onDrop,
+  onAddChild, isLeaf,
 }: BacklogRowProps) {
   const [renameVal, setRenameVal] = useState(row.title);
   const renameRef = useRef<HTMLInputElement>(null);
@@ -471,13 +558,6 @@ function BacklogRow({
 
   const renderCell = (col: ColKey) => {
     switch (col) {
-      case "type":
-        return (
-          <td key="type" className="px-2 py-2">
-            <WorkItemTypeBadge type={row.item_type} />
-          </td>
-        );
-
       case "title":
         return (
           <td
@@ -498,6 +578,7 @@ function BacklogRow({
                   }}
                 />
               )}
+              <WorkItemTypeBadge type={row.item_type} />
               {isRenaming ? (
                 <input
                   ref={renameRef}
@@ -666,6 +747,19 @@ function BacklogRow({
             {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
           </button>
         ) : null}
+      </td>
+
+      {/* Inline add child button */}
+      <td className="px-1 py-2 w-6">
+        {!isLeaf && onAddChild && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onAddChild(); }}
+            className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-primary transition-all rounded hover:bg-primary/10 p-0.5"
+            title="Add child"
+          >
+            <Plus size={11} />
+          </button>
+        )}
       </td>
 
       {colOrder.map((col) => renderCell(col))}

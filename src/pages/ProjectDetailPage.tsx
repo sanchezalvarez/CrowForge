@@ -3,7 +3,7 @@ import { ChevronLeft, Plus, LayoutList, LayoutGrid, Zap, AlertTriangle, X, Spark
 import axios from "axios";
 import { useTasks } from "../hooks/useTasks";
 import { useSprints } from "../hooks/useSprints";
-import { PMProject, PMTask, PMTaskStatus, PMMember, PMSuggestedTask } from "../types/pm";
+import { PMProject, PMTask, PMTaskStatus, PMItemType, PMMember, PMSuggestedTask } from "../types/pm";
 import { BacklogView } from "../components/PM/BacklogView";
 import { KanbanBoard } from "../components/PM/KanbanBoard";
 import { SprintView } from "../components/PM/SprintView";
@@ -111,6 +111,11 @@ export function ProjectDetailPage({ projectId, onBack, onNavigate }: ProjectDeta
 
   const handleFormSubmit = async (data: Partial<PMTask>) => {
     await createTask({ ...data, project_id: projectId } as PMTask & { project_id: number; title: string });
+    await loadProject();
+  };
+
+  const handleChildCreate = async (parentId: number, title: string, type: PMItemType) => {
+    await createTask({ project_id: projectId, parent_id: parentId, title, item_type: type, status: "new", priority: "medium" } as PMTask & { project_id: number; title: string });
     await loadProject();
   };
 
@@ -260,6 +265,7 @@ export function ProjectDetailPage({ projectId, onBack, onNavigate }: ProjectDeta
                   onTaskUpdate={handleTaskUpdate}
                   onTaskDelete={handleTaskDelete}
                   onTasksReload={loadTasks}
+                  onChildCreate={handleChildCreate}
                 />
               )}
               <AIStandup projectId={projectId} />

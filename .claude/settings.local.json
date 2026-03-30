@@ -69,7 +69,8 @@
       "Bash(wait:*)",
       "Bash(.build.ps1)",
       "Bash(file:*)",
-      "Bash(find /c/unity/CrowForge -type f \\\\\\(-name *storage* -o -name *file* -o -name *upload* \\\\\\))"
+      "Bash(find /c/unity/CrowForge -type f \\\\\\(-name *storage* -o -name *file* -o -name *upload* \\\\\\))",
+      "Bash(find /c/unity/CrowForge/src -type f \\\\\\(-name *.ts -o -name *.tsx -o -name *.js -o -name *.jsx \\\\\\))"
     ]
   }
 }

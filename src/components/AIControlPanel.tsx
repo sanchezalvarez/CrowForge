@@ -431,7 +431,7 @@ export function AIControlPanel({ showDebug, onShowDebugChange, tuningParams, onT
                     AI Engine
                   </Label>
                   <Select
-                    value={activeEngine ?? undefined}
+                    value={activeEngine ?? ""}
                     onValueChange={handleEngineChange}
                     disabled={isBusy}
                   >
@@ -467,7 +467,7 @@ export function AIControlPanel({ showDebug, onShowDebugChange, tuningParams, onT
                         Local Model
                       </Label>
                       <Select
-                        value={activeModel ?? undefined}
+                        value={activeModel ?? ""}
                         onValueChange={handleModelChange}
                         disabled={isBusy || models.length === 0}
                       >

@@ -168,6 +168,7 @@ interface SheetRowProps {
   freezeFirstCol: boolean;
   freezeFirstRow: boolean;
   onRowNumberClick: (ri: number) => void;
+  condStyles: Map<string, Partial<CellFormat>>;
 }
 
 const SheetRow = React.memo(function SheetRow({
@@ -185,7 +186,7 @@ const SheetRow = React.memo(function SheetRow({
   cellInputRef,
   hiddenCols, findMatches, findCurrentKey,
   fillHandleCell, onFillHandleMouseDown, fillPreviewCells, freezeFirstCol,
-  freezeFirstRow, onRowNumberClick,
+  freezeFirstRow, onRowNumberClick, condStyles,
 }: SheetRowProps) {
   return (
     <tr key={ri}>
@@ -989,6 +990,7 @@ export function SheetGrid({
                     setSelection({ r1: ri, c1: 0, r2: ri, c2: lastCol });
                     gridRef.current?.focus();
                   }}
+                  condStyles={condStyles}
                 />
                 </React.Fragment>
                 );

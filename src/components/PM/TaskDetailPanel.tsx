@@ -354,8 +354,8 @@ export function TaskDetailPanel({ task, open, onClose, onUpdate, onDelete, membe
         onClick={onClose}
       />
       <div
-        className="fixed right-0 top-8 bg-background border-l border-border shadow-2xl z-50 flex flex-col transition-transform duration-300"
-        style={{ width: 440, height: "calc(100% - 32px)", transform: open ? "translateX(0)" : "translateX(100%)" }}
+        className="fixed right-0 bg-background border-l border-border shadow-2xl z-50 flex flex-col transition-transform duration-300"
+        style={{ top: 35, width: 440, height: "calc(100% - 35px)", transform: open ? "translateX(0)" : "translateX(100%)" }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}

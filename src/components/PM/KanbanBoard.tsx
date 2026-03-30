@@ -34,15 +34,14 @@ const COLUMN_COLORS: Record<PMTaskStatus, string> = {
 };
 
 const ALL_TYPES: PMItemType[] = ["epic", "feature", "story", "task", "bug", "spike"];
-// Hide epics/features by default — they're too coarse for kanban
-const DEFAULT_SHOWN: Set<PMItemType> = new Set(["story", "task", "bug", "spike"]);
+const DEFAULT_SHOWN: Set<PMItemType> = new Set(ALL_TYPES);
 
 export function KanbanBoard({ tasks, members, onTaskClick, onStatusChange, onReorder, onTaskCreate }: KanbanBoardProps) {
   const dragging = useRef(false);
   const [shownTypes, setShownTypes] = useState<Set<PMItemType>>(DEFAULT_SHOWN);
 
   const filteredTasks = useMemo(
-    () => tasks.filter((t) => shownTypes.has(t.item_type) && t.parent_id === null),
+    () => tasks.filter((t) => shownTypes.has(t.item_type)),
     [tasks, shownTypes]
   );
 

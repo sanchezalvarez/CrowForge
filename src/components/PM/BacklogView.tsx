@@ -2,7 +2,7 @@ import React, { useState, useMemo, useRef, useEffect, useCallback } from "react"
 import { ChevronRight, ChevronDown, Plus, Search, Copy, Trash2, Pencil, GripVertical } from "lucide-react";
 import axios from "axios";
 import { PMTask, PMTaskStatus, PMPriority, PMItemType, PMMember } from "../../types/pm";
-import { buildTree, flattenTree, type TreeNode } from "../../lib/pmUtils";
+import { buildTree, flattenTree, filterTree, type TreeNode } from "../../lib/pmUtils";
 import { WorkItemTypeBadge } from "./WorkItemTypeBadge";
 import { StatusBadge } from "./StatusBadge";
 import { PriorityBadge } from "./PriorityBadge";
@@ -133,17 +133,18 @@ export function BacklogView({
     [members]
   );
 
-  const filteredTasks = useMemo(() => {
-    return tasks.filter((t) => {
-      if (!typeFilter.has(t.item_type)) return false;
-      if (statusFilter !== "all" && t.status !== statusFilter) return false;
-      if (assigneeFilter !== "all" && t.assignee_id?.toString() !== assigneeFilter) return false;
-      if (search && !t.title.toLowerCase().includes(search.toLowerCase())) return false;
+  const fullTree = useMemo(() => buildTree(tasks), [tasks]);
+
+  const tree = useMemo(() => {
+    return filterTree(fullTree, (node) => {
+      if (!typeFilter.has(node.item_type)) return false;
+      if (statusFilter !== "all" && node.status !== statusFilter) return false;
+      if (assigneeFilter !== "all" && node.assignee_id?.toString() !== assigneeFilter) return false;
+      if (search && !node.title.toLowerCase().includes(search.toLowerCase())) return false;
       return true;
     });
-  }, [tasks, typeFilter, statusFilter, assigneeFilter, search]);
+  }, [fullTree, typeFilter, statusFilter, assigneeFilter, search]);
 
-  const tree = useMemo(() => buildTree(filteredTasks), [filteredTasks]);
   const visibleRows = useMemo(() => flattenTree(tree, expandedIds), [tree, expandedIds]);
 
   const toggleExpand = (id: number) => {
@@ -412,16 +413,6 @@ export function BacklogView({
         </div>
       </div>
 
-      {/* Footer */}
-      <div className="flex items-center gap-3">
-        <button
-          onClick={() => onTaskCreate("new")}
-          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors self-start"
-        >
-          <Plus size={12} /> New work item
-        </button>
-      </div>
-
       {/* Context menu */}
       {ctxMenu && (
         <div
@@ -553,17 +544,17 @@ function BacklogRow({
         return (
           <td
             key="title"
-            className="py-2 overflow-hidden"
+            className="py-2.5 overflow-hidden"
             style={{ paddingLeft: `${8 + row.depth * 20}px` }}
           >
             <div className="flex items-center gap-1 min-w-0">
               {/* Chevron inline — fixed width so title stays aligned */}
               <button
-                className="shrink-0 w-4 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                className="shrink-0 w-5 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
                 style={{ visibility: hasChildren ? "visible" : "hidden" }}
                 onClick={(e) => { e.stopPropagation(); onToggleExpand(); }}
               >
-                {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
               </button>
               <WorkItemTypeBadge type={row.item_type} />
               {isRenaming ? (
@@ -602,7 +593,7 @@ function BacklogRow({
 
       case "status":
         return (
-          <td key="status" className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
+          <td key="status" className="px-2 py-2.5" onClick={(e) => e.stopPropagation()}>
             <div onDragStart={(e) => e.stopPropagation()}>
             <Select value={row.status} onValueChange={(v) => onUpdate(row.id, { status: v as PMTaskStatus })}>
               <SelectTrigger className="h-6 text-[11px] border-0 bg-transparent px-0 w-auto gap-1 hover:bg-muted rounded transition-colors">
@@ -623,7 +614,7 @@ function BacklogRow({
 
       case "assignee":
         return (
-          <td key="assignee" className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
+          <td key="assignee" className="px-2 py-2.5" onClick={(e) => e.stopPropagation()}>
             <div onDragStart={(e) => e.stopPropagation()}>
             <Select
               value={row.assignee_id?.toString() ?? "none"}
@@ -650,7 +641,7 @@ function BacklogRow({
 
       case "due":
         return (
-          <td key="due" className="px-2 py-2 text-xs text-muted-foreground font-mono">
+          <td key="due" className="px-2 py-3 text-xs text-muted-foreground font-mono">
             {row.due_date ?? <span className="text-border">—</span>}
           </td>
         );
@@ -664,13 +655,16 @@ function BacklogRow({
 
   return (
     <tr
-      className="border-b border-border/50 hover:bg-muted/20 transition-colors group"
+      className="border-b border-border/50 transition-colors group"
       style={{
         opacity: isDragging ? 0.45 : 1,
         outline: isDragOver ? "2px dashed var(--accent-orange)" : undefined,
         outlineOffset: isDragOver ? "-2px" : undefined,
         cursor: isDraggable ? "grab" : undefined,
+        // orange tint on hover via onMouseEnter/Leave would need state — use CSS instead
       }}
+      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "color-mix(in srgb, var(--accent-orange) 7%, transparent)"; }}
+      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = ""; }}
       draggable={isDraggable}
       onDragStart={(e) => {
         if (!isDraggable) { e.preventDefault(); return; }
@@ -682,7 +676,7 @@ function BacklogRow({
       onContextMenu={(e) => onContextMenu(e, row)}
     >
       {/* Drag handle — visual affordance only, drag is on <tr> */}
-      <td className="py-2 w-5" style={{ paddingLeft: 4 }}>
+      <td className="py-2.5 w-5" style={{ paddingLeft: 4 }}>
         <span
           className={`flex items-center transition-colors ${isDraggable ? "text-muted-foreground/25 group-hover:text-muted-foreground/60" : "text-transparent"}`}
         >
@@ -691,14 +685,15 @@ function BacklogRow({
       </td>
 
       {/* Inline add child button */}
-      <td className="px-1 py-2 w-6">
+      <td className="px-1 py-2.5 w-6">
         {!isLeaf && onAddChild && (
           <button
             onClick={(e) => { e.stopPropagation(); onAddChild(); }}
-            className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-primary transition-all rounded hover:bg-primary/10 p-0.5"
+            className="opacity-0 group-hover:opacity-70 hover:!opacity-100 text-accent-orange hover:text-accent-orange transition-all rounded hover:bg-orange-500/10 p-0.5"
+            style={{ color: 'var(--accent-orange)' }}
             title="Add child"
           >
-            <Plus size={11} />
+            <Plus size={16} />
           </button>
         )}
       </td>

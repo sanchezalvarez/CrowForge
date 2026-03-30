@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, FolderOpen } from "lucide-react";
+import { Plus, FolderOpen, Radio } from "lucide-react";
 import { useProjects } from "../hooks/useProjects";
 import { ProjectCard } from "../components/PM/ProjectCard";
 import { AIStandup } from "../components/PM/AIStandup";
@@ -26,6 +26,7 @@ const ICON_OPTIONS = ["📋", "🚀", "🎮", "🎨", "🔧", "📊", "🌐", "�
 export function ProjectsPage({ onNavigateToProject }: ProjectsPageProps) {
   const { projects, loading, create } = useProjects();
   const [createOpen, setCreateOpen] = useState(false);
+  const [standupOpen, setStandupOpen] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [color, setColor] = useState(COLOR_PRESETS[0]);
@@ -89,15 +90,15 @@ export function ProjectsPage({ onNavigateToProject }: ProjectsPageProps) {
               </span>
             )}
           </div>
-          <Button onClick={() => setCreateOpen(true)} className="gap-1.5">
-            <Plus size={14} /> New Project
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => setStandupOpen(true)} className="gap-1.5">
+              <Radio size={14} /> Standup
+            </Button>
+            <Button onClick={() => setCreateOpen(true)} className="gap-1.5">
+              <Plus size={14} /> New Project
+            </Button>
+          </div>
         </div>
-
-        {/* AI Standup */}
-        {projects.length > 0 && (
-          <AIStandup />
-        )}
 
         {/* Projects grid */}
         {loading ? (
@@ -134,6 +135,18 @@ export function ProjectsPage({ onNavigateToProject }: ProjectsPageProps) {
           </div>
         )}
       </div>
+
+      {/* Standup Dialog */}
+      <Dialog open={standupOpen} onOpenChange={setStandupOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Radio size={14} className="text-primary" /> Daily Standup
+            </DialogTitle>
+          </DialogHeader>
+          <AIStandup />
+        </DialogContent>
+      </Dialog>
 
       {/* Create Project Dialog */}
       <Dialog open={createOpen} onOpenChange={(o) => !o && setCreateOpen(false)}>

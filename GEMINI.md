@@ -37,6 +37,16 @@ CrowForge is a comprehensive, local-first AI workspace featuring Chat, Documents
 - **Sidecar:** Spawns the `crowforge-backend` binary on startup.
 - **Plugin:** `tauri-plugin-shell` for process management.
 
+## Project Management (Tasks)
+
+CrowForge includes a simplified Project Management module with the following characteristics:
+
+- **Item Types:** Epic, Feature, Story, Task, Bug, Spike.
+- **Simplified Model:** Intentionally excludes **Labels**, **Priority**, and **Story Points** to maintain a clean, focus-driven interface.
+- **Hierarchical Backlog:** Uses a parent-child tree structure. Filtering and search are recursive: a parent is shown if it matches OR if any of its descendants match the criteria.
+- **Kanban Board:** Visualizes all item types across workflow statuses. Simplified to remove inline creation buttons from columns to prioritize the global "New Item" workflow.
+- **Top-Level Creation:** The global "New Item" button is restricted to creating **Epics** and **Features** to enforce a top-down planning approach.
+
 ## Building and Running
 
 ### Development Mode
@@ -69,6 +79,7 @@ To run the project in development with live logs:
 - **Sidecar Protocol:** Frontend and Backend communicate solely via HTTP/SSE. Do not use Tauri IPC for application logic to keep the backend portable.
 - **Prompting:** Use `.replace()` for prompt template injection to avoid conflicts with brace-heavy content (like code).
 - **Agent Safety:** The AI Agent must use `list_sheets` and `list_documents` tools before performing writes to ensure ID accuracy.
+- **UI Aesthetics:** Custom "Riso" (Risograph) aesthetic with paper textures and subtle noise. Background horizontal lines are intentionally omitted from the document editor for clarity.
 
 ## Key Files
 - `CLAUDE.md`: Detailed dev guide and architecture overview for AI assistants.

@@ -26,6 +26,23 @@ export function flattenTree(nodes: TreeNode[], expandedIds: Set<number>): TreeNo
   return result;
 }
 
+/**
+ * Recursively filters a tree of nodes.
+ * A node is included if it matches the predicate OR if any of its descendants match.
+ */
+export function filterTree(nodes: TreeNode[], predicate: (node: TreeNode) => boolean): TreeNode[] {
+  return nodes
+    .map((node) => {
+      const filteredChildren = filterTree(node.children, predicate);
+      const matches = predicate(node);
+      if (matches || filteredChildren.length > 0) {
+        return { ...node, children: filteredChildren };
+      }
+      return null;
+    })
+    .filter((n): n is TreeNode => n !== null);
+}
+
 // ── Date/time helpers (TaskDetailPanel, SprintView) ──────────────────────────
 
 export function timeAgo(dateStr: string): string {
@@ -46,11 +63,6 @@ export function formatDate(d: string | null | undefined): string {
 // ── Sprint velocity (SprintView) ──────────────────────────────────────────────
 
 export function velocity(sprint: PMSprint): string {
-  if (!sprint.start_date || !sprint.end_date || !sprint.done_sp) return "";
-  const days = Math.max(
-    1,
-    (new Date(sprint.end_date).getTime() - new Date(sprint.start_date).getTime()) / (1000 * 60 * 60 * 24),
-  );
-  const v = (((sprint.done_sp ?? 0) / days) * 7).toFixed(1);
-  return `${v} SP/week`;
+  // Story points removed, so velocity calculation is disabled for now.
+  return "";
 }

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Sparkles, RefreshCw, ChevronDown, ChevronUp, AlertCircle } from "lucide-react";
+import { RefreshCw, AlertCircle } from "lucide-react";
 import axios from "axios";
 import ReactMarkdown from "react-markdown";
 import { useFetchSSE } from "../../hooks/useFetchSSE";
@@ -12,7 +12,6 @@ interface AIStandupProps {
 }
 
 export function AIStandup({ projectId }: AIStandupProps) {
-  const [expanded, setExpanded] = useState(false);
   const [content, setContent] = useState("");
   const [lastGenerated, setLastGenerated] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -41,7 +40,6 @@ export function AIStandup({ projectId }: AIStandupProps) {
       if (res.data.cache) {
         setContent(res.data.cache);
         setLastGenerated(res.data.last_generated);
-        setExpanded(true);
       }
     } catch {}
   };
@@ -49,7 +47,6 @@ export function AIStandup({ projectId }: AIStandupProps) {
   const generate = () => {
     setIsGenerating(true);
     setContent("");
-    setExpanded(true);
     start(
       `${API_BASE}/pm/ai/standup`,
       projectId ? { project_id: projectId } : {},
@@ -76,25 +73,22 @@ export function AIStandup({ projectId }: AIStandupProps) {
   const isToday = lastGenerated ? lastGenerated.slice(0, 10) === today : false;
 
   return (
-    <div className="rounded-lg border border-border bg-muted/20 overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center gap-2 px-4 py-3">
-        <Sparkles size={14} className="text-primary flex-shrink-0" />
-        <span className="text-sm font-semibold flex-1">AI Standup</span>
+    <div className="flex flex-col gap-3">
+      {/* Controls row */}
+      <div className="flex items-center gap-2">
         {lastGenerated && (
           <span className="text-[10px] text-muted-foreground font-mono">
-            {isToday ? "Today" : lastGenerated.slice(0, 10)}
+            {isToday ? "Generated today" : `Last: ${lastGenerated.slice(0, 10)}`}
           </span>
         )}
-        <div className="flex items-center gap-1">
+        <div className="ml-auto flex items-center gap-1">
           {isGenerating ? (
-            <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={handleStop}>
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={handleStop}>
               Stop
             </Button>
           ) : (
             <Button
               size="sm"
-              variant="ghost"
               className="h-7 text-xs gap-1"
               onClick={generate}
               disabled={modelReady === false}
@@ -103,40 +97,33 @@ export function AIStandup({ projectId }: AIStandupProps) {
               {content ? "Regenerate" : "Generate"}
             </Button>
           )}
-          {content && (
-            <button
-              onClick={() => setExpanded((v) => !v)}
-              className="p-1 rounded hover:bg-muted transition-colors text-muted-foreground"
-            >
-              {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-            </button>
-          )}
         </div>
       </div>
 
       {/* Model not ready warning */}
       {modelReady === false && (
-        <div className="px-4 pb-3 flex items-center gap-2 text-xs text-amber-600">
+        <div className="flex items-center gap-2 text-xs text-amber-600">
           <AlertCircle size={12} />
           No AI model configured. Set up a model in Settings to use this feature.
         </div>
       )}
 
+      {/* Empty state */}
+      {!content && !isGenerating && modelReady !== false && (
+        <p className="text-xs text-muted-foreground">
+          Click "Generate" to create a daily standup summary from your project data.
+        </p>
+      )}
+
       {/* Content */}
-      {expanded && content && (
-        <div className="px-4 pb-4 border-t border-border pt-3">
+      {content && (
+        <div className="rounded-md border border-border bg-muted/20 px-4 py-3 max-h-[60vh] overflow-y-auto">
           <div className="prose prose-sm max-w-none text-foreground text-sm leading-relaxed">
             <ReactMarkdown>{content}</ReactMarkdown>
           </div>
           {isGenerating && (
             <span className="inline-block w-1.5 h-4 bg-primary animate-pulse rounded ml-0.5" />
           )}
-        </div>
-      )}
-
-      {!content && !isGenerating && modelReady !== false && (
-        <div className="px-4 pb-3 text-xs text-muted-foreground">
-          Click "Generate" to create a daily standup summary from your project data.
         </div>
       )}
     </div>

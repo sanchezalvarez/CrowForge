@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { ChevronLeft, Plus, LayoutList, LayoutGrid, Zap, AlertTriangle, X, Sparkles } from "lucide-react";
+import { ChevronLeft, Plus, LayoutList, LayoutGrid, Zap, AlertTriangle, X, Sparkles, Radio } from "lucide-react";
 import axios from "axios";
 import { useTasks } from "../hooks/useTasks";
 import { useSprints } from "../hooks/useSprints";
@@ -48,6 +48,7 @@ export function ProjectDetailPage({ projectId, onBack, onNavigate }: ProjectDeta
   const [taskFormStatus, setTaskFormStatus] = useState<PMTaskStatus>("new");
   const [taskFormRestrict, setTaskFormRestrict] = useState(false);
   const [deadlineDismissed, setDeadlineDismissed] = useState(() => !!localStorage.getItem(LS_DISMISSED_KEY()));
+  const [standupOpen, setStandupOpen] = useState(false);
   const [suggestOpen, setSuggestOpen] = useState(false);
   const [suggestContext, setSuggestContext] = useState("");
   const [suggestLoading, setSuggestLoading] = useState(false);
@@ -197,8 +198,11 @@ export function ProjectDetailPage({ projectId, onBack, onNavigate }: ProjectDeta
           <h1 className="font-semibold text-sm text-foreground truncate">{project.name}</h1>
         </div>
         <div className="ml-auto flex items-center gap-2">
+          <Button size="sm" variant="outline" className="gap-1 h-7 text-xs" onClick={() => setStandupOpen(true)}>
+            <Radio size={11} /> Standup
+          </Button>
           <Button size="sm" variant="outline" className="gap-1 h-7 text-xs" onClick={() => setSuggestOpen(true)}>
-            <Sparkles size={11} /> AI Suggest
+            <Sparkles size={11} /> Suggest
           </Button>
           <Button size="sm" className="gap-1 h-7 text-xs" onClick={() => handleTaskCreate("new", true)}>
             <Plus size={12} /> New Item
@@ -270,7 +274,6 @@ export function ProjectDetailPage({ projectId, onBack, onNavigate }: ProjectDeta
                   onChildCreate={handleChildCreate}
                 />
               )}
-              <AIStandup projectId={projectId} />
             </TabsContent>
 
             <TabsContent value="kanban" className="h-full overflow-hidden px-6 py-4 mt-0">
@@ -328,6 +331,18 @@ export function ProjectDetailPage({ projectId, onBack, onNavigate }: ProjectDeta
         projectId={projectId}
         restrictTypes={taskFormRestrict}
       />
+
+      {/* Standup Dialog */}
+      <Dialog open={standupOpen} onOpenChange={setStandupOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Radio size={14} className="text-primary" /> Daily Standup
+            </DialogTitle>
+          </DialogHeader>
+          <AIStandup projectId={projectId} />
+        </DialogContent>
+      </Dialog>
 
       {/* AI Suggest Tasks Dialog */}
       <Dialog open={suggestOpen} onOpenChange={(o) => { if (!o) { setSuggestOpen(false); setSuggestedTasks([]); setSuggestContext(""); } }}>

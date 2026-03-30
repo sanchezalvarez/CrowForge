@@ -5,6 +5,7 @@ import pytest
 from backend.ai_engine import MockAIEngine
 
 
+
 @pytest.fixture
 def engine():
     return MockAIEngine()
@@ -89,6 +90,7 @@ class TestBuildResponse:
 # ── generate_stream ───────────────────────────────────────────────────────────
 
 class TestGenerateStream:
+    pytestmark = pytest.mark.asyncio
     @pytest.mark.asyncio
     async def test_stream_yields_all_content(self, engine):
         chunks = []
@@ -114,6 +116,7 @@ class TestGenerateStream:
 # ── generate_with_tools ───────────────────────────────────────────────────────
 
 class TestGenerateWithTools:
+    pytestmark = pytest.mark.asyncio
     @pytest.mark.asyncio
     async def test_phase1_emits_list_sheets_tool_call(self, engine):
         messages = [

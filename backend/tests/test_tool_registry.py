@@ -5,6 +5,7 @@ import pytest
 from backend.ai.tool_registry import ToolRegistry, TOOL_DEFINITIONS
 
 
+
 # ── schemas ───────────────────────────────────────────────────────────────────
 
 class TestSchemas:
@@ -73,6 +74,7 @@ class TestDynamicDefinitions:
 # ── call ──────────────────────────────────────────────────────────────────────
 
 class TestCall:
+    pytestmark = pytest.mark.asyncio
     @pytest.mark.asyncio
     async def test_call_registered_handler(self):
         r = ToolRegistry()

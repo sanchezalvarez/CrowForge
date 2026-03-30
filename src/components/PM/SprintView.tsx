@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ChevronDown, ChevronRight, Plus, CheckCircle2, Circle } from "lucide-react";
 import { PMProject, PMSprint, PMTask, PMMember } from "../../types/pm";
+import { formatDate, velocity } from "../../lib/pmUtils";
 import { Button } from "../ui/button";
 import { TaskCard } from "./TaskCard";
 import {
@@ -24,10 +25,7 @@ interface SprintViewProps {
   onTaskUpdate: (id: number, data: Partial<PMTask>) => Promise<PMTask | null>;
 }
 
-function formatDate(d: string | null | undefined) {
-  if (!d) return "–";
-  return new Date(d + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
-}
+// formatDate and velocity imported from pmUtils
 
 function ProgressBar({ done, total, doneSP, totalSP }: { done: number; total: number; doneSP: number; totalSP: number }) {
   const useSP = totalSP > 0;
@@ -51,12 +49,6 @@ function ProgressBar({ done, total, doneSP, totalSP }: { done: number; total: nu
   );
 }
 
-function velocity(sprint: PMSprint): string {
-  if (!sprint.start_date || !sprint.end_date || !sprint.done_sp) return "";
-  const days = Math.max(1, (new Date(sprint.end_date).getTime() - new Date(sprint.start_date).getTime()) / (1000 * 60 * 60 * 24));
-  const v = ((sprint.done_sp ?? 0) / days * 7).toFixed(1);
-  return `${v} SP/week`;
-}
 
 export function SprintView({ project, sprints, tasks, members, onTaskClick, onSprintCreate, onSprintComplete, onTaskUpdate }: SprintViewProps) {
   const [expanded, setExpanded] = useState<Record<number, boolean>>({});

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, type ComponentPropsWithoutRef } from "react";
+import { timeAgo } from "../../lib/pmUtils";
 import ReactMarkdown from "react-markdown";
 import { X, Trash2, ChevronRight, ChevronsUpDown, ImagePlus, Youtube, Loader2 } from "lucide-react";
 import axios from "axios";
@@ -44,15 +45,7 @@ interface TaskDetailPanelProps {
   onNavigate?: (page: string, id?: string) => void;
 }
 
-function timeAgo(dateStr: string): string {
-  const now = new Date();
-  const d = new Date(dateStr);
-  const diff = Math.floor((now.getTime() - d.getTime()) / 1000);
-  if (diff < 60) return "just now";
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-  return `${Math.floor(diff / 86400)}d ago`;
-}
+// timeAgo imported from pmUtils
 
 // ── Markdown components for description preview ──────────────────────────────
 

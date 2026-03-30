@@ -2,6 +2,7 @@ import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { ChevronRight, ChevronDown, Plus, Search, Copy, Trash2, Pencil, GripVertical } from "lucide-react";
 import axios from "axios";
 import { PMTask, PMTaskStatus, PMPriority, PMItemType, PMMember } from "../../types/pm";
+import { buildTree, flattenTree, type TreeNode } from "../../lib/pmUtils";
 import { WorkItemTypeBadge } from "./WorkItemTypeBadge";
 import { StatusBadge } from "./StatusBadge";
 import { PriorityBadge } from "./PriorityBadge";
@@ -60,31 +61,7 @@ interface BacklogViewProps {
 
 interface CtxMenu { x: number; y: number; task: PMTask }
 
-type TreeNode = PMTask & { depth: number; children: TreeNode[] };
-
-// ── Tree helpers ─────────────────────────────────────────────────────────────
-
-function buildTree(tasks: PMTask[], parentId: number | null = null, depth = 0): TreeNode[] {
-  return tasks
-    .filter((t) => t.parent_id === parentId)
-    .sort((a, b) => a.position - b.position)
-    .map((t) => ({
-      ...t,
-      depth,
-      children: buildTree(tasks, t.id, depth + 1),
-    }));
-}
-
-function flattenTree(nodes: TreeNode[], expandedIds: Set<number>): TreeNode[] {
-  const result: TreeNode[] = [];
-  for (const node of nodes) {
-    result.push(node);
-    if (expandedIds.has(node.id) && node.children.length > 0) {
-      result.push(...flattenTree(node.children, expandedIds));
-    }
-  }
-  return result;
-}
+// ── Tree helpers imported from pmUtils ───────────────────────────────────────
 
 const ALL_TYPES: PMItemType[] = ["epic", "feature", "story", "task", "bug", "spike"];
 

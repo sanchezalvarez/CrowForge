@@ -1,6 +1,5 @@
 import { useState, useRef, useMemo } from "react";
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
-import { Plus } from "lucide-react";
 import { PMTask, PMTaskStatus, PMItemType, PMMember } from "../../types/pm";
 import { TaskCard } from "./TaskCard";
 
@@ -28,15 +27,26 @@ const COLUMN_COLORS: Record<PMTaskStatus, string> = {
   active:        "bg-primary",
   ready_to_go:   "bg-blue-500",
   needs_testing: "bg-amber-500",
-  resolved:      "bg-teal-500",
+  resolved:      "bg-teal-600",
   rejected:      "bg-destructive",
   closed:        "bg-muted-foreground/50",
 };
 
-const ALL_TYPES: PMItemType[] = ["epic", "feature", "story", "task", "bug", "spike"];
+// Riso accent color per column status for shadow
+const COLUMN_SHADOW: Record<PMTaskStatus, string> = {
+  new:           "rgba(20,16,10,0.10)",
+  active:        "rgba(224,78,14,0.22)",
+  ready_to_go:   "rgba(37,99,235,0.18)",
+  needs_testing: "rgba(245,158,11,0.22)",
+  resolved:      "rgba(11,114,104,0.22)",
+  rejected:      "rgba(220,38,38,0.22)",
+  closed:        "rgba(20,16,10,0.10)",
+};
+
+const ALL_TYPES: PMItemType[] = ["epic", "feature", "story", "task", "spike"];
 const DEFAULT_SHOWN: Set<PMItemType> = new Set(ALL_TYPES);
 
-export function KanbanBoard({ tasks, members, onTaskClick, onStatusChange, onReorder, onTaskCreate }: KanbanBoardProps) {
+export function KanbanBoard({ tasks, members, onTaskClick, onStatusChange, onReorder, onTaskCreate: _onTaskCreate }: KanbanBoardProps) {
   const dragging = useRef(false);
   const [shownTypes, setShownTypes] = useState<Set<PMItemType>>(DEFAULT_SHOWN);
 
@@ -90,18 +100,18 @@ export function KanbanBoard({ tasks, members, onTaskClick, onStatusChange, onReo
   };
 
   return (
-    <div className="flex flex-col gap-3 h-full">
+    <div className="flex flex-col gap-4 h-full">
       {/* Filter bar */}
-      <div className="flex items-center gap-1 flex-wrap flex-shrink-0">
-        <span className="text-xs text-muted-foreground font-mono mr-1">Show:</span>
+      <div className="flex items-center gap-2 flex-wrap flex-shrink-0">
+        <span className="text-[10px] text-muted-foreground font-mono-ui mr-1 tracking-wide uppercase">Show:</span>
         {ALL_TYPES.map((type) => (
           <button
             key={type}
             onClick={() => toggleType(type)}
-            className={`text-[10px] font-medium px-1.5 py-0.5 rounded border transition-colors ${
+            className={`btn-tactile text-[10px] transition-all ${
               shownTypes.has(type)
-                ? "bg-muted border-border text-foreground"
-                : "bg-transparent border-transparent text-muted-foreground/40"
+                ? "btn-tactile-orange"
+                : "btn-tactile-outline opacity-50"
             }`}
           >
             {type}
@@ -110,15 +120,34 @@ export function KanbanBoard({ tasks, members, onTaskClick, onStatusChange, onReo
       </div>
 
       <DragDropContext onDragEnd={onDragEnd}>
-        <div className="flex gap-3 overflow-x-auto pb-4 flex-1 min-h-0 w-full">
+        <div className="flex gap-4 overflow-x-auto pb-4 flex-1 min-h-0 w-full">
           {COLUMNS.map((status) => {
             const col = grouped[status];
             return (
-              <div key={status} className="flex flex-col flex-1 min-w-[160px]">
-                <div className="flex items-center gap-2 mb-3 px-1">
-                  <span className={`w-2.5 h-2.5 rounded-full ${COLUMN_COLORS[status]}`} />
-                  <span className="text-sm font-semibold text-foreground">{COLUMN_LABELS[status]}</span>
-                  <span className="text-xs text-muted-foreground font-mono ml-1">{col.length}</span>
+              <div
+                key={status}
+                className="flex flex-col flex-1 min-w-[160px] animate-column-in"
+                style={{ animationDelay: `${COLUMNS.indexOf(status) * 40}ms` }}
+              >
+                {/* Column header — riso styled */}
+                <div
+                  className="flex items-center gap-2 mb-3 px-3 py-2 rounded-md surface-noise"
+                  style={{
+                    border: "1.5px solid rgba(20,16,10,0.14)",
+                    boxShadow: `2px 2px 0 ${COLUMN_SHADOW[status]}`,
+                    background: "var(--background-2)",
+                  }}
+                >
+                  <span className={`w-2.5 h-2.5 rounded-sm ${COLUMN_COLORS[status]}`} style={{ border: "1px solid rgba(20,16,10,0.20)" }} />
+                  <span className="text-xs font-display font-black tracking-tight text-foreground">{COLUMN_LABELS[status]}</span>
+                  <span
+                    className="text-[10px] font-mono-ui ml-auto px-1.5 rounded"
+                    style={{
+                      background: "var(--background-3)",
+                      border: "1px solid var(--border-strong)",
+                      color: "var(--muted-foreground)",
+                    }}
+                  >{col.length}</span>
                 </div>
 
                 <Droppable droppableId={status}>
@@ -126,14 +155,25 @@ export function KanbanBoard({ tasks, members, onTaskClick, onStatusChange, onReo
                     <div
                       ref={provided.innerRef}
                       {...provided.droppableProps}
-                      className={`flex flex-col gap-2 min-h-[120px] rounded-lg p-2 transition-colors flex-1 ${
-                        snapshot.isDraggingOver ? "bg-primary/5 border border-primary/20" : "bg-muted/20"
-                      }`}
+                      className="flex flex-col gap-3 min-h-[120px] rounded-md p-3 transition-colors flex-1"
+                      style={{
+                        background: snapshot.isDraggingOver
+                          ? `color-mix(in srgb, var(--accent-orange) 6%, var(--background-2))`
+                          : "var(--background-2)",
+                        border: snapshot.isDraggingOver
+                          ? "1.5px dashed var(--accent-orange)"
+                          : "1.5px solid rgba(20,16,10,0.10)",
+                      }}
                     >
                       {col.map((task, index) => (
                         <Draggable key={task.id} draggableId={String(task.id)} index={index}>
                           {(dragProvided) => (
-                            <div ref={dragProvided.innerRef} {...dragProvided.draggableProps}>
+                            <div
+                              ref={dragProvided.innerRef}
+                              {...dragProvided.draggableProps}
+                              className="animate-card-in"
+                              style={{ ...dragProvided.draggableProps.style, animationDelay: `${index * 30}ms` }}
+                            >
                               <TaskCard
                                 task={task}
                                 members={members}

@@ -141,6 +141,9 @@
 
 @theme inline {
   --color-background:         var(--background);
+  --color-background-2:       var(--background-2);
+  --color-background-3:       var(--background-3);
+  --color-border-strong:      var(--border-strong);
   --color-foreground:         var(--foreground);
   --color-card:               var(--card);
   --color-card-foreground:    var(--card-foreground);
@@ -606,6 +609,7 @@ input[type="range"]::-webkit-slider-thumb {
   border: 2px solid var(--background);
   box-shadow: 0 1px 4px rgba(0,0,0,0.18);
   cursor: pointer;
+  margin-top: -6px;
   transition: transform 0.12s ease, box-shadow 0.12s ease;
 }
 input[type="range"]::-moz-range-thumb {
@@ -638,6 +642,70 @@ input[type="range"]:hover::-moz-range-thumb {
 input[type="range"]:focus-visible::-webkit-slider-thumb {
   outline: 2px solid var(--ring);
   outline-offset: 2px;
+}
+
+/* ── Date inputs — Risograph style ─────────────────────────────────────── */
+/* Shared class for all type="date" inputs in the PM module.                */
+/* Matches the existing btn-tactile / border-strong / surface-noise system. */
+.input-riso-date {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--foreground);
+  background: var(--background);
+  background-image: var(--noise-subtle);
+  background-repeat: repeat;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 4px;
+  padding: 4px 8px;
+  width: 100%;
+  box-shadow: 2px 2px 0 var(--riso-teal);
+  outline: none;
+  cursor: pointer;
+  transition: box-shadow 0.1s ease, border-color 0.1s ease, transform 0.1s ease;
+  /* Normalize the native date picker chrome */
+  -webkit-appearance: none;
+  appearance: none;
+  /* Ensure the calendar icon stays visible and on-brand */
+  color-scheme: light;
+}
+.dark .input-riso-date {
+  color-scheme: dark;
+}
+.input-riso-date:hover:not(:disabled) {
+  border-color: var(--accent-teal);
+  box-shadow: 2px 2px 0 var(--riso-teal);
+}
+.input-riso-date:focus {
+  border-color: var(--accent-teal);
+  box-shadow: 3px 3px 0 var(--riso-teal), 0 0 0 2px color-mix(in srgb, var(--accent-teal) 18%, transparent);
+  transform: translate(-1px, -1px);
+}
+.input-riso-date:active:not(:disabled) {
+  transform: translate(1px, 1px);
+  box-shadow: 1px 1px 0 var(--riso-teal);
+}
+.input-riso-date:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+/* Compact variant used in TaskDetailPanel (xs size) */
+.input-riso-date-sm {
+  font-size: 11px;
+  padding: 2px 6px;
+  box-shadow: 2px 2px 0 var(--riso-teal);
+}
+.input-riso-date-sm:focus {
+  box-shadow: 2px 2px 0 var(--riso-teal), 0 0 0 2px color-mix(in srgb, var(--accent-teal) 18%, transparent);
+  transform: translate(-1px, -1px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .input-riso-date,
+  .input-riso-date-sm {
+    transition: none;
+    transform: none !important;
+  }
 }
 
 /* ── Animations ─────────────────────────────────────────────────────────── */
@@ -789,4 +857,62 @@ input[type="range"]:focus-visible::-webkit-slider-thumb {
 * {
   scrollbar-width: thin;
   scrollbar-color: var(--background-3) transparent;
+}
+
+/* ── PM / Project Management view utilities ─────────────────────────────── */
+
+/* Kanban column entrance */
+@keyframes riso-column-in {
+  0%   { opacity: 0; transform: translateY(12px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+.animate-column-in {
+  animation: riso-column-in 0.25s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Sprint / backlog card entrance */
+@keyframes riso-card-in {
+  0%   { opacity: 0; transform: translateX(-6px); }
+  100% { opacity: 1; transform: translateX(0); }
+}
+.animate-card-in {
+  animation: riso-card-in 0.2s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes riso-row-in {
+  0%   { opacity: 0; transform: translateY(6px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+.animate-row-in {
+  animation: riso-row-in 0.18s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Tactile press for interactive rows */
+.row-tactile {
+  transition: background 0.08s ease;
+}
+.row-tactile:active {
+  background: color-mix(in srgb, var(--accent-orange) 6%, transparent) !important;
+}
+
+/* PM page surface — subtle off-cream with riso blob glows */
+.pm-surface {
+  background-color: var(--background);
+  background-image:
+    radial-gradient(circle 340px at 92% 8%,  rgba(11,114,104,0.10) 0%, transparent 70%),
+    radial-gradient(circle 300px at 6% 92%, rgba(224,78,14,0.10)  0%, transparent 70%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-column-in,
+  .animate-card-in,
+  .animate-row-in,
+  .animate-ink-in,
+  .animate-blob-drift,
+  .animate-blob-drift-b,
+  .animate-blob-drift-c,
+  .animate-blob-drift-d,
+  .riso-noise-live::after {
+    animation: none !important;
+  }
 }

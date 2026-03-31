@@ -19,7 +19,9 @@ We're focused on providing a clean, efficient, and inspiring environment for cre
 
 ## ✨ What Makes CrowForge Different?
 
+-   **All-in-One Workspace:** Chat, Documents, Spreadsheets, Canvas, Project Management, Issue Tracker, AI Agent, and Benchmarking — all in a single app.
 -   **Documents & Tasks in Symbiosis:** Your Game Design Document (GDD) is not a static file. It's a living organism. Turn an idea into an actionable task with a single click.
+-   **Scrum Project Management:** Full Kanban boards, sprint planning, backlog management, roadmaps, and AI-powered standups — built for how teams actually work.
 -   **Blazing Fast:** As fast as your code. Experience an application without frustrating loading spinners.
 -   **Indie-First Philosophy:** Built for solo developers and small teams. CrowForge won't impose corporate processes or overhead you don't need.
 
@@ -31,9 +33,26 @@ We're focused on providing a clean, efficient, and inspiring environment for cre
 
 ## 🗺️ Roadmap
 
--   **Server-Based Local Development & Testing:** Enhancing our local backend infrastructure for more robust development and testing workflows.
--   **User Management:** Implementing user management features for collaborative scenarios.
--   **Git Integration:** Connecting your project management and documentation directly to your source control for seamless tracking of changes and tasks.
+-   **CrowSync:** SVN-inspired collaboration system built for game development — simple file locking, binary-friendly versioning, and team sync without Git complexity.
+-   **Multi-User Collaboration:** Real-time collaboration with shared projects and live cursors.
+-   **Plugin Ecosystem:** Extend CrowForge with community-built agent tools and integrations.
+
+---
+
+## 🧩 Modules
+
+| Module | Description |
+|--------|-------------|
+| **Chat** | Multi-session AI conversations with context personas, PDF uploads, and document awareness |
+| **Documents** | Rich text editor (TipTap) with inline AI actions — rewrite, summarize, expand, fix grammar |
+| **Sheets** | Spreadsheets with formulas, AI Fill, Formula Assistant, Range Operations, and Generate Rows |
+| **Canvas** | Infinite node-based canvas with AI nodes, auto-layout, and execution chains |
+| **Projects** | Scrum project management — Kanban board, Backlog (tree hierarchy), Sprint view, Roadmap |
+| **Issue Tracker** | Cross-project bug tracking with severity levels, bulk actions, screenshots, and filters |
+| **Agent** | ReAct agent with tool use — reads/writes sheets and documents autonomously |
+| **Benchmark** | Side-by-side model comparison with latency and quality metrics |
+| **Dashboard** | Activity overview, quick actions, AI news digest from RSS feeds |
+| **Settings** | AI engine config, GGUF model gallery, team members, custom workflows, news feeds |
 
 ---
 

@@ -128,6 +128,7 @@ CREATE TABLE IF NOT EXISTS pm_members (
 CREATE TABLE IF NOT EXISTS pm_projects (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL,
+  code TEXT NOT NULL DEFAULT '', -- Short code like 'GAME'
   description TEXT NOT NULL DEFAULT '',
   color TEXT NOT NULL DEFAULT '#E04E0E',
   icon TEXT NOT NULL DEFAULT '📋',
@@ -151,6 +152,7 @@ CREATE TABLE IF NOT EXISTS pm_sprints (
 CREATE TABLE IF NOT EXISTS pm_tasks (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   project_id INTEGER NOT NULL REFERENCES pm_projects(id) ON DELETE CASCADE,
+  project_task_id INTEGER DEFAULT NULL, -- Per-project incrementing ID
   parent_id INTEGER DEFAULT NULL REFERENCES pm_tasks(id) ON DELETE SET NULL,
   sprint_id INTEGER DEFAULT NULL REFERENCES pm_sprints(id) ON DELETE SET NULL,
 
@@ -167,6 +169,9 @@ CREATE TABLE IF NOT EXISTS pm_tasks (
   priority TEXT NOT NULL DEFAULT 'medium',
   -- critical | high | medium | low
 
+  severity TEXT NOT NULL DEFAULT 'Minor',
+  -- Blocker | Major | Minor | UI/UX
+
   assignee_id INTEGER DEFAULT NULL REFERENCES pm_members(id) ON DELETE SET NULL,
   story_points INTEGER DEFAULT NULL,
   due_date TEXT DEFAULT NULL,
@@ -179,6 +184,7 @@ CREATE TABLE IF NOT EXISTS pm_tasks (
 );
 
 CREATE INDEX IF NOT EXISTS idx_pm_tasks_project ON pm_tasks(project_id);
+CREATE INDEX IF NOT EXISTS idx_pm_tasks_proj_task_id ON pm_tasks(project_id, project_task_id);
 CREATE INDEX IF NOT EXISTS idx_pm_tasks_parent ON pm_tasks(parent_id);
 CREATE INDEX IF NOT EXISTS idx_pm_tasks_sprint ON pm_tasks(sprint_id);
 CREATE INDEX IF NOT EXISTS idx_pm_tasks_type ON pm_tasks(item_type);
@@ -210,4 +216,5 @@ CREATE INDEX IF NOT EXISTS idx_documents_updated ON documents(updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_canvases_updated  ON rf_canvases(updated_at DESC);
 
 INSERT OR IGNORE INTO pm_members (id, name, email, avatar_color, initials)
-VALUES (1, 'Me', '', '#E04E0E', 'ME');
+VALUES (1, 'Agent Crowner', '', '#E04E0E', 'AC');
+UPDATE pm_members SET name = 'Agent Crowner', initials = 'AC', avatar_color = '#E04E0E' WHERE id = 1;

@@ -180,7 +180,7 @@ function DescriptionField({ value, onChange, onBlur }: { value: string; onChange
 
   return (
     <div className="px-4 py-3 border-b border-border">
-      <p className="text-xs text-muted-foreground font-mono mb-1.5">Description</p>
+      <p className="text-xs text-muted-foreground font-mono tracking-wide uppercase mb-1.5">Description</p>
 
       {editing ? (
         <div
@@ -218,7 +218,8 @@ function DescriptionField({ value, onChange, onBlur }: { value: string; onChange
           >
             <textarea
               ref={textareaRef}
-              className="w-full text-sm resize-none rounded-md border-0 bg-muted px-3 py-2 focus:outline-none focus:ring-1 focus:ring-primary min-h-[120px]"
+              className="w-full text-sm resize-none rounded-md bg-muted px-3 py-2 focus:outline-none min-h-[120px]"
+              style={{ border: "1.5px solid var(--border-strong)" }}
               value={value}
               onChange={(e) => onChange(e.target.value)}
               onPaste={handlePaste}
@@ -352,8 +353,8 @@ export function TaskDetailPanel({ task, open, onClose, onUpdate, onDelete, membe
         onClick={onClose}
       />
       <div
-        className="fixed right-0 bg-background border-l border-border shadow-2xl z-50 flex flex-col transition-transform duration-300"
-        style={{ top: 35, width: 440, height: "calc(100% - 35px)", transform: open ? "translateX(0)" : "translateX(100%)" }}
+        className="fixed right-0 bg-background surface-noise z-50 flex flex-col transition-transform duration-300"
+        style={{ top: 35, width: 440, height: "calc(100% - 35px)", transform: open ? "translateX(0)" : "translateX(100%)", borderLeft: "1.5px solid var(--border-strong)", boxShadow: "-4px 0 0 var(--riso-teal)" }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -406,7 +407,7 @@ export function TaskDetailPanel({ task, open, onClose, onUpdate, onDelete, membe
             {/* Parent row */}
             {canHaveParent && (
               <>
-                <span className="text-muted-foreground text-xs font-mono pt-1">Parent</span>
+                <span className="text-muted-foreground text-xs font-mono tracking-wide uppercase pt-1">Parent</span>
                 <div className="relative flex items-center gap-1">
                   <div className="flex-1 flex items-center gap-1 min-w-0">
                     {parentTask ? (
@@ -430,7 +431,8 @@ export function TaskDetailPanel({ task, open, onClose, onUpdate, onDelete, membe
                       <div className="p-1.5">
                         <input
                           autoFocus
-                          className="w-full text-xs border border-border rounded px-2 py-1 bg-muted focus:outline-none focus:ring-1 focus:ring-primary"
+                          className="w-full text-xs rounded px-2 py-1 bg-muted focus:outline-none"
+                          style={{ border: "1.5px solid var(--border-strong)" }}
                           placeholder="Search tasks…"
                           value={parentPickerSearch}
                           onChange={(e) => setParentPickerSearch(e.target.value)}
@@ -469,9 +471,9 @@ export function TaskDetailPanel({ task, open, onClose, onUpdate, onDelete, membe
               </>
             )}
 
-            <span className="text-muted-foreground text-xs font-mono pt-1">Status</span>
+            <span className="text-muted-foreground text-xs font-mono tracking-wide uppercase pt-1">Status</span>
             <Select value={task.status} onValueChange={(v) => onUpdate(task.id, { status: v as PMTaskStatus })}>
-              <SelectTrigger className="h-7 text-xs border-0 bg-muted px-2">
+              <SelectTrigger className="h-7 text-xs bg-muted px-2" style={{ border: "1.5px solid var(--border-strong)", boxShadow: "none" }}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -484,14 +486,14 @@ export function TaskDetailPanel({ task, open, onClose, onUpdate, onDelete, membe
               </SelectContent>
             </Select>
 
-            <span className="text-muted-foreground text-xs font-mono pt-1">Assignee</span>
+            <span className="text-muted-foreground text-xs font-mono tracking-wide uppercase pt-1">Assignee</span>
             <div className="flex items-center gap-2">
               <MemberAvatar member={assignee} size="sm" />
               <Select
                 value={task.assignee_id?.toString() ?? "none"}
                 onValueChange={(v) => onUpdate(task.id, { assignee_id: v !== "none" ? parseInt(v) : null })}
               >
-                <SelectTrigger className="h-7 text-xs border-0 bg-muted px-2 flex-1">
+                <SelectTrigger className="h-7 text-xs bg-muted px-2 flex-1" style={{ border: "1.5px solid var(--border-strong)", boxShadow: "none" }}>
                   <SelectValue placeholder="Unassigned" />
                 </SelectTrigger>
                 <SelectContent>
@@ -503,23 +505,23 @@ export function TaskDetailPanel({ task, open, onClose, onUpdate, onDelete, membe
               </Select>
             </div>
 
-            <span className="text-muted-foreground text-xs font-mono pt-1">Due</span>
+            <span className="text-muted-foreground text-xs font-mono tracking-wide uppercase pt-1">Due</span>
             <div className="flex items-center gap-2">
               <input
                 type="date"
-                className="rounded border border-border bg-muted px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                className="input-riso-date input-riso-date-sm"
                 value={task.due_date ?? ""}
                 onChange={(e) => onUpdate(task.id, { due_date: e.target.value || null })}
               />
               <DeadlineWarning dueDate={task.due_date} status={task.status} />
             </div>
 
-            <span className="text-muted-foreground text-xs font-mono pt-1">Sprint</span>
+            <span className="text-muted-foreground text-xs font-mono tracking-wide uppercase pt-1">Sprint</span>
             <Select
               value={task.sprint_id?.toString() ?? "none"}
               onValueChange={(v) => onUpdate(task.id, { sprint_id: v !== "none" ? parseInt(v) : null })}
             >
-              <SelectTrigger className="h-7 text-xs border-0 bg-muted px-2">
+              <SelectTrigger className="h-7 text-xs bg-muted px-2" style={{ border: "1.5px solid var(--border-strong)", boxShadow: "none" }}>
                 <SelectValue placeholder="Backlog" />
               </SelectTrigger>
               <SelectContent>
@@ -541,9 +543,10 @@ export function TaskDetailPanel({ task, open, onClose, onUpdate, onDelete, membe
           {/* Acceptance Criteria (stories) */}
           {showAC && (
             <div className="px-4 py-3 border-b border-border">
-              <p className="text-xs text-muted-foreground font-mono mb-1.5">Acceptance Criteria</p>
+              <p className="text-xs text-muted-foreground font-mono tracking-wide uppercase mb-1.5">Acceptance Criteria</p>
               <Textarea
-                className="text-sm resize-none border-0 bg-muted focus:ring-1 focus:ring-primary min-h-[60px]"
+                className="text-sm resize-none bg-muted focus-visible:ring-0 min-h-[60px]"
+                style={{ border: "1.5px solid var(--border-strong)" }}
                 value={acceptanceCriteria}
                 onChange={(e) => setAcceptanceCriteria(e.target.value)}
                 onBlur={handleBlurAC}
@@ -562,7 +565,7 @@ export function TaskDetailPanel({ task, open, onClose, onUpdate, onDelete, membe
 
           {/* Activity */}
           <div className="px-4 py-3">
-            <p className="text-xs text-muted-foreground font-mono mb-2">Activity</p>
+            <p className="text-xs text-muted-foreground font-mono tracking-wide uppercase mb-2">Activity</p>
             {activity.length === 0 ? (
               <p className="text-xs text-muted-foreground">No activity yet.</p>
             ) : (

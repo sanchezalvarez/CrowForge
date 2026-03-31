@@ -1,12 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { buildTree, flattenTree, timeAgo, formatDate, velocity } from "./pmUtils";
-import type { PMTask, PMSprint } from "../types/pm";
+import { buildTree, flattenTree, filterTree, treeToMarkdown, timeAgo, formatDate } from "./pmUtils";
+import type { PMTask } from "../types/pm";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function makeTask(overrides: Partial<PMTask> & { id: number }): PMTask {
   return {
     project_id: 1,
+    project_task_id: null,
     parent_id: null,
     sprint_id: null,
     item_type: "task",
@@ -14,7 +15,8 @@ function makeTask(overrides: Partial<PMTask> & { id: number }): PMTask {
     description: "",
     acceptance_criteria: "",
     status: "new",
-    priority: "medium",
+    priority: "medium" as const,
+    severity: "Minor" as const,
     assignee_id: null,
     story_points: null,
     due_date: null,
@@ -25,20 +27,6 @@ function makeTask(overrides: Partial<PMTask> & { id: number }): PMTask {
     child_count: 0,
     created_at: "2026-01-01T00:00:00",
     updated_at: "2026-01-01T00:00:00",
-    ...overrides,
-  };
-}
-
-function makeSprint(overrides: Partial<PMSprint> & { id: number }): PMSprint {
-  return {
-    project_id: 1,
-    name: "Sprint 1",
-    goal: "",
-    start_date: null,
-    end_date: null,
-    status: "active",
-    created_at: "2026-01-01T00:00:00",
-    done_sp: 0,
     ...overrides,
   };
 }
@@ -195,33 +183,180 @@ describe("formatDate", () => {
   });
 });
 
-// ── velocity ──────────────────────────────────────────────────────────────────
+// ── filterTree ───────────────────────────────────────────────────────────────
 
-describe("velocity", () => {
-  it("returns empty string when no start_date", () => {
-    const sprint = makeSprint({ id: 1, start_date: null, end_date: "2026-03-20", done_sp: 10 });
-    expect(velocity(sprint)).toBe("");
+describe("filterTree", () => {
+  it("returns empty array for empty input", () => {
+    expect(filterTree([], () => true)).toEqual([]);
   });
 
-  it("returns empty string when no end_date", () => {
-    const sprint = makeSprint({ id: 1, start_date: "2026-03-01", end_date: null, done_sp: 10 });
-    expect(velocity(sprint)).toBe("");
+  it("returns matching root nodes", () => {
+    const tasks = [makeTask({ id: 1 }), makeTask({ id: 2 }), makeTask({ id: 3 })];
+    const tree = buildTree(tasks);
+    const result = filterTree(tree, (n) => n.id === 2);
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe(2);
   });
 
-  it("returns empty string when done_sp is 0 or null", () => {
-    const sprint = makeSprint({ id: 1, start_date: "2026-03-01", end_date: "2026-03-14", done_sp: 0 });
-    expect(velocity(sprint)).toBe("");
+  it("includes parent when child matches (preserves structure)", () => {
+    const tasks = [
+      makeTask({ id: 1, parent_id: null }),
+      makeTask({ id: 2, parent_id: 1 }),
+      makeTask({ id: 3, parent_id: 1 }),
+    ];
+    const tree = buildTree(tasks);
+    const result = filterTree(tree, (n) => n.id === 2);
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe(1);
+    expect(result[0].children).toHaveLength(1);
+    expect(result[0].children[0].id).toBe(2);
   });
 
-  it("calculates SP/week for a 14-day sprint with 14 SP", () => {
-    // 14 days → 2 weeks → 14 SP / 2 = 7.0 SP/week
-    const sprint = makeSprint({ id: 1, start_date: "2026-03-01", end_date: "2026-03-15", done_sp: 14 });
-    expect(velocity(sprint)).toBe("7.0 SP/week");
+  it("excludes entire subtree when nothing matches", () => {
+    const tasks = [
+      makeTask({ id: 1, parent_id: null }),
+      makeTask({ id: 2, parent_id: 1 }),
+    ];
+    const tree = buildTree(tasks);
+    const result = filterTree(tree, (n) => n.id === 999);
+    expect(result).toHaveLength(0);
   });
 
-  it("calculates SP/week for a 7-day sprint with 5 SP", () => {
-    // 7 days → 1 week → 5 SP/week
-    const sprint = makeSprint({ id: 1, start_date: "2026-03-01", end_date: "2026-03-08", done_sp: 5 });
-    expect(velocity(sprint)).toBe("5.0 SP/week");
+  it("finds matches at different depths (ancestors preserved)", () => {
+    const tasks = [
+      makeTask({ id: 1, parent_id: null }),
+      makeTask({ id: 2, parent_id: 1 }),
+      makeTask({ id: 3, parent_id: 2 }),
+      makeTask({ id: 4, parent_id: null }),
+    ];
+    const tree = buildTree(tasks);
+    const result = filterTree(tree, (n) => n.id === 3 || n.id === 4);
+    expect(result).toHaveLength(2);
+    expect(result[0].id).toBe(1);
+    expect(result[0].children[0].id).toBe(2);
+    expect(result[0].children[0].children[0].id).toBe(3);
+    expect(result[1].id).toBe(4);
+  });
+
+  it("filters by item_type", () => {
+    const tasks = [
+      makeTask({ id: 1, item_type: "epic" }),
+      makeTask({ id: 2, item_type: "bug" }),
+      makeTask({ id: 3, item_type: "task" }),
+    ];
+    const tree = buildTree(tasks);
+    const result = filterTree(tree, (n) => n.item_type === "bug");
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe(2);
+  });
+
+  it("filters by status", () => {
+    const tasks = [
+      makeTask({ id: 1, status: "new" }),
+      makeTask({ id: 2, status: "resolved" }),
+      makeTask({ id: 3, status: "active" }),
+    ];
+    const tree = buildTree(tasks);
+    const result = filterTree(tree, (n) => n.status === "resolved");
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe(2);
+  });
+
+  it("filters by title substring", () => {
+    const tasks = [
+      makeTask({ id: 1, title: "Fix login bug" }),
+      makeTask({ id: 2, title: "Add new feature" }),
+      makeTask({ id: 3, title: "Refactor login service" }),
+    ];
+    const tree = buildTree(tasks);
+    const result = filterTree(tree, (n) => n.title.includes("login"));
+    expect(result).toHaveLength(2);
+    expect(result.map((n) => n.id).sort()).toEqual([1, 3]);
+  });
+});
+
+// ── treeToMarkdown ───────────────────────────────────────────────────────────
+
+describe("treeToMarkdown", () => {
+  it("returns empty string for empty tree", () => {
+    expect(treeToMarkdown([])).toBe("");
+  });
+
+  it("renders single root node with status", () => {
+    const tasks = [makeTask({ id: 1, title: "Root Task", status: "new" })];
+    const tree = buildTree(tasks);
+    const md = treeToMarkdown(tree);
+    expect(md).toContain("# Root Task [NEW]");
+  });
+
+  it("renders nested nodes with proper heading levels", () => {
+    const tasks = [
+      makeTask({ id: 1, parent_id: null, title: "Epic" }),
+      makeTask({ id: 2, parent_id: 1, title: "Feature" }),
+      makeTask({ id: 3, parent_id: 2, title: "Story" }),
+    ];
+    const tree = buildTree(tasks);
+    const md = treeToMarkdown(tree);
+    expect(md).toContain("# Epic [NEW]");
+    expect(md).toContain("## Feature [NEW]");
+    expect(md).toContain("### Story [NEW]");
+  });
+
+  it("uses [x] checkbox for resolved tasks at level 3+", () => {
+    const tasks = [
+      makeTask({ id: 1, parent_id: null, title: "L0" }),
+      makeTask({ id: 2, parent_id: 1, title: "L1" }),
+      makeTask({ id: 3, parent_id: 2, title: "L2" }),
+      makeTask({ id: 4, parent_id: 3, title: "Done Item", status: "resolved" }),
+    ];
+    const tree = buildTree(tasks);
+    const md = treeToMarkdown(tree);
+    expect(md).toContain("- [x] Done Item");
+  });
+
+  it("uses [ ] checkbox for non-resolved tasks at level 3+", () => {
+    const tasks = [
+      makeTask({ id: 1, parent_id: null, title: "L0" }),
+      makeTask({ id: 2, parent_id: 1, title: "L1" }),
+      makeTask({ id: 3, parent_id: 2, title: "L2" }),
+      makeTask({ id: 4, parent_id: 3, title: "Open Item", status: "active" }),
+    ];
+    const tree = buildTree(tasks);
+    const md = treeToMarkdown(tree);
+    expect(md).toContain("- [ ] Open Item");
+  });
+
+  it("uses [x] checkbox for closed tasks at level 3+", () => {
+    const tasks = [
+      makeTask({ id: 1, parent_id: null, title: "L0" }),
+      makeTask({ id: 2, parent_id: 1, title: "L1" }),
+      makeTask({ id: 3, parent_id: 2, title: "L2" }),
+      makeTask({ id: 4, parent_id: 3, title: "Closed Item", status: "closed" }),
+    ];
+    const tree = buildTree(tasks);
+    const md = treeToMarkdown(tree);
+    expect(md).toContain("- [x] Closed Item");
+  });
+
+  it("includes description for top-level nodes", () => {
+    const tasks = [
+      makeTask({ id: 1, title: "With Desc", description: "Some description" }),
+    ];
+    const tree = buildTree(tasks);
+    const md = treeToMarkdown(tree);
+    expect(md).toContain("Some description");
+  });
+
+  it("uses indentation for deep nesting (level 4+)", () => {
+    const tasks = [
+      makeTask({ id: 1, parent_id: null, title: "L0" }),
+      makeTask({ id: 2, parent_id: 1, title: "L1" }),
+      makeTask({ id: 3, parent_id: 2, title: "L2" }),
+      makeTask({ id: 4, parent_id: 3, title: "L3" }),
+      makeTask({ id: 5, parent_id: 4, title: "L4 Deep", status: "new" }),
+    ];
+    const tree = buildTree(tasks);
+    const md = treeToMarkdown(tree);
+    expect(md).toContain("  - [ ] L4 Deep");
   });
 });

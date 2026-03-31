@@ -79,7 +79,7 @@ export function BenchmarkPage() {
         setEngines(res.data);
         setSelectedEngines(new Set(res.data.map((e) => e.name)));
       })
-      .catch(() => {});
+      .catch(() => { setEngines([]); });
 
     axios
       .get<{ models: ModelInfo[]; active_model: string | null }>(
@@ -91,7 +91,7 @@ export function BenchmarkPage() {
           setSelectedModels(new Set([res.data.active_model]));
         }
       })
-      .catch(() => {});
+      .catch(() => { setModels([]); });
 
     fetchRuns();
   }, []);
@@ -277,15 +277,15 @@ export function BenchmarkPage() {
         <div className="animate-blob-drift-b" style={{ position: 'absolute', width: 500, height: 500, borderRadius: '50%', background: 'var(--accent-orange)', opacity: 0.09, mixBlendMode: 'multiply', bottom: -160, left: -160 }} />
         <div className="animate-blob-drift-c" style={{ position: 'absolute', width: 380, height: 380, borderRadius: '50%', background: 'var(--accent-violet)', opacity: 0.07, mixBlendMode: 'multiply', bottom: 80, right: -100 }} />
         <div className="animate-blob-drift-d" style={{ position: 'absolute', width: 260, height: 260, borderRadius: '50%', background: 'var(--accent-teal)', opacity: 0.06, mixBlendMode: 'multiply', top: '35%', left: -100 }} />
-        <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} xmlns="http://www.w3.org/2000/svg">
-          <line x1="calc(100% - 32)" y1="28" x2="calc(100% - 8)" y2="28" stroke="rgba(11,114,104,0.45)" strokeWidth="1.5" />
-          <line x1="calc(100% - 20)" y1="16" x2="calc(100% - 20)" y2="40" stroke="rgba(11,114,104,0.45)" strokeWidth="1.5" />
-          <circle cx="calc(100% - 20)" cy="28" r="5" stroke="rgba(11,114,104,0.3)" strokeWidth="1" fill="none" />
-          <line x1="8" y1="calc(100% - 28)" x2="32" y2="calc(100% - 28)" stroke="rgba(224,78,14,0.45)" strokeWidth="1.5" />
-          <line x1="20" y1="calc(100% - 40)" x2="20" y2="calc(100% - 16)" stroke="rgba(224,78,14,0.45)" strokeWidth="1.5" />
-          <circle cx="20" cy="calc(100% - 28)" r="5" stroke="rgba(224,78,14,0.3)" strokeWidth="1" fill="none" />
-          <line x1="8" y1="28" x2="32" y2="28" stroke="rgba(92,58,156,0.35)" strokeWidth="1.5" />
-          <line x1="20" y1="16" x2="20" y2="40" stroke="rgba(92,58,156,0.35)" strokeWidth="1.5" />
+        <svg style={{ position: 'absolute', top: 12, right: 12, width: 44, height: 44 }} xmlns="http://www.w3.org/2000/svg">
+          <line x1="4" y1="18" x2="26" y2="18" stroke="rgba(11,114,104,0.40)" strokeWidth="1.5" />
+          <line x1="15" y1="7" x2="15" y2="29" stroke="rgba(11,114,104,0.40)" strokeWidth="1.5" />
+          <circle cx="15" cy="18" r="5" stroke="rgba(11,114,104,0.28)" strokeWidth="1" fill="none" />
+        </svg>
+        <svg style={{ position: 'absolute', bottom: 12, left: 12, width: 44, height: 44 }} xmlns="http://www.w3.org/2000/svg">
+          <line x1="4" y1="26" x2="26" y2="26" stroke="rgba(224,78,14,0.40)" strokeWidth="1.5" />
+          <line x1="15" y1="15" x2="15" y2="37" stroke="rgba(224,78,14,0.40)" strokeWidth="1.5" />
+          <circle cx="15" cy="26" r="5" stroke="rgba(224,78,14,0.28)" strokeWidth="1" fill="none" />
         </svg>
         <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} xmlns="http://www.w3.org/2000/svg">
           <circle cx="18%" cy="12%" r="3" fill="rgba(224,78,14,0.20)" />
@@ -294,7 +294,7 @@ export function BenchmarkPage() {
           <circle cx="10%" cy="70%" r="2" fill="rgba(11,114,104,0.16)" />
         </svg>
       </div>
-      <div className="h-full overflow-y-auto overflow-x-hidden px-4 sm:px-6 py-6 sm:py-8 space-y-6" style={{ position: 'relative', zIndex: 1 }}>
+      <div className="h-full overflow-y-auto overflow-x-hidden p-10 space-y-6" style={{ position: 'relative', zIndex: 1 }}>
       <div className="animate-ink-in">
         <h1 className="font-display font-black tracking-tight" style={{ fontSize: 'clamp(1.4rem, 3vw, 2rem)', textShadow: '2px 2px 0 rgba(224,78,14,0.18), -1px -1px 0 rgba(11,114,104,0.12)' }}>Benchmark</h1>
         <p className="text-sm text-muted-foreground mt-1">

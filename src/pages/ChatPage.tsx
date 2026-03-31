@@ -303,7 +303,7 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
     axios.get(`${API_BASE}/documents`).then(r => {
       const docs = Array.isArray(r.data) ? r.data : r.data.documents ?? [];
       setDocList(docs);
-    }).catch(() => {});
+    }).catch(() => { setDocList([]); });
   }, []);
 
   // Derive sending state: context is sending AND it's for our active session
@@ -464,7 +464,9 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
       setSessions((prev) =>
         prev.map((s) => (s.id === sessionId ? { ...s, title: t } : s))
       );
-    } catch { /* ignore */ }
+    } catch {
+      toast("Failed to save title.", "error");
+    }
   }
 
   function startEditTitle() {
@@ -496,7 +498,9 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
       form.append("file", file);
       const res = await axios.post(`${API_BASE}/chat/upload`, form);
       setAttachedFile({ name: res.data.filename, text: res.data.text });
-    } catch { /* ignore */ }
+    } catch {
+      toast("Failed to upload file.", "error");
+    }
     setUploadingFile(false);
   }
 
@@ -639,15 +643,16 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
         </div>
         <ScrollArea className="flex-1">
           <div className="p-2 space-y-0.5">
-            {sessions.map((s) => (
+            {sessions.map((s, i) => (
               <div
                 key={s.id}
                 className={cn(
-                  "group flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-sm cursor-pointer transition-colors",
+                  "group flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-sm cursor-pointer transition-colors animate-row-in",
                   activeSessionId === s.id
                     ? "bg-primary/10 text-primary font-medium"
                     : "text-muted-foreground hover:bg-muted hover:text-foreground"
                 )}
+                style={{ animationDelay: `${Math.min(i, 20) * 20}ms` }}
                 onClick={() => { if (renamingSessionId !== s.id) setActiveSessionId(s.id); }}
                 onDoubleClick={() => startRenameSession(s.id, s.title)}
                 onContextMenu={(e) => { e.preventDefault(); setSessionMenu({ sessionId: s.id, x: e.clientX, y: e.clientY }); }}
@@ -724,17 +729,15 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
           <div className="animate-blob-drift-b" style={{ position: 'absolute', width: 500, height: 500, borderRadius: '50%', background: 'var(--accent-orange)', opacity: 0.09, mixBlendMode: 'multiply', bottom: -160, left: -160 }} />
           <div className="animate-blob-drift-c" style={{ position: 'absolute', width: 380, height: 380, borderRadius: '50%', background: 'var(--accent-violet)', opacity: 0.07, mixBlendMode: 'multiply', bottom: 80, right: -100 }} />
           <div className="animate-blob-drift-d" style={{ position: 'absolute', width: 260, height: 260, borderRadius: '50%', background: 'var(--accent-teal)', opacity: 0.06, mixBlendMode: 'multiply', top: '35%', left: -100 }} />
-          <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} xmlns="http://www.w3.org/2000/svg">
-            <line x1="calc(100% - 32)" y1="28" x2="calc(100% - 8)" y2="28" stroke="rgba(11,114,104,0.45)" strokeWidth="1.5" />
-            <line x1="calc(100% - 20)" y1="16" x2="calc(100% - 20)" y2="40" stroke="rgba(11,114,104,0.45)" strokeWidth="1.5" />
-            <circle cx="calc(100% - 20)" cy="28" r="5" stroke="rgba(11,114,104,0.3)" strokeWidth="1" fill="none" />
-            <line x1="8" y1="calc(100% - 28)" x2="32" y2="calc(100% - 28)" stroke="rgba(224,78,14,0.45)" strokeWidth="1.5" />
-            <line x1="20" y1="calc(100% - 40)" x2="20" y2="calc(100% - 16)" stroke="rgba(224,78,14,0.45)" strokeWidth="1.5" />
-            <circle cx="20" cy="calc(100% - 28)" r="5" stroke="rgba(224,78,14,0.3)" strokeWidth="1" fill="none" />
-            <line x1="8" y1="28" x2="32" y2="28" stroke="rgba(92,58,156,0.35)" strokeWidth="1.5" />
-            <line x1="20" y1="16" x2="20" y2="40" stroke="rgba(92,58,156,0.35)" strokeWidth="1.5" />
-            <line x1="calc(100% - 32)" y1="calc(100% - 28)" x2="calc(100% - 8)" y2="calc(100% - 28)" stroke="rgba(11,114,104,0.25)" strokeWidth="1" />
-            <line x1="calc(100% - 20)" y1="calc(100% - 40)" x2="calc(100% - 20)" y2="calc(100% - 16)" stroke="rgba(11,114,104,0.25)" strokeWidth="1" />
+          <svg style={{ position: 'absolute', top: 12, right: 12, width: 44, height: 44 }} xmlns="http://www.w3.org/2000/svg">
+            <line x1="4" y1="18" x2="26" y2="18" stroke="rgba(11,114,104,0.40)" strokeWidth="1.5" />
+            <line x1="15" y1="7" x2="15" y2="29" stroke="rgba(11,114,104,0.40)" strokeWidth="1.5" />
+            <circle cx="15" cy="18" r="5" stroke="rgba(11,114,104,0.28)" strokeWidth="1" fill="none" />
+          </svg>
+          <svg style={{ position: 'absolute', bottom: 12, left: 12, width: 44, height: 44 }} xmlns="http://www.w3.org/2000/svg">
+            <line x1="4" y1="26" x2="26" y2="26" stroke="rgba(224,78,14,0.40)" strokeWidth="1.5" />
+            <line x1="15" y1="15" x2="15" y2="37" stroke="rgba(224,78,14,0.40)" strokeWidth="1.5" />
+            <circle cx="15" cy="26" r="5" stroke="rgba(224,78,14,0.28)" strokeWidth="1" fill="none" />
           </svg>
           <svg style={{ position: 'absolute', right: 40, top: 120, width: 100, height: 100 }} viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
             {[[20,20,3.5],[38,14,2.5],[12,38,2],[30,35,3],[48,28,2],[55,42,1.5],[22,52,2],[40,50,1.5],[60,30,1],[15,60,1.5]].map(([x,y,r],i) => <circle key={i} cx={x} cy={y} r={r} fill="rgba(224,78,14,0.28)" />)}

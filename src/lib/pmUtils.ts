@@ -43,6 +43,31 @@ export function filterTree(nodes: TreeNode[], predicate: (node: TreeNode) => boo
     .filter((n): n is TreeNode => n !== null);
 }
 
+export function treeToMarkdown(nodes: TreeNode[], level = 0): string {
+  let md = "";
+  for (const node of nodes) {
+    const status = node.status.toUpperCase();
+    const prefix = level === 0 ? "#" : level === 1 ? "##" : level === 2 ? "###" : "- [" + (status === "RESOLVED" || status === "CLOSED" ? "x" : " ") + "]";
+    
+    if (level < 3) {
+      md += `${prefix} ${node.title} [${status}]\n`;
+    } else {
+      md += `${"  ".repeat(level - 3)}${prefix} ${node.title}\n`;
+    }
+
+    if (node.description && level < 3) {
+      md += `${node.description}\n\n`;
+    }
+
+    if (node.children.length > 0) {
+      md += treeToMarkdown(node.children, level + 1);
+    }
+    
+    if (level < 2) md += "\n";
+  }
+  return md;
+}
+
 // ── Date/time helpers (TaskDetailPanel, SprintView) ──────────────────────────
 
 export function timeAgo(dateStr: string): string {
@@ -62,7 +87,7 @@ export function formatDate(d: string | null | undefined): string {
 
 // ── Sprint velocity (SprintView) ──────────────────────────────────────────────
 
-export function velocity(sprint: PMSprint): string {
+export function velocity(_sprint: PMSprint): string {
   // Story points removed, so velocity calculation is disabled for now.
   return "";
 }

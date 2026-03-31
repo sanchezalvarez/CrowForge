@@ -2,6 +2,7 @@ import sys
 import asyncio
 import os
 import json
+import re
 import shutil
 import uuid
 import httpx
@@ -3047,6 +3048,57 @@ Group under ## [Feed Name] headers. Add ## Sources at end (one line per feed).""
 
 # ── Project Management ──────────────────────────────────────────────────────
 
+_PM_DEFAULT_WORKFLOW = {
+    "task_statuses": [
+        {"key": "new",           "label": "New",           "color": "bg-muted-foreground/30", "isDone": False},
+        {"key": "active",        "label": "Active",        "color": "bg-primary",             "isDone": False},
+        {"key": "ready_to_go",   "label": "Ready to Go",   "color": "bg-blue-500",            "isDone": False},
+        {"key": "needs_testing", "label": "Needs Testing", "color": "bg-amber-500",           "isDone": False},
+        {"key": "resolved",      "label": "Resolved",      "color": "bg-teal-600",            "isDone": True},
+        {"key": "rejected",      "label": "Rejected",      "color": "bg-destructive",         "isDone": True},
+    ],
+    "issue_statuses": [
+        {"key": "new",           "label": "Open",          "color": "bg-blue-500",            "isDone": False},
+        {"key": "active",        "label": "In Progress",   "color": "bg-amber-500",           "isDone": False},
+        {"key": "needs_testing", "label": "Testing",       "color": "bg-purple-500",          "isDone": False},
+        {"key": "resolved",      "label": "Resolved",      "color": "bg-green-500",           "isDone": True},
+    ],
+    "severities": [
+        {"key": "Blocker", "label": "Blocker", "color": "bg-destructive/15 text-destructive border-destructive/30", "order": 0},
+        {"key": "Major",   "label": "Major",   "color": "bg-orange-500/15 text-orange-600 dark:text-orange-400 border-orange-500/30", "order": 1},
+        {"key": "Minor",   "label": "Minor",   "color": "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30", "order": 2},
+        {"key": "UI/UX",   "label": "UI/UX",   "color": "bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/30", "order": 3},
+    ],
+}
+
+def _pm_get_workflow():
+    with db.get_connection() as conn:
+        row = conn.execute("SELECT value FROM settings WHERE key = 'pm_workflow'").fetchone()
+        if row:
+            try:
+                return json.loads(row["value"])
+            except Exception:
+                pass
+        return _PM_DEFAULT_WORKFLOW
+
+def _pm_done_statuses():
+    wf = _pm_get_workflow()
+    return tuple(s["key"] for s in wf.get("task_statuses", []) if s.get("isDone"))
+
+@app.get("/pm/workflow")
+async def pm_get_workflow():
+    return _pm_get_workflow()
+
+@app.put("/pm/workflow")
+async def pm_put_workflow(body: dict):
+    with db.get_connection() as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO settings (key, value) VALUES ('pm_workflow', ?)",
+            (json.dumps(body),)
+        )
+        conn.commit()
+    return body
+
 # Type hierarchy rules: what item_type is allowed as child of a given parent type
 _PM_CHILD_TYPES = {
     "epic":    ["feature"],
@@ -3151,10 +3203,13 @@ async def pm_create_project(body: dict):
     description = str(body.get("description", ""))
     color = str(body.get("color", "#E04E0E"))
     icon = str(body.get("icon", "📋"))
+    code = str(body.get("code", "")).strip().upper()
+    if not code:
+        code = re.sub(r'[^A-Za-z]', '', name)[:4].upper() or "PROJ"
     with db.get_connection() as conn:
         cur = conn.execute(
-            "INSERT INTO pm_projects (name, description, color, icon) VALUES (?,?,?,?)",
-            (name, description, color, icon)
+            "INSERT INTO pm_projects (name, description, color, icon, code) VALUES (?,?,?,?,?)",
+            (name, description, color, icon, code)
         )
         conn.commit()
         row = conn.execute("SELECT * FROM pm_projects WHERE id = ?", (cur.lastrowid,)).fetchone()
@@ -3167,7 +3222,7 @@ async def pm_update_project(project_id: int, body: dict):
         raise HTTPException(status_code=404, detail="Project not found")
     fields = []
     params = []
-    for key in ("name", "description", "color", "icon", "status"):
+    for key in ("name", "description", "color", "icon", "status", "code"):
         if key in body:
             fields.append(f"{key} = ?")
             params.append(str(body[key]))
@@ -3320,6 +3375,7 @@ async def pm_create_task(body: dict):
     item_type = str(body.get("item_type", "task"))
     status_val = str(body.get("status", "new"))
     priority = str(body.get("priority", "medium"))
+    severity = str(body.get("severity", "Minor"))
     description = str(body.get("description", ""))
     acceptance_criteria = str(body.get("acceptance_criteria", ""))
     assignee_id = body.get("assignee_id")
@@ -3347,12 +3403,17 @@ async def pm_create_task(body: dict):
             "SELECT COALESCE(MAX(position), 0) as m FROM pm_tasks WHERE project_id = ? AND COALESCE(parent_id, -1) = COALESCE(?, -1)",
             (project_id, parent_id)
         ).fetchone()["m"]
+        max_proj_task_id = conn.execute(
+            "SELECT COALESCE(MAX(project_task_id), 0) FROM pm_tasks WHERE project_id = ?",
+            (project_id,)
+        ).fetchone()[0]
+        new_proj_task_id = max_proj_task_id + 1
         cur = conn.execute(
-            """INSERT INTO pm_tasks (project_id, parent_id, sprint_id, item_type, title, description,
-               acceptance_criteria, status, priority, assignee_id, story_points, due_date, position, refs_json)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-            (project_id, parent_id, sprint_id, item_type, title, description,
-             acceptance_criteria, status_val, priority, assignee_id, story_points, due_date, max_pos + 1000,
+            """INSERT INTO pm_tasks (project_id, project_task_id, parent_id, sprint_id, item_type, title, description,
+               acceptance_criteria, status, priority, severity, assignee_id, story_points, due_date, position, refs_json)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (project_id, new_proj_task_id, parent_id, sprint_id, item_type, title, description,
+             acceptance_criteria, status_val, priority, severity, assignee_id, story_points, due_date, max_pos + 1000,
              json.dumps(refs if isinstance(refs, list) else []))
         )
         task_id = cur.lastrowid
@@ -3397,8 +3458,8 @@ async def pm_update_task(task_id: int, body: dict):
 
         fields = []
         params = []
-        for key in ("title", "description", "acceptance_criteria", "status", "priority", "assignee_id",
-                    "due_date", "story_points", "sprint_id", "parent_id", "position"):
+        for key in ("title", "description", "acceptance_criteria", "status", "priority", "severity",
+                    "assignee_id", "due_date", "story_points", "sprint_id", "parent_id", "position"):
             if key in body:
                 fields.append(f"{key} = ?")
                 params.append(body[key])
@@ -3408,8 +3469,8 @@ async def pm_update_task(task_id: int, body: dict):
         if not fields:
             return _pm_task_with_meta(conn, task_id)
 
-        # Auto-set resolved_date when status → resolved, closed, or rejected
-        _DONE_STATUSES = ("resolved", "closed", "rejected")
+        # Auto-set resolved_date when status transitions to/from done
+        _DONE_STATUSES = _pm_done_statuses() or ("resolved", "closed", "rejected")
         new_status = body.get("status")
         if new_status in _DONE_STATUSES and existing.get("status") not in _DONE_STATUSES:
             fields.append("resolved_date = ?")
@@ -3455,6 +3516,58 @@ async def pm_delete_task(task_id: int):
         conn.execute("DELETE FROM pm_tasks WHERE id = ?", (task_id,))
         conn.commit()
     return {"ok": True}
+
+# ── Issue Tracker (cross-project bugs) ──
+
+@app.get("/pm/issues")
+async def pm_list_issues(
+    project_id: Optional[int] = None,
+    assignee_id: Optional[int] = None,
+    severity: Optional[str] = None,
+    status: Optional[str] = None,
+):
+    clauses = ["t.item_type = 'bug'"]
+    params: list = []
+    if project_id is not None:
+        clauses.append("t.project_id = ?")
+        params.append(project_id)
+    if assignee_id is not None:
+        clauses.append("t.assignee_id = ?")
+        params.append(assignee_id)
+    if severity is not None:
+        clauses.append("t.severity = ?")
+        params.append(severity)
+    if status is not None:
+        clauses.append("t.status = ?")
+        params.append(status)
+    where = "WHERE " + " AND ".join(clauses)
+    with db.get_connection() as conn:
+        rows = conn.execute(f"""
+            SELECT t.*,
+                   m.name as assignee_name, m.avatar_color as assignee_color, m.initials as assignee_initials,
+                   p.name as project_name, p.code as project_code
+            FROM pm_tasks t
+            LEFT JOIN pm_members m ON m.id = t.assignee_id
+            LEFT JOIN pm_projects p ON p.id = t.project_id
+            {where}
+            ORDER BY
+              CASE t.severity WHEN 'Blocker' THEN 0 WHEN 'Major' THEN 1 WHEN 'Minor' THEN 2 ELSE 3 END,
+              t.created_at DESC
+        """, params).fetchall()
+        result = []
+        for row in rows:
+            issue = dict(row)
+            labels = conn.execute(
+                "SELECT label FROM pm_task_labels WHERE task_id = ?", (issue["id"],)
+            ).fetchall()
+            issue["labels"] = [r["label"] for r in labels]
+            issue["refs"] = json.loads(issue.get("refs_json") or "[]")
+            child_count = conn.execute(
+                "SELECT COUNT(*) as c FROM pm_tasks WHERE parent_id = ?", (issue["id"],)
+            ).fetchone()
+            issue["child_count"] = child_count["c"] if child_count else 0
+            result.append(issue)
+        return result
 
 # ── Sprints ──
 

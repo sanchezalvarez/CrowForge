@@ -1,8 +1,7 @@
 import { useState } from "react";
 import { ChevronDown, ChevronRight, Plus, CheckCircle2, Circle } from "lucide-react";
 import { PMProject, PMSprint, PMTask, PMMember } from "../../types/pm";
-import { formatDate, velocity } from "../../lib/pmUtils";
-import { Button } from "../ui/button";
+import { formatDate } from "../../lib/pmUtils";
 import { TaskCard } from "./TaskCard";
 import {
   Dialog,
@@ -32,12 +31,18 @@ function ProgressBar({ done, total }: { done: number; total: number }) {
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-center gap-2">
-        <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
-          <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${pct}%` }} />
+        <div
+          className="flex-1 h-2 rounded-sm overflow-hidden"
+          style={{ background: "var(--background-3)", border: "1px solid var(--border-strong)" }}
+        >
+          <div
+            className="h-full transition-all duration-500"
+            style={{ width: `${pct}%`, background: "var(--accent-teal)" }}
+          />
         </div>
-        <span className="text-[10px] text-muted-foreground font-mono">{pct}%</span>
+        <span className="text-[10px] text-muted-foreground font-mono-ui">{pct}%</span>
       </div>
-      <span className="text-[10px] text-muted-foreground font-mono">{done}/{total} items</span>
+      <span className="text-[10px] text-muted-foreground font-mono-ui">{done}/{total} items</span>
     </div>
   );
 }
@@ -85,30 +90,56 @@ export function SprintView({ project, sprints, tasks, members, onTaskClick, onSp
   };
 
   return (
-    <div className="flex flex-col gap-4">
-      {sprints.map((sprint) => {
+    <div className="flex flex-col gap-5">
+      {sprints.map((sprint, sprintIdx) => {
         const sprintTasks = tasks.filter((t) => t.sprint_id === sprint.id && t.parent_id === null);
         const doneTasks = sprintTasks.filter((t) => t.status === "resolved" || t.status === "closed" || t.status === "rejected");
         const isExpanded = expanded[sprint.id] !== false;
 
         return (
-          <div key={sprint.id} className="border border-border rounded-lg overflow-hidden">
+          <div
+            key={sprint.id}
+            className="overflow-hidden surface-noise animate-column-in"
+            style={{
+              animationDelay: `${sprintIdx * 50}ms`,
+              border: "1.5px solid rgba(20,16,10,0.18)",
+              borderRadius: "8px",
+              boxShadow: sprint.status === "active"
+                ? "3px 3px 0 var(--riso-orange)"
+                : sprint.status === "completed"
+                ? "3px 3px 0 var(--riso-teal)"
+                : "2px 2px 0 rgba(20,16,10,0.10)",
+            }}
+          >
             <div
-              className="flex items-center gap-3 px-4 py-3 bg-muted/30 cursor-pointer hover:bg-muted/50 transition-colors"
+              className="flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors"
+              style={{ background: "var(--background-2)", borderBottom: isExpanded ? "1px solid rgba(20,16,10,0.10)" : "none" }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "var(--background-3)"; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "var(--background-2)"; }}
               onClick={() => setExpanded((e) => ({ ...e, [sprint.id]: !isExpanded }))}
             >
               {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-semibold text-sm">{sprint.name}</span>
-                  <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${
-                    sprint.status === "active" ? "bg-primary/10 text-primary border-primary/30" :
-                    sprint.status === "completed" ? "bg-teal-500/10 text-teal-600 border-teal-500/30" :
-                    "bg-muted text-muted-foreground border-border"
-                  }`}>
+                  <span className="font-display font-black text-sm tracking-tight">{sprint.name}</span>
+                  <span className={`text-[10px] font-mono-ui px-1.5 py-0.5 rounded-sm border ${
+                    sprint.status === "active"
+                      ? "border-orange-500/40 text-orange-700 dark:text-orange-400"
+                      : sprint.status === "completed"
+                      ? "border-teal-500/40 text-teal-700 dark:text-teal-400"
+                      : "text-muted-foreground border-border"
+                  }`}
+                  style={{
+                    background: sprint.status === "active"
+                      ? "color-mix(in srgb, var(--accent-orange) 10%, transparent)"
+                      : sprint.status === "completed"
+                      ? "color-mix(in srgb, var(--accent-teal) 10%, transparent)"
+                      : "var(--background-3)",
+                  }}
+                  >
                     {sprint.status}
                   </span>
-                  <span className="text-xs text-muted-foreground font-mono">
+                  <span className="text-[11px] text-muted-foreground font-mono-ui">
                     {formatDate(sprint.start_date)} → {formatDate(sprint.end_date)}
                   </span>
                 </div>
@@ -118,23 +149,21 @@ export function SprintView({ project, sprints, tasks, members, onTaskClick, onSp
                 <ProgressBar done={doneTasks.length} total={sprintTasks.length} />
               </div>
               {sprint.status !== "completed" && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="text-xs h-7"
+                <button
+                  className="btn-tactile btn-tactile-teal text-[10px]"
                   onClick={(e) => { e.stopPropagation(); handleComplete(sprint); }}
                 >
                   Complete
-                </Button>
+                </button>
               )}
             </div>
 
             {isExpanded && (
-              <div className="p-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {sprintTasks.map((task) => {
+              <div className="p-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2" style={{ background: "var(--background)" }}>
+                {sprintTasks.map((task, taskIdx) => {
                   const isDone = task.status === "resolved" || task.status === "closed";
                   return (
-                    <div key={task.id} className="flex items-start gap-2">
+                    <div key={task.id} className="flex items-start gap-2.5 animate-card-in" style={{ animationDelay: `${taskIdx * 30}ms` }}>
                       <button
                         onClick={() => handleAssignToSprint(task, null)}
                         className="mt-1 text-muted-foreground hover:text-destructive transition-colors flex-shrink-0"
@@ -164,20 +193,32 @@ export function SprintView({ project, sprints, tasks, members, onTaskClick, onSp
       )}
 
       {/* Backlog */}
-      <div className="border border-border rounded-lg overflow-hidden">
-        <div className="flex items-center gap-2 px-4 py-3 bg-muted/20">
-          <span className="text-sm font-semibold">Backlog</span>
-          <span className="text-xs text-muted-foreground font-mono">({backlogTasks.length})</span>
+      <div
+        className="overflow-hidden surface-noise"
+        style={{ border: "1.5px solid rgba(20,16,10,0.18)", borderRadius: "8px", boxShadow: "2px 2px 0 rgba(20,16,10,0.10)" }}
+      >
+        <div
+          className="flex items-center gap-2.5 px-4 py-3"
+          style={{ background: "var(--background-2)", borderBottom: "1px solid rgba(20,16,10,0.10)" }}
+        >
+          <span className="font-display font-black text-sm tracking-tight">Backlog</span>
+          <span
+            className="text-[10px] font-mono-ui px-1.5 py-0.5 rounded-sm"
+            style={{ background: "var(--background-3)", border: "1px solid var(--border-strong)", color: "var(--muted-foreground)" }}
+          >({backlogTasks.length})</span>
         </div>
-        <div className="p-3 flex flex-col gap-2">
+        <div className="p-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
           {backlogTasks.map((task) => (
-            <div key={task.id} className="flex items-start gap-2">
-              <div className="flex-1 min-w-0">
-                <TaskCard task={task} members={members} onClick={() => onTaskClick(task)} compact />
-              </div>
-              {sprints.filter((s) => s.status !== "completed").length > 0 && (
+            <TaskCard
+              key={task.id}
+              task={task}
+              members={members}
+              onClick={() => onTaskClick(task)}
+              compact
+              footer={sprints.filter((s) => s.status !== "completed").length > 0 ? (
                 <select
-                  className="text-xs border border-border rounded px-1 py-1 bg-background text-muted-foreground h-7 flex-shrink-0"
+                  className="w-full text-[11px] font-mono-ui border rounded px-1.5 py-1 bg-background text-muted-foreground"
+                  style={{ borderColor: "rgba(20,16,10,0.15)" }}
                   value=""
                   onChange={(e) => { if (e.target.value) handleAssignToSprint(task, parseInt(e.target.value)); }}
                 >
@@ -186,8 +227,8 @@ export function SprintView({ project, sprints, tasks, members, onTaskClick, onSp
                     <option key={s.id} value={s.id}>{s.name}</option>
                   ))}
                 </select>
-              )}
-            </div>
+              ) : undefined}
+            />
           ))}
           {backlogTasks.length === 0 && (
             <p className="text-xs text-muted-foreground py-2">All items are assigned to sprints.</p>
@@ -195,20 +236,21 @@ export function SprintView({ project, sprints, tasks, members, onTaskClick, onSp
         </div>
       </div>
 
-      <Button variant="outline" className="self-start" onClick={() => setCreateOpen(true)}>
-        <Plus size={14} className="mr-1" /> New Sprint
-      </Button>
+      <button className="btn-tactile btn-tactile-teal self-start" onClick={() => setCreateOpen(true)}>
+        <Plus size={12} /> New Sprint
+      </button>
 
       <Dialog open={createOpen} onOpenChange={(o) => !o && setCreateOpen(false)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md surface-noise" style={{ border: "1.5px solid var(--border-strong)" }}>
           <DialogHeader>
-            <DialogTitle>New Sprint</DialogTitle>
+            <DialogTitle className="font-display font-black tracking-tight">New Sprint</DialogTitle>
           </DialogHeader>
-          <form onSubmit={handleCreateSprint} className="flex flex-col gap-3 py-1">
-            <div className="flex flex-col gap-1">
-              <Label>Sprint name *</Label>
+          <form onSubmit={handleCreateSprint} className="flex flex-col gap-4 py-2">
+            <div className="flex flex-col gap-1.5">
+              <Label className="font-mono text-xs text-muted-foreground">Sprint name *</Label>
               <input
-                className="w-full rounded-md border border-border bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                className="w-full rounded-md bg-background px-3 py-2 text-sm focus:outline-none"
+                style={{ border: "1.5px solid var(--border-strong)" }}
                 value={sprintName}
                 onChange={(e) => setSprintName(e.target.value)}
                 placeholder="Sprint 1"
@@ -216,40 +258,41 @@ export function SprintView({ project, sprints, tasks, members, onTaskClick, onSp
                 required
               />
             </div>
-            <div className="flex flex-col gap-1">
-              <Label>Goal</Label>
+            <div className="flex flex-col gap-1.5">
+              <Label className="font-mono text-xs text-muted-foreground">Goal</Label>
               <input
-                className="w-full rounded-md border border-border bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                className="w-full rounded-md bg-background px-3 py-2 text-sm focus:outline-none"
+                style={{ border: "1.5px solid var(--border-strong)" }}
                 value={sprintGoal}
                 onChange={(e) => setSprintGoal(e.target.value)}
                 placeholder="What do you want to achieve?"
               />
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div className="flex flex-col gap-1">
-                <Label>Start date</Label>
+              <div className="flex flex-col gap-1.5">
+                <Label className="font-mono text-xs text-muted-foreground">Start date</Label>
                 <input
                   type="date"
-                  className="w-full rounded-md border border-border bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                  className="input-riso-date"
                   value={sprintStart}
                   onChange={(e) => setSprintStart(e.target.value)}
                 />
               </div>
-              <div className="flex flex-col gap-1">
-                <Label>End date</Label>
+              <div className="flex flex-col gap-1.5">
+                <Label className="font-mono text-xs text-muted-foreground">End date</Label>
                 <input
                   type="date"
-                  className="w-full rounded-md border border-border bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                  className="input-riso-date"
                   value={sprintEnd}
                   onChange={(e) => setSprintEnd(e.target.value)}
                 />
               </div>
             </div>
-            <DialogFooter className="pt-2">
-              <Button type="button" variant="ghost" onClick={() => setCreateOpen(false)}>Cancel</Button>
-              <Button type="submit" disabled={creating || !sprintName.trim()}>
+            <DialogFooter className="pt-1">
+              <button type="button" className="btn-tactile btn-tactile-outline" onClick={() => setCreateOpen(false)}>Cancel</button>
+              <button type="submit" className="btn-tactile btn-tactile-teal" disabled={creating || !sprintName.trim()}>
                 {creating ? "Creating…" : "Create Sprint"}
-              </Button>
+              </button>
             </DialogFooter>
           </form>
         </DialogContent>

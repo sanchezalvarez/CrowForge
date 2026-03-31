@@ -14,6 +14,7 @@ import {
   Workflow,
   HelpCircle,
   KanbanSquare,
+  Bug,
 } from "lucide-react";
 import { cn } from "./lib/utils";
 import DashboardPage from "./pages/DashboardPage";
@@ -28,6 +29,7 @@ import { CanvasPage } from "./pages/CanvasPage";
 import { HelpPage } from "./pages/HelpPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
 import { ProjectDetailPage } from "./pages/ProjectDetailPage";
+import { IssueTrackerPage } from "./pages/IssueTrackerPage";
 import { SplashScreen } from "./components/SplashScreen";
 import { OnboardingPage } from "./pages/OnboardingPage";
 import { Toaster } from "./components/ui/toaster";
@@ -68,7 +70,7 @@ class PageErrorBoundary extends Component<{ children: ReactNode; page: string },
 }
 
 type AppStatus = "loading" | "onboarding" | "ready" | "failed";
-type AppPage = "home" | "chat" | "agent" | "documents" | "sheets" | "tools" | "benchmark" | "settings" | "canvas" | "help" | "projects" | "project_detail";
+type AppPage = "home" | "chat" | "agent" | "documents" | "sheets" | "tools" | "benchmark" | "settings" | "canvas" | "help" | "projects" | "project_detail" | "issues";
 
 export interface DocumentContext {
   title: string;
@@ -258,7 +260,8 @@ export default function App() {
     { page: "home", label: "Home", icon: Home },
     { page: "chat", label: "Chat", icon: MessageSquare },
     { page: "agent", label: "Agent", icon: Bot },
-    { page: "projects", label: "Tasks", icon: KanbanSquare },
+    { page: "projects", label: "Management", icon: KanbanSquare },
+    { page: "issues", label: "Issues", icon: Bug },
     { page: "documents", label: "Documents", icon: FileText },
     { page: "sheets", label: "Sheets", icon: Table2 },
     { page: "canvas", label: "Canvas", icon: Workflow },
@@ -349,21 +352,22 @@ export default function App() {
 
         <div className="flex-1 overflow-y-auto relative" style={{ zIndex: 1 }}>
           <div className="p-3 space-y-0.5">
-            {navItems.map(({ page, label, icon: Icon }) => (
+            {navItems.map(({ page, label, icon: Icon }, i) => (
               <Fragment key={page}>
                 {page === "projects" && <div className="mx-1 my-1.5" style={{ borderTop: '1px solid var(--topbar-border)' }} />}
                 <button
                   onClick={() => setCurrentPage(page)}
-                  className={cn("w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-sm transition-colors", currentPage === page ? "font-semibold" : "")}
-                  style={
-                    page === "agent"
+                  className={cn("w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-sm transition-colors animate-row-in", currentPage === page ? "font-semibold" : "")}
+                  style={{
+                    animationDelay: `${i * 25}ms`,
+                    ...(page === "agent"
                       ? currentPage === page
                         ? { background: 'rgba(139,98,212,0.25)', color: '#c4a8f0', boxShadow: '0 0 0 1px rgba(139,98,212,0.40)' }
                         : { color: 'var(--topbar-muted)' }
                       : currentPage === page
                         ? { background: 'color-mix(in srgb, var(--primary) 20%, transparent)', color: 'var(--accent-orange)' }
-                        : { color: 'var(--topbar-muted)' }
-                  }
+                        : { color: 'var(--topbar-muted)' }),
+                  }}
                   onMouseEnter={(e) => { if (currentPage !== page) { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.06)'; (e.currentTarget as HTMLButtonElement).style.color = 'var(--topbar-fg)'; } }}
                   onMouseLeave={(e) => { if (currentPage !== page) { (e.currentTarget as HTMLButtonElement).style.background = ''; (e.currentTarget as HTMLButtonElement).style.color = 'var(--topbar-muted)'; } }}
                 >
@@ -382,20 +386,21 @@ export default function App() {
             <span style={{ background: 'var(--accent-teal)' }} />
             <span style={{ background: 'var(--accent-violet)' }} />
           </div>
-          <span className="font-mono-ui" style={{ fontSize: 8, color: 'var(--topbar-muted)', letterSpacing: '0.08em' }}>v0.3</span>
+          <span className="font-mono-ui" style={{ fontSize: 8, color: 'var(--topbar-muted)', letterSpacing: '0.08em' }}>v0.4.1</span>
         </div>
 
         <div className="p-3 space-y-0.5 relative" style={{ borderTop: '1px solid var(--topbar-border)', zIndex: 1 }}>
-          {bottomNavItems.map(({ page, label, icon: Icon }) => (
+          {bottomNavItems.map(({ page, label, icon: Icon }, i) => (
             <button
               key={page}
               onClick={() => setCurrentPage(page)}
-              className={cn("w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-sm transition-colors", currentPage === page ? "font-semibold" : "")}
-              style={
-                currentPage === page
+              className={cn("w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-sm transition-colors animate-row-in", currentPage === page ? "font-semibold" : "")}
+              style={{
+                animationDelay: `${(i + 10) * 25}ms`,
+                ...(currentPage === page
                   ? { background: 'color-mix(in srgb, var(--primary) 20%, transparent)', color: 'var(--accent-orange)' }
-                  : { color: 'var(--topbar-muted)' }
-              }
+                  : { color: 'var(--topbar-muted)' }),
+              }}
               onMouseEnter={(e) => { if (currentPage !== page) { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.06)'; (e.currentTarget as HTMLButtonElement).style.color = 'var(--topbar-fg)'; } }}
               onMouseLeave={(e) => { if (currentPage !== page) { (e.currentTarget as HTMLButtonElement).style.background = ''; (e.currentTarget as HTMLButtonElement).style.color = 'var(--topbar-muted)'; } }}
             >
@@ -408,7 +413,7 @@ export default function App() {
 
       {/* MAIN + AI CONTROLS */}
       <div className="flex flex-1 min-w-0 flex-col lg:flex-row overflow-hidden">
-        <main className={`flex-1 min-w-0 ${["canvas", "settings", "chat", "agent", "tools", "help", "project_detail", "projects"].includes(currentPage) ? "overflow-hidden" : "overflow-y-auto"}`}>
+        <main className={`flex-1 min-w-0 ${["canvas", "settings", "chat", "agent", "tools", "help", "project_detail", "projects", "issues"].includes(currentPage) ? "overflow-hidden" : "overflow-y-auto"}`}>
           <PageErrorBoundary page={currentPage}>
           {currentPage === "home" ? (
             <DashboardPage onNavigate={handleNavigate} />
@@ -442,6 +447,7 @@ export default function App() {
           ) : currentPage === "projects" ? (
             <ProjectsPage
               onNavigateToProject={(id) => handleNavigate("project_detail", String(id))}
+              onNavigate={(page) => handleNavigate(page)}
             />
           ) : currentPage === "project_detail" && activeProjectId ? (
             <ProjectDetailPage
@@ -449,6 +455,8 @@ export default function App() {
               onBack={() => setCurrentPage("projects")}
               onNavigate={handleNavigate}
             />
+          ) : currentPage === "issues" ? (
+            <IssueTrackerPage />
           ) : currentPage === "settings" ? (
             <SettingsPage
               theme={theme}

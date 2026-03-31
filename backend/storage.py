@@ -165,6 +165,7 @@ class DatabaseManager:
             conn.execute("""CREATE TABLE IF NOT EXISTS pm_tasks (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 project_id INTEGER NOT NULL,
+                project_task_id INTEGER DEFAULT NULL,
                 parent_id INTEGER DEFAULT NULL,
                 sprint_id INTEGER DEFAULT NULL,
                 item_type TEXT NOT NULL DEFAULT 'task',
@@ -173,6 +174,7 @@ class DatabaseManager:
                 acceptance_criteria TEXT DEFAULT '',
                 status TEXT NOT NULL DEFAULT 'new',
                 priority TEXT NOT NULL DEFAULT 'medium',
+                severity TEXT NOT NULL DEFAULT 'Minor',
                 assignee_id INTEGER DEFAULT NULL,
                 story_points INTEGER DEFAULT NULL,
                 due_date TEXT DEFAULT NULL,
@@ -203,6 +205,7 @@ class DatabaseManager:
             conn.execute("""CREATE TABLE IF NOT EXISTS pm_tasks (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 project_id INTEGER NOT NULL,
+                project_task_id INTEGER DEFAULT NULL,
                 parent_id INTEGER DEFAULT NULL,
                 sprint_id INTEGER DEFAULT NULL,
                 item_type TEXT NOT NULL DEFAULT 'task',
@@ -211,6 +214,7 @@ class DatabaseManager:
                 acceptance_criteria TEXT DEFAULT '',
                 status TEXT NOT NULL DEFAULT 'new',
                 priority TEXT NOT NULL DEFAULT 'medium',
+                severity TEXT NOT NULL DEFAULT 'Minor',
                 assignee_id INTEGER DEFAULT NULL,
                 story_points INTEGER DEFAULT NULL,
                 due_date TEXT DEFAULT NULL,
@@ -220,6 +224,14 @@ class DatabaseManager:
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )""")
+            # Add new columns to existing pm_tasks if missing
+            _pm_tasks_cols = {row["name"] for row in conn.execute("PRAGMA table_info(pm_tasks)").fetchall()}
+            if "project_task_id" not in _pm_tasks_cols:
+                conn.execute("ALTER TABLE pm_tasks ADD COLUMN project_task_id INTEGER DEFAULT NULL")
+            if "severity" not in _pm_tasks_cols:
+                conn.execute("ALTER TABLE pm_tasks ADD COLUMN severity TEXT NOT NULL DEFAULT 'Minor'")
+            if "code" not in {row["name"] for row in conn.execute("PRAGMA table_info(pm_projects)").fetchall()}:
+                conn.execute("ALTER TABLE pm_projects ADD COLUMN code TEXT NOT NULL DEFAULT ''")
         conn.execute("""CREATE TABLE IF NOT EXISTS pm_task_labels (
             task_id INTEGER NOT NULL,
             label TEXT NOT NULL,
@@ -234,6 +246,7 @@ class DatabaseManager:
             "CREATE INDEX IF NOT EXISTS idx_pm_tasks_type ON pm_tasks(item_type)",
             "CREATE INDEX IF NOT EXISTS idx_pm_tasks_status ON pm_tasks(status)",
             "CREATE INDEX IF NOT EXISTS idx_pm_tasks_assignee ON pm_tasks(assignee_id)",
+            "CREATE INDEX IF NOT EXISTS idx_pm_tasks_proj_task_id ON pm_tasks(project_id, project_task_id)",
         ]:
             conn.execute(idx_sql)
         conn.execute("""CREATE TABLE IF NOT EXISTS pm_activity (
@@ -246,7 +259,8 @@ class DatabaseManager:
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (project_id) REFERENCES pm_projects(id) ON DELETE CASCADE
         )""")
-        conn.execute("INSERT OR IGNORE INTO pm_members (id, name, email, avatar_color, initials) VALUES (1, 'Me', '', '#E04E0E', 'ME')")
+        conn.execute("INSERT OR IGNORE INTO pm_members (id, name, email, avatar_color, initials) VALUES (1, 'Agent Crowner', '', '#E04E0E', 'AC')")
+        conn.execute("UPDATE pm_members SET name = 'Agent Crowner', initials = 'AC', avatar_color = '#E04E0E' WHERE id = 1")
 
         conn.commit()
 

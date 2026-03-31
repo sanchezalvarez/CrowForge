@@ -287,18 +287,27 @@ export function AIControlPanel({ showDebug, onShowDebugChange, tuningParams, onT
   const renderStatusBanner = () => {
     if (backendStatus === "online") {
       return (
-        <div className="rounded-lg border-l-4 border-l-emerald-500 border border-emerald-500/20 bg-emerald-500/5 px-3 py-2.5">
+        <div
+          className="surface-noise rounded border-l-4 px-3 py-2.5"
+          style={{
+            borderLeftColor: "var(--accent-teal)",
+            border: "1.5px solid var(--border-strong)",
+            borderLeftWidth: "4px",
+            background: "color-mix(in srgb, var(--accent-teal) 6%, var(--background-2))",
+            boxShadow: "2px 2px 0 var(--riso-teal)",
+          }}
+        >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="h-2.5 w-2.5 rounded-full bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.4)]" />
-              <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">
+              <div className="h-2.5 w-2.5 rounded-full" style={{ background: "var(--accent-teal)", boxShadow: "0 0 6px color-mix(in srgb, var(--accent-teal) 50%, transparent)" }} />
+              <span className="font-mono-ui text-[10px] font-semibold tracking-widest uppercase" style={{ color: "var(--accent-teal)" }}>
                 Backend Online
               </span>
             </div>
             <div className="flex items-center gap-1">
               <button
                 onClick={handleRestartBackend}
-                className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+                className="btn-tactile"
                 title="Restart backend"
               >
                 <RotateCcw size={10} />
@@ -306,7 +315,8 @@ export function AIControlPanel({ showDebug, onShowDebugChange, tuningParams, onT
               </button>
               <button
                 onClick={handleKillBackend}
-                className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                className="btn-tactile"
+                style={{ color: "var(--destructive)" }}
                 title="Stop backend"
               >
                 <Square size={10} />
@@ -315,7 +325,7 @@ export function AIControlPanel({ showDebug, onShowDebugChange, tuningParams, onT
             </div>
           </div>
           {responseTime !== null && (
-            <p className="text-[10px] text-emerald-600/70 dark:text-emerald-500/60 mt-1 ml-[18px]">
+            <p className="font-mono-ui text-[10px] mt-1 ml-[18px]" style={{ color: "color-mix(in srgb, var(--accent-teal) 70%, var(--muted-foreground))" }}>
               Response: {responseTime}ms
             </p>
           )}
@@ -325,14 +335,23 @@ export function AIControlPanel({ showDebug, onShowDebugChange, tuningParams, onT
 
     if (backendStatus === "restarting") {
       return (
-        <div className="rounded-lg border-l-4 border-l-amber-500 border border-amber-500/20 bg-amber-500/5 px-3 py-2.5">
+        <div
+          className="surface-noise rounded border-l-4 px-3 py-2.5"
+          style={{
+            borderLeftColor: "var(--accent-orange)",
+            border: "1.5px solid var(--border-strong)",
+            borderLeftWidth: "4px",
+            background: "color-mix(in srgb, var(--accent-orange) 6%, var(--background-2))",
+            boxShadow: "2px 2px 0 var(--riso-orange)",
+          }}
+        >
           <div className="flex items-center gap-2">
-            <Loader2 size={14} className="animate-spin text-amber-500" />
-            <span className="text-xs font-semibold text-amber-700 dark:text-amber-400">
+            <Loader2 size={14} className="animate-spin" style={{ color: "var(--accent-orange)" }} />
+            <span className="font-mono-ui text-[10px] font-semibold tracking-widest uppercase" style={{ color: "var(--accent-orange)" }}>
               Restarting backend...
             </span>
           </div>
-          <p className="text-[10px] text-amber-600/70 dark:text-amber-500/60 mt-1 ml-[22px]">
+          <p className="font-mono-ui text-[10px] mt-1 ml-[22px]" style={{ color: "color-mix(in srgb, var(--accent-orange) 70%, var(--muted-foreground))" }}>
             Attempt {restartAttempt}/30 — waiting for backend to respond
           </p>
         </div>
@@ -341,10 +360,19 @@ export function AIControlPanel({ showDebug, onShowDebugChange, tuningParams, onT
 
     // Offline
     return (
-      <div className="rounded-lg border-l-4 border-l-red-500 border border-red-500/20 bg-red-500/5 px-3 py-2.5">
+      <div
+        className="surface-noise rounded border-l-4 px-3 py-2.5"
+        style={{
+          borderLeftColor: "var(--destructive)",
+          border: "1.5px solid var(--border-strong)",
+          borderLeftWidth: "4px",
+          background: "color-mix(in srgb, var(--destructive) 6%, var(--background-2))",
+          boxShadow: "2px 2px 0 rgba(220,38,38,0.18)",
+        }}
+      >
         <div className="flex items-center gap-2">
-          <div className="h-2.5 w-2.5 rounded-full bg-red-500 shadow-[0_0_6px_rgba(239,68,68,0.4)]" />
-          <span className="text-xs font-semibold text-red-700 dark:text-red-400">
+          <div className="h-2.5 w-2.5 rounded-full" style={{ background: "var(--destructive)", boxShadow: "0 0 6px rgba(239,68,68,0.4)" }} />
+          <span className="font-mono-ui text-[10px] font-semibold tracking-widest uppercase" style={{ color: "var(--destructive)" }}>
             Backend Offline
           </span>
         </div>
@@ -353,14 +381,14 @@ export function AIControlPanel({ showDebug, onShowDebugChange, tuningParams, onT
             <div className="flex gap-2">
               <button
                 onClick={handleStartBackend}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-emerald-500 text-white hover:bg-emerald-600 transition-colors"
+                className="btn-tactile btn-tactile-teal"
               >
                 <Play size={11} />
                 Start
               </button>
               <button
                 onClick={handleRestartBackend}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-red-500 text-white hover:bg-red-600 transition-colors"
+                className="btn-tactile btn-tactile-orange"
               >
                 <RotateCcw size={11} />
                 Restart
@@ -368,11 +396,18 @@ export function AIControlPanel({ showDebug, onShowDebugChange, tuningParams, onT
             </div>
           ) : (
             <div className="space-y-1">
-              <p className="text-[11px] text-red-600/80 dark:text-red-400/80">
+              <p className="font-mono-ui text-[10px]" style={{ color: "var(--destructive)" }}>
                 Start the backend manually:
               </p>
-              <code className="flex items-center gap-1.5 text-[10px] font-mono bg-muted/60 rounded px-2 py-1 text-foreground/80">
-                <Terminal size={10} className="shrink-0 text-muted-foreground" />
+              <code
+                className="flex items-center gap-1.5 font-mono-ui text-[10px] rounded px-2 py-1"
+                style={{
+                  background: "var(--background-3)",
+                  border: "1px solid var(--border-strong)",
+                  color: "var(--foreground)",
+                }}
+              >
+                <Terminal size={10} className="shrink-0" style={{ color: "var(--accent-teal)" }} />
                 python -m backend.app
               </code>
             </div>
@@ -383,17 +418,17 @@ export function AIControlPanel({ showDebug, onShowDebugChange, tuningParams, onT
   };
 
   return (
-    <aside className="w-full lg:w-[280px] shrink-0 border-t lg:border-t-0 lg:border-l bg-background flex flex-col overflow-hidden max-h-[40vh] lg:max-h-none">
+    <aside className="surface-noise w-full lg:w-[280px] shrink-0 border-t lg:border-t-0 lg:border-l border-border-strong bg-background flex flex-col overflow-hidden max-h-[40vh] lg:max-h-none">
       {/* Header */}
-      <div className="h-12 lg:h-14 flex items-center gap-2 px-4 border-b">
-        <Sliders size={15} className="text-muted-foreground" />
-        <span className="text-xs font-semibold tracking-wide uppercase text-muted-foreground">
+      <div className="h-12 lg:h-14 flex items-center gap-2 px-4 border-b border-border-strong">
+        <Sliders size={15} style={{ color: "var(--accent-orange)" }} />
+        <span className="font-mono-ui text-[10px] font-semibold tracking-widest uppercase" style={{ color: "var(--muted-foreground)" }}>
           AI Controls
         </span>
         <div className="ml-auto flex items-center gap-2">
-          {isBusy && <Loader2 size={13} className="animate-spin text-muted-foreground" />}
+          {isBusy && <Loader2 size={13} className="animate-spin" style={{ color: "var(--accent-orange)" }} />}
           {modelStatus && modelStatus !== "loaded" && modelStatus !== "no_local" && (
-            <div className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono bg-amber-500/10 text-amber-600 border border-amber-500/20 whitespace-nowrap">
+            <div className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono-ui whitespace-nowrap" style={{ background: "color-mix(in srgb, var(--accent-gold) 12%, transparent)", color: "var(--accent-gold)", border: "1px solid color-mix(in srgb, var(--accent-gold) 28%, transparent)" }}>
               <Cpu size={10} />
               {modelStatus === "unloaded" ? "Model unloaded" : "No model"}
             </div>
@@ -407,16 +442,37 @@ export function AIControlPanel({ showDebug, onShowDebugChange, tuningParams, onT
         {renderStatusBanner()}
 
         <Tabs defaultValue="engine-model" className="w-full">
-          <TabsList className="w-full grid grid-cols-3 h-8">
-            <TabsTrigger value="engine-model" className="text-xs px-1.5 gap-1">
+          <TabsList
+            className="w-full grid grid-cols-3 h-8 surface-noise"
+            style={{
+              background: "var(--background-3)",
+              border: "1.5px solid var(--border-strong)",
+              borderRadius: "6px",
+              padding: "2px",
+            }}
+          >
+            <TabsTrigger
+              value="engine-model"
+              className="font-mono-ui text-[10px] tracking-wider uppercase px-1.5 gap-1"
+              style={{ fontFamily: "'IBM Plex Mono', monospace" }}
+            >
               <Cpu size={12} />
               Engine
             </TabsTrigger>
-            <TabsTrigger value="tuning" className="text-xs px-1.5 gap-1">
+            <TabsTrigger
+              value="tuning"
+              className="font-mono-ui text-[10px] tracking-wider uppercase px-1.5 gap-1"
+              style={{ fontFamily: "'IBM Plex Mono', monospace" }}
+            >
               <Sliders size={12} />
               Tuning
             </TabsTrigger>
-            <TabsTrigger value="debug" className="text-xs px-1.5 gap-1" onClick={() => { if (showDebug) fetchDebug(); }}>
+            <TabsTrigger
+              value="debug"
+              className="font-mono-ui text-[10px] tracking-wider uppercase px-1.5 gap-1"
+              style={{ fontFamily: "'IBM Plex Mono', monospace" }}
+              onClick={() => { if (showDebug) fetchDebug(); }}
+            >
               <Bug size={12} />
               Debug
             </TabsTrigger>
@@ -424,10 +480,16 @@ export function AIControlPanel({ showDebug, onShowDebugChange, tuningParams, onT
 
           {/* ── Engine & Model ─────────────────────── */}
           <TabsContent value="engine-model">
-            <Card className="shadow-none border-muted">
+            <Card
+              className="card-riso surface-noise"
+              style={{
+                border: "1.5px solid var(--border-strong)",
+                background: "var(--background-2)",
+              }}
+            >
               <CardContent className="p-3 space-y-3">
                 <div className="space-y-1.5">
-                  <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">
+                  <Label className="riso-section-label">
                     AI Engine
                   </Label>
                   <Select
@@ -435,21 +497,29 @@ export function AIControlPanel({ showDebug, onShowDebugChange, tuningParams, onT
                     onValueChange={handleEngineChange}
                     disabled={isBusy}
                   >
-                    <SelectTrigger className="h-8 text-xs font-mono">
+                    <SelectTrigger
+                      className="h-8 font-mono-ui text-xs"
+                      style={{
+                        background: "var(--background-2)",
+                        border: "1.5px solid var(--border-strong)",
+                        fontFamily: "'IBM Plex Mono', monospace",
+                        boxShadow: "1px 1px 0 var(--riso-teal)",
+                      }}
+                    >
                       <SelectValue placeholder="No engines available" />
                     </SelectTrigger>
                     <SelectContent>
                       {engines.map((e) => (
                         <SelectItem key={e.name} value={e.name}>
-                          <span className="font-mono">{e.type === "mock" ? "No AI" : e.name}</span>
-                          <span className="ml-2 text-muted-foreground/60 text-[10px]">
+                          <span className="font-mono-ui">{e.type === "mock" ? "No AI" : e.name}</span>
+                          <span className="ml-2 text-[10px]" style={{ color: "var(--muted-foreground)", opacity: 0.7 }}>
                             {e.type === "mock" ? "no ai" : e.type}
                           </span>
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
-                  <p className="text-[10px] text-muted-foreground/70">
+                  <p className="font-mono-ui text-[10px]" style={{ color: "var(--muted-foreground)", opacity: 0.75 }}>
                     {engineSwitching
                       ? "Switching engine..."
                       : activeEngine
@@ -461,9 +531,9 @@ export function AIControlPanel({ showDebug, onShowDebugChange, tuningParams, onT
                 {/* Model selector — only when local engine is active */}
                 {showModelSelector && (
                   <>
-                    <Separator />
+                    <Separator style={{ borderColor: "var(--border-strong)" }} />
                     <div className="space-y-1.5">
-                      <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">
+                      <Label className="riso-section-label">
                         Local Model
                       </Label>
                       <Select
@@ -471,7 +541,15 @@ export function AIControlPanel({ showDebug, onShowDebugChange, tuningParams, onT
                         onValueChange={handleModelChange}
                         disabled={isBusy || models.length === 0}
                       >
-                        <SelectTrigger className="h-8 text-xs font-mono">
+                        <SelectTrigger
+                          className="h-8 font-mono-ui text-xs"
+                          style={{
+                            background: "var(--background-2)",
+                            border: "1.5px solid var(--border-strong)",
+                            fontFamily: "'IBM Plex Mono', monospace",
+                            boxShadow: "1px 1px 0 var(--riso-teal)",
+                          }}
+                        >
                           <SelectValue placeholder="Choose a model…" />
                         </SelectTrigger>
                         <SelectContent>
@@ -483,7 +561,7 @@ export function AIControlPanel({ showDebug, onShowDebugChange, tuningParams, onT
                         </SelectContent>
                       </Select>
                       {modelSwitching && (
-                        <p className="text-[10px] text-muted-foreground/70">
+                        <p className="font-mono-ui text-[10px]" style={{ color: "var(--muted-foreground)", opacity: 0.75 }}>
                           Loading model — this may take a moment...
                         </p>
                       )}
@@ -491,10 +569,10 @@ export function AIControlPanel({ showDebug, onShowDebugChange, tuningParams, onT
                       {/* Model idle timeout */}
                       <div className="pt-1 space-y-1">
                         <div className="flex items-center justify-between">
-                          <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">
+                          <Label className="font-mono-ui text-[10px] font-semibold tracking-widest uppercase" style={{ color: "var(--muted-foreground)" }}>
                             Auto-unload after
                           </Label>
-                          <span className="text-xs font-mono text-foreground">
+                          <span className="font-mono-ui text-xs" style={{ color: "var(--accent-violet)" }}>
                             {idleTimeoutMin === 0 ? "Never" : `${idleTimeoutMin}m`}
                           </span>
                         </div>
@@ -505,9 +583,10 @@ export function AIControlPanel({ showDebug, onShowDebugChange, tuningParams, onT
                           step="5"
                           value={idleTimeoutMin}
                           onChange={(e) => handleIdleTimeoutChange(Number(e.target.value))}
-                          className="w-full h-2 accent-primary cursor-pointer"
+                          className="w-full h-2 cursor-pointer"
+                          style={{ accentColor: "var(--accent-violet)" }}
                         />
-                        <p className="text-[10px] text-muted-foreground/60">
+                        <p className="font-mono-ui text-[10px]" style={{ color: "var(--muted-foreground)", opacity: 0.6 }}>
                           0 = keep in memory
                         </p>
                       </div>
@@ -515,31 +594,40 @@ export function AIControlPanel({ showDebug, onShowDebugChange, tuningParams, onT
                   </>
                 )}
 
-                <Separator />
+                <Separator style={{ borderColor: "var(--border-strong)" }} />
 
                 <div className="space-y-1.5">
-                  <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">
+                  <Label className="riso-section-label">
                     Registered
                   </Label>
                   {engines.length === 0 ? (
-                    <p className="text-[10px] text-muted-foreground/70 italic">
+                    <p className="font-mono-ui text-[10px] italic" style={{ color: "var(--muted-foreground)", opacity: 0.75 }}>
                       No engines found — is the backend running?
                     </p>
                   ) : (
                     engines.map((e) => (
                       <div
                         key={e.name}
-                        className="flex items-center justify-between rounded-md border px-3 py-1.5 text-xs text-muted-foreground"
+                        className="surface-noise flex items-center justify-between rounded px-3 py-1.5"
+                        style={{
+                          border: "1.5px solid var(--border-strong)",
+                          background: e.name === activeEngine
+                            ? "color-mix(in srgb, var(--accent-teal) 8%, var(--background-2))"
+                            : "var(--background-2)",
+                          boxShadow: e.name === activeEngine ? "2px 2px 0 var(--riso-teal)" : "1px 1px 0 var(--border-strong)",
+                        }}
                       >
                         <div className="flex items-center gap-2">
                           <div
-                            className={`h-2 w-2 rounded-full ${
-                              e.name === activeEngine ? "bg-emerald-500" : "bg-muted-foreground/30"
-                            }`}
+                            className="h-2 w-2 rounded-full"
+                            style={{
+                              background: e.name === activeEngine ? "var(--accent-teal)" : "var(--muted-foreground)",
+                              opacity: e.name === activeEngine ? 1 : 0.35,
+                            }}
                           />
-                          <span className="font-mono">{e.name}</span>
+                          <span className="font-mono-ui text-[11px]" style={{ color: "var(--foreground)" }}>{e.name}</span>
                         </div>
-                        <span className="text-[10px] text-muted-foreground/60">
+                        <span className="font-mono-ui text-[10px]" style={{ color: "var(--muted-foreground)", opacity: 0.65 }}>
                           {e.type}
                         </span>
                       </div>
@@ -552,15 +640,21 @@ export function AIControlPanel({ showDebug, onShowDebugChange, tuningParams, onT
 
           {/* ── Tuning ─────────────────────────────── */}
           <TabsContent value="tuning">
-            <Card className="shadow-none border-muted">
+            <Card
+              className="card-riso card-riso-orange surface-noise"
+              style={{
+                border: "1.5px solid var(--border-strong)",
+                background: "var(--background-2)",
+              }}
+            >
               <CardContent className="p-3 space-y-3">
                 {/* Temperature */}
                 <div className="space-y-1">
                   <div className="flex items-center justify-between">
-                    <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">
+                    <Label className="font-mono-ui text-[10px] font-semibold tracking-widest uppercase" style={{ color: "var(--muted-foreground)" }}>
                       Temperature
                     </Label>
-                    <span className="text-xs font-mono text-foreground">
+                    <span className="font-mono-ui text-xs font-semibold" style={{ color: "var(--accent-orange)" }}>
                       {tuningParams.temperature.toFixed(2)}
                     </span>
                   </div>
@@ -571,20 +665,21 @@ export function AIControlPanel({ showDebug, onShowDebugChange, tuningParams, onT
                     step="0.05"
                     value={tuningParams.temperature}
                     onChange={(e) => onTuningChange({ ...tuningParams, temperature: parseFloat(e.target.value) })}
-                    className="w-full h-2 accent-primary cursor-pointer"
+                    className="w-full h-2 cursor-pointer"
+                    style={{ accentColor: "var(--accent-orange)" }}
                   />
-                  <p className="text-[10px] text-muted-foreground/60 text-right">0 – 1.5</p>
+                  <p className="font-mono-ui text-[10px] text-right" style={{ color: "var(--muted-foreground)", opacity: 0.6 }}>0 – 1.5</p>
                 </div>
 
-                <Separator />
+                <Separator style={{ borderColor: "var(--border-strong)" }} />
 
                 {/* Top-p */}
                 <div className="space-y-1">
                   <div className="flex items-center justify-between">
-                    <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">
+                    <Label className="font-mono-ui text-[10px] font-semibold tracking-widest uppercase" style={{ color: "var(--muted-foreground)" }}>
                       Top-p
                     </Label>
-                    <span className="text-xs font-mono text-foreground">
+                    <span className="font-mono-ui text-xs font-semibold" style={{ color: "var(--accent-teal)" }}>
                       {tuningParams.topP.toFixed(2)}
                     </span>
                   </div>
@@ -595,20 +690,21 @@ export function AIControlPanel({ showDebug, onShowDebugChange, tuningParams, onT
                     step="0.05"
                     value={tuningParams.topP}
                     onChange={(e) => onTuningChange({ ...tuningParams, topP: parseFloat(e.target.value) })}
-                    className="w-full h-2 accent-primary cursor-pointer"
+                    className="w-full h-2 cursor-pointer"
+                    style={{ accentColor: "var(--accent-teal)" }}
                   />
-                  <p className="text-[10px] text-muted-foreground/60 text-right">0.1 – 1.0</p>
+                  <p className="font-mono-ui text-[10px] text-right" style={{ color: "var(--muted-foreground)", opacity: 0.6 }}>0.1 – 1.0</p>
                 </div>
 
-                <Separator />
+                <Separator style={{ borderColor: "var(--border-strong)" }} />
 
                 {/* Max Tokens */}
                 <div className="space-y-1">
                   <div className="flex items-center justify-between">
-                    <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">
+                    <Label className="font-mono-ui text-[10px] font-semibold tracking-widest uppercase" style={{ color: "var(--muted-foreground)" }}>
                       Max Tokens
                     </Label>
-                    <span className="text-xs font-mono text-foreground">
+                    <span className="font-mono-ui text-xs font-semibold" style={{ color: "var(--accent-violet)" }}>
                       {tuningParams.maxTokens}
                     </span>
                   </div>
@@ -619,20 +715,21 @@ export function AIControlPanel({ showDebug, onShowDebugChange, tuningParams, onT
                     step="64"
                     value={tuningParams.maxTokens}
                     onChange={(e) => onTuningChange({ ...tuningParams, maxTokens: parseInt(e.target.value, 10) || 1024 })}
-                    className="w-full h-2 accent-primary cursor-pointer"
+                    className="w-full h-2 cursor-pointer"
+                    style={{ accentColor: "var(--accent-violet)" }}
                   />
-                  <p className="text-[10px] text-muted-foreground/60 text-right">64 – 8192</p>
+                  <p className="font-mono-ui text-[10px] text-right" style={{ color: "var(--muted-foreground)", opacity: 0.6 }}>64 – 8192</p>
                 </div>
 
-                <Separator />
+                <Separator style={{ borderColor: "var(--border-strong)" }} />
 
                 {/* Seed */}
                 <div className="space-y-1">
                   <div className="flex items-center justify-between">
-                    <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">
+                    <Label className="font-mono-ui text-[10px] font-semibold tracking-widest uppercase" style={{ color: "var(--muted-foreground)" }}>
                       Seed
                     </Label>
-                    <span className="text-xs font-mono text-foreground">
+                    <span className="font-mono-ui text-xs" style={{ color: "var(--foreground)", opacity: 0.8 }}>
                       {tuningParams.seed !== null ? tuningParams.seed : "Random"}
                     </span>
                   </div>
@@ -647,18 +744,26 @@ export function AIControlPanel({ showDebug, onShowDebugChange, tuningParams, onT
                         const parsed = parseInt(val, 10);
                         onTuningChange({ ...tuningParams, seed: val && !isNaN(parsed) ? parsed : null });
                       }}
-                      className="flex-1 h-7 rounded-md border border-input bg-background px-2 text-xs font-mono text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                      className="flex-1 h-7 rounded px-2 font-mono-ui text-xs"
+                      style={{
+                        background: "var(--background-2)",
+                        border: "1.5px solid var(--border-strong)",
+                        color: "var(--foreground)",
+                        boxShadow: "1px 1px 0 var(--border-strong)",
+                        outline: "none",
+                        fontFamily: "'IBM Plex Mono', monospace",
+                      }}
                     />
                     {tuningParams.seed !== null && (
                       <button
                         onClick={() => onTuningChange({ ...tuningParams, seed: null })}
-                        className="text-[10px] text-muted-foreground hover:text-foreground"
+                        className="btn-tactile text-[10px]"
                       >
                         Clear
                       </button>
                     )}
                   </div>
-                  <p className="text-[10px] text-muted-foreground/60 text-right">optional</p>
+                  <p className="font-mono-ui text-[10px] text-right" style={{ color: "var(--muted-foreground)", opacity: 0.6 }}>optional</p>
                 </div>
               </CardContent>
             </Card>
@@ -666,50 +771,74 @@ export function AIControlPanel({ showDebug, onShowDebugChange, tuningParams, onT
 
           {/* ── Debug ──────────────────────────────── */}
           <TabsContent value="debug">
-            <Card className="shadow-none border-muted">
+            <Card
+              className="card-riso surface-noise"
+              style={{
+                border: "1.5px solid var(--border-strong)",
+                background: "var(--background-2)",
+              }}
+            >
               <CardContent className="p-3 space-y-3">
                 {/* Debug toggle */}
                 <button
                   type="button"
                   onClick={() => onShowDebugChange(!showDebug)}
-                  className="flex items-center gap-2.5 w-full px-1 py-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  className="flex items-center gap-2.5 w-full px-1 py-1.5 transition-colors"
+                  style={{ color: showDebug ? "var(--accent-teal)" : "var(--muted-foreground)" }}
                 >
                   <div
-                    className={`h-4 w-8 rounded-full relative transition-colors ${
-                      showDebug ? "bg-emerald-500" : "bg-muted-foreground/30"
-                    }`}
+                    className="h-4 w-8 rounded-full relative transition-colors"
+                    style={{
+                      background: showDebug
+                        ? "var(--accent-teal)"
+                        : "color-mix(in srgb, var(--muted-foreground) 30%, transparent)",
+                      border: "1.5px solid var(--border-strong)",
+                      boxShadow: showDebug ? "1px 1px 0 var(--riso-teal)" : "none",
+                    }}
                   >
                     <div
-                      className={`absolute top-0.5 h-3 w-3 rounded-full bg-white transition-transform ${
-                        showDebug ? "translate-x-4" : "translate-x-0.5"
-                      }`}
+                      className="absolute top-0.5 h-3 w-3 rounded-full transition-transform"
+                      style={{
+                        background: showDebug ? "#fff" : "var(--background-3)",
+                        transform: showDebug ? "translateX(16px)" : "translateX(2px)",
+                      }}
                     />
                   </div>
-                  <span className="font-mono">Show AI Debug</span>
+                  <span className="font-mono-ui text-[10px] font-semibold tracking-widest uppercase">Show AI Debug</span>
                 </button>
 
                 {showDebug && (
                   <>
-                    <Separator />
+                    <Separator style={{ borderColor: "var(--border-strong)" }} />
                     <div className="space-y-1.5">
                       <div className="flex items-center justify-between">
-                        <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">
+                        <Label className="riso-section-label">
                           Last Generation
                         </Label>
                         <button
                           onClick={fetchDebug}
                           disabled={debugLoading}
-                          className="text-muted-foreground hover:text-foreground"
+                          className="btn-tactile"
+                          style={{ padding: "2px 4px" }}
                         >
                           <RefreshCw size={12} className={debugLoading ? "animate-spin" : ""} />
                         </button>
                       </div>
                       {debugPayload ? (
-                        <pre className="text-[10px] font-mono text-foreground/80 bg-muted rounded p-2 overflow-auto max-h-[300px] whitespace-pre-wrap break-all">
+                        <pre
+                          className="font-mono-ui text-[10px] rounded p-2 overflow-auto max-h-[300px] whitespace-pre-wrap break-all"
+                          style={{
+                            background: "var(--background-3)",
+                            border: "1.5px solid var(--border-strong)",
+                            color: "var(--foreground)",
+                            boxShadow: "2px 2px 0 var(--riso-teal)",
+                            fontFamily: "'IBM Plex Mono', monospace",
+                          }}
+                        >
                           {JSON.stringify(debugPayload, null, 2)}
                         </pre>
                       ) : (
-                        <p className="text-[10px] text-muted-foreground/70 italic">
+                        <p className="font-mono-ui text-[10px] italic" style={{ color: "var(--muted-foreground)", opacity: 0.75 }}>
                           {debugLoading ? "Loading..." : "No debug data yet. Set DEBUG_AI=true in .env and make a generation request."}
                         </p>
                       )}

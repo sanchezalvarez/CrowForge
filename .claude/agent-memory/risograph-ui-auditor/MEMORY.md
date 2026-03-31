@@ -1,0 +1,7 @@
+# CrowForge Risograph UI Auditor — Memory Index
+
+- [PM Module Riso Audit 2026-03-31](project_pm_riso_audit.md) — Full riso audit and enforcement pass on PM + Issue Tracker views
+- [SplashScreen + OnboardingPage Riso Redesign 2026-03-31](project_splash_onboarding_riso.md) — Canonical pattern for centered riso card surfaces; all btn-tactile, engine cards, input styling, step indicators
+- [SettingsPage Riso Redesign 2026-03-31](project_settings_riso_audit.md) — Full 5-tab settings page redesign: tab nav, card-riso pattern, input/select/button specs, all section layouts
+- [PM Dialogs & Detail Panel Riso 2026-03-31](project_pm_dialogs_riso.md) — TaskDetailPanel, TaskForm, SprintView New Sprint dialog: surface-noise, riso borders, btn-tactile, mono labels
+- [Dashboard MyWorkSection Riso Audit 2026-03-31](project_dashboard_mywork_riso.md) — Member pills, card headers, row hover, severity tags, empty states, stats bar

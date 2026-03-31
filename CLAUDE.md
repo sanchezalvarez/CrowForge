@@ -12,7 +12,7 @@ After implementing any fix, do a self-review pass checking for: stale state clos
 
 ## Build & Release
 
-Use semver format (e.g., `0.3.0` not `0.3`) for all version strings. Always validate version format before committing.
+Use semver format (e.g., `0.4.1` not `0.4`) for all version strings. Current version: **0.4.1** (set in `package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`, displayed in `App.tsx` sidebar and `SettingsPage.tsx` About). Always validate version format before committing.
 
 ## Problem Solving
 
@@ -59,13 +59,16 @@ Tauri (Rust) — spawns Python backend as sidecar on startup
 - `SheetsPage.tsx` — spreadsheet with formula support and AI fill
 - `ToolsPage.tsx` — utility widgets (world clock, RSS news, etc.)
 - `BenchmarkPage.tsx` — model comparison/benchmarking tool
-- `SettingsPage.tsx` — all app configuration (AI engines, appearance, etc.)
-- `HelpPage.tsx` — in-app help documentation
+- `ProjectsPage.tsx` — project list with create/edit dialogs
+- `ProjectDetailPage.tsx` — single project view with tabs: Kanban, Backlog, Sprint, Roadmap
+- `IssueTrackerPage.tsx` — cross-project bug tracker with Report Bug dialog
+- `SettingsPage.tsx` — all app configuration (AI engines, appearance, team, workflows, etc.)
+- `HelpPage.tsx` — in-app help documentation (includes Scrum guide)
 - `OnboardingPage.tsx` — first-run onboarding flow
 
 **App shell**: `src/App.tsx` contains routing, layout sidebar, and shared state.
 
-**Styling**: Tailwind CSS v4 with shadcn/ui design tokens (CSS variables in `index.css`), Radix UI primitives, Lucide icons.
+**Styling**: Tailwind CSS v4 with shadcn/ui design tokens (CSS variables in `index.css`), Radix UI primitives, Lucide icons. Risograph visual design system throughout (see below).
 
 **SSE hook**: `src/hooks/useFetchSSE.ts` wraps `fetch` with streaming for AI token streaming (use this, not `useSSE.ts`).
 
@@ -90,6 +93,53 @@ Node-based visual programming canvas using `@xyflow/react` v12.
 **AI Node behaviors**: free prompt, answer, summarize, translate, expand, extract, simplify, classify, rewrite.
 **Execution chain**: when an AI node completes, it automatically triggers connected downstream AI nodes. Outputs from connected upstream nodes are injected as context.
 
+### Project Management System (`src/components/PM/`)
+
+Full Scrum-style project management with Kanban boards, sprints, backlog, roadmap, and issue tracking.
+
+- **`KanbanBoard.tsx`** — drag-and-drop Kanban board using `@hello-pangea/dnd`, status columns with task cards
+- **`BacklogView.tsx`** — hierarchical tree table (Epic → Feature → Story → Task/Bug/Spike), column reorder, inline child creation, context menu
+- **`SprintView.tsx`** — time-boxed sprints with progress bars, complete sprint action
+- **`RoadmapView.tsx`** — epics/features grouped by target month with overdue indicators
+- **`IssueTrackerView.tsx`** — virtual-scrolled issue table with bulk actions, severity/status filters, group by project
+- **`TaskDetailPanel.tsx`** — slide-in right panel for editing task details, parent assignment, references
+- **`TaskForm.tsx`** — create/edit work item dialog (risograph styled)
+- **`TaskCard.tsx`** — compact task card used in Kanban and Sprint views
+
+**PM Hooks** (`src/hooks/`):
+- `useIssues.ts` — issue CRUD and filtering
+- `useWorkflowConfig.ts` — custom task/issue statuses and severity levels
+
+**PM Types**: `src/types/pm.ts` — `PMProject`, `PMTask`, `PMSprint`, `PMMember`, `PMIssue`, `PMSeverity`, `PMItemType`
+
+### Risograph Design System (`src/index.css`)
+
+Visual identity based on risograph printing aesthetics — offset shadows, grain textures, registration marks, mono typography.
+
+**CSS classes** (defined in `index.css`):
+- `surface-noise` — subtle grain texture overlay via `::after` pseudo-element
+- `card-riso`, `card-riso-orange`, `card-riso-teal`, `card-riso-violet` — card variants with offset box-shadows
+- `btn-tactile`, `btn-tactile-orange`, `btn-tactile-teal`, `btn-tactile-outline` — buttons with press-in active state (translate + shadow)
+- `riso-section-label` — IBM Plex Mono 10px uppercase labels with `◆` marker
+- `riso-frame` — registration-mark corner decorations via `::before`/`::after`
+- `input-riso-date`, `input-riso-date-sm` — styled date inputs with noise, borders, shadows, focus glow
+- `row-tactile` — interactive table row with orange tint on active
+
+**Animation classes** (all use `cubic-bezier(0.22, 1, 0.36, 1)` easing, respect `prefers-reduced-motion`):
+- `animate-ink-in` — blur fade + bounce (0.6s), for headers/sections
+- `animate-column-in` — fade + slide up 12px (0.25s), for columns/sections with stagger
+- `animate-card-in` — fade + slide left 6px (0.2s), for cards with stagger
+- `animate-row-in` — fade + slide up 6px (0.18s), for table/list rows with stagger
+- `animate-msg-in` — riso misregistration text-shadow fade (0.35s), for chat messages
+
+**CSS variables** (key tokens): `--accent-orange`, `--accent-teal`, `--accent-violet`, `--riso-orange`, `--riso-teal`, `--riso-violet`, `--border-strong`, `--background-2`, `--background-3`, `--noise-subtle`
+
+**Fonts**: Syne Variable (`font-display`), IBM Plex Mono (`font-mono-ui`)
+
+### Dialog Component
+
+`src/components/ui/dialog.tsx` — Radix Dialog with flexbox-centered overlay (`flex items-center justify-center`) instead of `fixed + translate`. Content uses `max-h-[85vh]` with internal scroll for tall dialogs.
+
 ### Backend
 
 - **`app.py`**: All FastAPI routes — chat, agent, documents, sheets, canvas, benchmark, AI engine management, model download
@@ -105,7 +155,7 @@ Node-based visual programming canvas using `@xyflow/react` v12.
 - **`storage.py`**: Raw SQL data layer — `DatabaseManager`, `AppRepository`, `PromptTemplateRepository`, `BenchmarkRepository`, `ChatSessionRepository`, `ChatMessageRepository`, `DocumentRepository`, `SheetRepository`, `CanvasRepository`
 - **`models.py`**: Pydantic request/response models
 - **`prompts.py`**: System prompt and user prompt template strings
-- **`schema.sql`**: SQLite DDL — `settings`, `prompt_templates`, `benchmark_runs`, `chat_sessions`, `chat_messages`, `documents`, `sheets`, `sheet_columns`, `sheet_rows`, `rf_canvases`
+- **`schema.sql`**: SQLite DDL — `settings`, `prompt_templates`, `benchmark_runs`, `chat_sessions`, `chat_messages`, `documents`, `sheets`, `sheet_columns`, `sheet_rows`, `rf_canvases`, `pm_projects`, `pm_members`, `pm_project_members`, `pm_sprints`, `pm_tasks`, `pm_workflow_config`
 
 ### Tauri
 

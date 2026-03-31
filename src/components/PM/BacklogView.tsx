@@ -1,12 +1,13 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from "react";
-import { ChevronRight, ChevronDown, Plus, Search, Copy, Trash2, Pencil, GripVertical } from "lucide-react";
+import { ChevronRight, ChevronDown, Plus, Search, Trash2, Pencil, Download, Copy } from "lucide-react";
 import axios from "axios";
-import { PMTask, PMTaskStatus, PMPriority, PMItemType, PMMember } from "../../types/pm";
-import { buildTree, flattenTree, filterTree, type TreeNode } from "../../lib/pmUtils";
+import { PMTask, PMTaskStatus, PMItemType, PMMember } from "../../types/pm";
+import { buildTree, flattenTree, filterTree, treeToMarkdown, type TreeNode } from "../../lib/pmUtils";
 import { WorkItemTypeBadge } from "./WorkItemTypeBadge";
 import { StatusBadge } from "./StatusBadge";
-import { PriorityBadge } from "./PriorityBadge";
 import { MemberAvatar } from "./MemberAvatar";
+import { toast } from "../../hooks/useToast";
+import { Button } from "../ui/button";
 import {
   Select,
   SelectContent,
@@ -31,22 +32,6 @@ const COL_LABELS: Record<ColKey, string> = {
   type: "Type", title: "Title", status: "Status", assignee: "Assignee", due: "Due",
 };
 
-// Valid parent types for drag & drop reparenting
-const VALID_PARENT_TYPES: Partial<Record<PMItemType, PMItemType[]>> = {
-  feature: ["epic"],
-  story:   ["feature"],
-  task:    ["story", "feature"],
-  bug:     ["story", "feature"],
-  spike:   ["story", "feature"],
-};
-
-// Depth tree-line colors: depth 1 = orange, 2 = teal, 3+ = violet
-const DEPTH_COLORS = [
-  "rgba(224,78,14,0.55)",
-  "rgba(11,114,104,0.55)",
-  "rgba(92,58,156,0.55)",
-];
-
 // ── Props ───────────────────────────────────────────────────────────────────
 
 interface BacklogViewProps {
@@ -64,7 +49,7 @@ interface CtxMenu { x: number; y: number; task: PMTask }
 
 // ── Tree helpers imported from pmUtils ───────────────────────────────────────
 
-const ALL_TYPES: PMItemType[] = ["epic", "feature", "story", "task", "bug", "spike"];
+const ALL_TYPES: PMItemType[] = ["epic", "feature", "story", "task", "spike"];
 
 function defaultChildType(parentType: PMItemType): PMItemType {
   if (parentType === "epic") return "feature";
@@ -75,7 +60,7 @@ function defaultChildType(parentType: PMItemType): PMItemType {
 // ── Main BacklogView ─────────────────────────────────────────────────────────
 
 export function BacklogView({
-  tasks, members, onTaskClick, onTaskCreate, onTaskUpdate, onTaskDelete, onTasksReload, onChildCreate,
+  tasks, members, onTaskClick, onTaskCreate: _onTaskCreate, onTaskUpdate, onTaskDelete, onTasksReload, onChildCreate,
 }: BacklogViewProps) {
   // Expand state
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
@@ -124,10 +109,6 @@ export function BacklogView({
   const dragColRef = useRef<ColKey | null>(null);
   const resizeRef = useRef<{ col: ColKey; startX: number; startWidth: number } | null>(null);
 
-  // Row drag (reparent)
-  const [dragRowId, setDragRowId] = useState<number | null>(null);
-  const [dragOverRowId, setDragOverRowId] = useState<number | null>(null);
-
   const memberMap = useMemo(
     () => Object.fromEntries(members.map((m) => [m.id, m])),
     [members]
@@ -175,8 +156,6 @@ export function BacklogView({
         title: `${task.title} (copy)`,
         item_type: task.item_type,
         status: task.status,
-        priority: task.priority,
-        story_points: task.story_points,
         description: task.description,
         sprint_id: task.sprint_id,
       });
@@ -193,6 +172,12 @@ export function BacklogView({
     setCtxMenu(null);
     setRenameId(task.id);
   }, []);
+
+  const handleExport = () => {
+    const md = treeToMarkdown(tree);
+    navigator.clipboard.writeText(md);
+    toast("Backlog exported to clipboard as Markdown", "success");
+  };
 
   // ── Column resize ──
   const startResize = useCallback((e: React.MouseEvent, col: ColKey) => {
@@ -240,24 +225,10 @@ export function BacklogView({
   };
   const onColDragEnd = () => { dragColRef.current = null; setDragColOver(null); };
 
-  // ── Row drag reparent ──
-  const handleRowDrop = useCallback(async (targetId: number) => {
-    const srcId = dragRowId;
-    setDragRowId(null);
-    setDragOverRowId(null);
-    if (!srcId || srcId === targetId) return;
-    const src = tasks.find(t => t.id === srcId);
-    const tgt = tasks.find(t => t.id === targetId);
-    if (!src || !tgt) return;
-    const validParents = VALID_PARENT_TYPES[src.item_type] ?? [];
-    if (!validParents.includes(tgt.item_type)) return;
-    await onTaskUpdate(srcId, { parent_id: targetId });
-  }, [dragRowId, tasks, onTaskUpdate]);
-
   return (
-    <div className="flex flex-col gap-3 h-full" onClick={() => setCtxMenu(null)}>
+    <div className="flex flex-col gap-4 h-full" onClick={() => setCtxMenu(null)}>
       {/* Filter bar */}
-      <div className="flex items-center gap-3 flex-wrap">
+      <div className="flex items-center gap-2 flex-wrap animate-ink-in">
         <div className="relative flex-1 min-w-[180px]">
           <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <input
@@ -268,15 +239,19 @@ export function BacklogView({
           />
         </div>
 
-        <div className="flex items-center gap-1">
+        <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={handleExport}>
+          <Download size={13} /> Export
+        </Button>
+
+        <div className="flex items-center gap-1.5">
           {ALL_TYPES.map((type) => (
             <button
               key={type}
               onClick={() => toggleType(type)}
-              className={`text-[10px] font-medium px-1.5 py-0.5 rounded border transition-colors ${
+              className={`btn-tactile text-[10px] transition-all ${
                 typeFilter.has(type)
-                  ? "bg-muted border-border text-foreground"
-                  : "bg-transparent border-transparent text-muted-foreground/40"
+                  ? "btn-tactile-orange"
+                  : "btn-tactile-outline opacity-50"
               }`}
             >
               {type}
@@ -313,27 +288,36 @@ export function BacklogView({
       </div>
 
       {/* Table */}
-      <div className="flex-1 overflow-auto rounded-lg border border-border">
+      <div
+        className="flex-1 overflow-auto rounded-md"
+        style={{ border: "1.5px solid rgba(20,16,10,0.18)", boxShadow: "3px 3px 0 var(--riso-teal)" }}
+      >
         <div className="overflow-x-auto">
         <table
           className="text-sm border-collapse"
           style={{ tableLayout: "fixed", width: "max-content", minWidth: "100%" }}
         >
           <colgroup>
-            <col style={{ width: 20 }} />
             <col style={{ width: 24 }} />
             {colOrder.map((col) => (
               <col key={col} style={{ width: colWidths[col] }} />
             ))}
           </colgroup>
           <thead>
-            <tr className="bg-muted/40 text-muted-foreground text-xs font-mono border-b border-border">
-              <th className="w-5" />
+            <tr
+              className="text-muted-foreground text-[10px] font-mono-ui border-b"
+              style={{
+                background: "var(--background-3)",
+                borderColor: "rgba(20,16,10,0.14)",
+                letterSpacing: "0.06em",
+                textTransform: "uppercase",
+              }}
+            >
               <th className="w-6" />
               {colOrder.map((col) => (
                 <th
                   key={col}
-                  className="text-left px-2 py-2 relative"
+                  className="text-left px-3 py-2.5 relative"
                   style={{
                     userSelect: "none",
                     cursor: "grab",
@@ -360,14 +344,16 @@ export function BacklogView({
             {visibleRows.length === 0 ? (
               <tr>
                 <td colSpan={colOrder.length + 1} className="text-center py-12 text-sm text-muted-foreground">
+
                   No work items found. Click "+ New Item" to get started.
                 </td>
               </tr>
             ) : (
-              visibleRows.map((row) => (
+              visibleRows.map((row, idx) => (
                 <React.Fragment key={row.id}>
                 <BacklogRow
                   row={row}
+                  animIndex={idx}
                   colOrder={colOrder}
                   expanded={expandedIds.has(row.id)}
                   onToggleExpand={() => toggleExpand(row.id)}
@@ -383,15 +369,6 @@ export function BacklogView({
                   isRenaming={renameId === row.id}
                   onRenameSubmit={async (title) => { setRenameId(null); await onTaskUpdate(row.id, { title }); }}
                   onRenameCancel={() => setRenameId(null)}
-                  isDragOver={dragOverRowId === row.id && dragRowId !== null && dragRowId !== row.id && (() => {
-                    const src = tasks.find(t => t.id === dragRowId);
-                    return (VALID_PARENT_TYPES[src?.item_type ?? "epic"] ?? []).includes(row.item_type);
-                  })()}
-                  isDragging={dragRowId === row.id}
-                  onDragStart={() => setDragRowId(row.id)}
-                  onDragOver={(e) => { e.preventDefault(); setDragOverRowId(row.id); }}
-                  onDragLeave={() => { if (dragOverRowId === row.id) setDragOverRowId(null); }}
-                  onDrop={() => handleRowDrop(row.id)}
                   onAddChild={onChildCreate ? () => handleAddChildInline(row.id) : undefined}
                   isLeaf={row.item_type === "task" || row.item_type === "bug" || row.item_type === "spike"}
                 />
@@ -416,25 +393,32 @@ export function BacklogView({
       {/* Context menu */}
       {ctxMenu && (
         <div
-          className="fixed z-[200] bg-background border border-border rounded-md shadow-lg py-1 min-w-[140px]"
-          style={{ top: ctxMenu.y, left: ctxMenu.x }}
+          className="fixed z-[200] surface-noise py-1 min-w-[140px]"
+          style={{
+            top: ctxMenu.y,
+            left: ctxMenu.x,
+            background: "var(--card)",
+            border: "1.5px solid rgba(20,16,10,0.22)",
+            borderRadius: "6px",
+            boxShadow: "3px 3px 0 rgba(20,16,10,0.18)",
+          }}
           onClick={(e) => e.stopPropagation()}
         >
           <button
-            className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted transition-colors text-left"
+            className="w-full flex items-center gap-2 px-3 py-2 text-xs font-mono-ui hover:bg-muted/60 transition-colors text-left"
             onClick={() => handleCtxRename(ctxMenu.task)}
           >
             <Pencil size={11} /> Rename
           </button>
           <button
-            className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted transition-colors text-left"
+            className="w-full flex items-center gap-2 px-3 py-2 text-xs font-mono-ui hover:bg-muted/60 transition-colors text-left"
             onClick={() => handleCtxDuplicate(ctxMenu.task)}
           >
             <Copy size={11} /> Duplicate
           </button>
-          <div className="my-1 border-t border-border" />
+          <div className="my-1 border-t" style={{ borderColor: "rgba(20,16,10,0.12)" }} />
           <button
-            className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-destructive/10 text-destructive transition-colors text-left"
+            className="w-full flex items-center gap-2 px-3 py-2 text-xs font-mono-ui hover:bg-destructive/10 text-destructive transition-colors text-left"
             onClick={() => handleCtxDelete(ctxMenu.task)}
           >
             <Trash2 size={11} /> Delete
@@ -466,10 +450,9 @@ function InlineAddRow({ parentId, parentType, depth, colCount, onSubmit, onCance
   return (
     <tr className="border-b border-border/50 bg-muted/10">
       <td />
-      <td />
       <td
-        className="py-1.5"
-        style={{ paddingLeft: `${8 + depth * 20}px` }}
+        className="py-2"
+        style={{ paddingLeft: `${12 + depth * 20}px` }}
         colSpan={colCount}
       >
         <div className="flex items-center gap-1.5">
@@ -511,19 +494,13 @@ interface BacklogRowProps {
   onRenameCancel: () => void;
   onAddChild?: () => void;
   isLeaf?: boolean;
-  isDragOver: boolean;
-  isDragging: boolean;
-  onDragStart: () => void;
-  onDragOver: (e: React.DragEvent) => void;
-  onDragLeave: () => void;
-  onDrop: () => void;
+  animIndex?: number;
 }
 
 function BacklogRow({
   row, colOrder, expanded, onToggleExpand, onClick, onUpdate, members, memberMap,
   onContextMenu, isRenaming, onRenameSubmit, onRenameCancel,
-  isDragOver, isDragging, onDragStart, onDragOver, onDragLeave, onDrop,
-  onAddChild, isLeaf,
+  onAddChild, isLeaf, animIndex = 0,
 }: BacklogRowProps) {
   const [renameVal, setRenameVal] = useState(row.title);
   const renameRef = useRef<HTMLInputElement>(null);
@@ -544,8 +521,8 @@ function BacklogRow({
         return (
           <td
             key="title"
-            className="py-2.5 overflow-hidden"
-            style={{ paddingLeft: `${8 + row.depth * 20}px` }}
+            className="py-2 overflow-hidden"
+            style={{ paddingLeft: `${12 + row.depth * 20}px` }}
           >
             <div className="flex items-center gap-1 min-w-0">
               {/* Chevron inline — fixed width so title stays aligned */}
@@ -593,8 +570,7 @@ function BacklogRow({
 
       case "status":
         return (
-          <td key="status" className="px-2 py-2.5" onClick={(e) => e.stopPropagation()}>
-            <div onDragStart={(e) => e.stopPropagation()}>
+          <td key="status" className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
             <Select value={row.status} onValueChange={(v) => onUpdate(row.id, { status: v as PMTaskStatus })}>
               <SelectTrigger className="h-6 text-[11px] border-0 bg-transparent px-0 w-auto gap-1 hover:bg-muted rounded transition-colors">
                 <StatusBadge status={row.status} />
@@ -608,14 +584,12 @@ function BacklogRow({
                 <SelectItem value="rejected">Rejected</SelectItem>
               </SelectContent>
             </Select>
-            </div>
           </td>
         );
 
       case "assignee":
         return (
-          <td key="assignee" className="px-2 py-2.5" onClick={(e) => e.stopPropagation()}>
-            <div onDragStart={(e) => e.stopPropagation()}>
+          <td key="assignee" className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
             <Select
               value={row.assignee_id?.toString() ?? "none"}
               onValueChange={(v) => onUpdate(row.id, { assignee_id: v !== "none" ? parseInt(v) : null })}
@@ -635,13 +609,12 @@ function BacklogRow({
                 ))}
               </SelectContent>
             </Select>
-            </div>
           </td>
         );
 
       case "due":
         return (
-          <td key="due" className="px-2 py-3 text-xs text-muted-foreground font-mono">
+          <td key="due" className="px-3 py-2 text-xs text-muted-foreground font-mono">
             {row.due_date ?? <span className="text-border">—</span>}
           </td>
         );
@@ -651,41 +624,19 @@ function BacklogRow({
     }
   };
 
-  const isDraggable = !!(VALID_PARENT_TYPES[row.item_type]?.length);
-
   return (
     <tr
-      className="border-b border-border/50 transition-colors group"
+      className="border-b transition-colors group row-tactile animate-row-in"
       style={{
-        opacity: isDragging ? 0.45 : 1,
-        outline: isDragOver ? "2px dashed var(--accent-orange)" : undefined,
-        outlineOffset: isDragOver ? "-2px" : undefined,
-        cursor: isDraggable ? "grab" : undefined,
-        // orange tint on hover via onMouseEnter/Leave would need state — use CSS instead
+        borderBottomColor: "rgba(20,16,10,0.08)",
+        animationDelay: `${Math.min(animIndex, 30) * 15}ms`,
       }}
       onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "color-mix(in srgb, var(--accent-orange) 7%, transparent)"; }}
       onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = ""; }}
-      draggable={isDraggable}
-      onDragStart={(e) => {
-        if (!isDraggable) { e.preventDefault(); return; }
-        onDragStart();
-      }}
-      onDragOver={onDragOver}
-      onDragLeave={onDragLeave}
-      onDrop={(e) => { e.preventDefault(); onDrop(); }}
       onContextMenu={(e) => onContextMenu(e, row)}
     >
-      {/* Drag handle — visual affordance only, drag is on <tr> */}
-      <td className="py-2.5 w-5" style={{ paddingLeft: 4 }}>
-        <span
-          className={`flex items-center transition-colors ${isDraggable ? "text-muted-foreground/25 group-hover:text-muted-foreground/60" : "text-transparent"}`}
-        >
-          <GripVertical size={12} />
-        </span>
-      </td>
-
       {/* Inline add child button */}
-      <td className="px-1 py-2.5 w-6">
+      <td className="px-1 py-2 w-6">
         {!isLeaf && onAddChild && (
           <button
             onClick={(e) => { e.stopPropagation(); onAddChild(); }}

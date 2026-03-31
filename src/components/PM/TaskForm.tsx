@@ -9,7 +9,6 @@ import {
 } from "../ui/dialog";
 import { Label } from "../ui/label";
 import { Textarea } from "../ui/textarea";
-import { Button } from "../ui/button";
 import {
   Select,
   SelectContent,
@@ -77,16 +76,27 @@ export function TaskForm({ open, onClose, onSubmit, initialData, members, sprint
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle>{initialData?.id ? "Edit Work Item" : "New Work Item"}</DialogTitle>
+      <DialogContent
+        className="max-w-lg surface-noise riso-frame flex flex-col overflow-hidden"
+        style={{
+          background: "var(--background)",
+          border: "1.5px solid rgba(20,16,10,0.22)",
+          borderRadius: "6px",
+          boxShadow: "4px 4px 0 var(--riso-teal), 0 8px 32px rgba(20,16,10,0.12)",
+        }}
+      >
+        <DialogHeader className="pb-1 shrink-0">
+          <DialogTitle
+            className="font-display font-black text-base tracking-tight"
+            style={{ textShadow: "1.5px 1.5px 0 rgba(224,78,14,0.18)" }}
+          >{initialData?.id ? "Edit Work Item" : "New Work Item"}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="flex flex-col gap-3 py-1">
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1">
-              <Label>Type</Label>
+              <Label className="font-mono-ui text-[10px] font-semibold tracking-widest uppercase" style={{ color: "var(--muted-foreground)" }}>Type</Label>
               <Select value={itemType} onValueChange={(v) => setItemType(v as PMItemType)}>
-                <SelectTrigger className="h-8 text-sm">
+                <SelectTrigger className="h-8 text-xs font-mono-ui" style={{ border: "1.5px solid var(--border-strong)", background: "var(--background-2)", boxShadow: "2px 2px 0 var(--riso-teal)", borderRadius: "4px" }}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -104,9 +114,27 @@ export function TaskForm({ open, onClose, onSubmit, initialData, members, sprint
               </Select>
             </div>
             <div className="flex flex-col gap-1">
-              <Label>Title *</Label>
+              <Label className="font-mono-ui text-[10px] font-semibold tracking-widest uppercase" style={{ color: "var(--muted-foreground)" }}>Title *</Label>
               <input
-                className="w-full rounded-md border border-border bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                className="w-full font-mono-ui text-sm focus:outline-none transition-all"
+                style={{
+                  background: "var(--background-2)",
+                  backgroundImage: "var(--noise-subtle)",
+                  backgroundRepeat: "repeat",
+                  border: "1.5px solid var(--border-strong)",
+                  borderRadius: "4px",
+                  padding: "6px 10px",
+                  boxShadow: "2px 2px 0 var(--riso-teal)",
+                  color: "var(--foreground)",
+                }}
+                onFocus={(e) => {
+                  e.currentTarget.style.borderColor = "var(--accent-teal)";
+                  e.currentTarget.style.boxShadow = "3px 3px 0 var(--riso-teal), 0 0 0 2px color-mix(in srgb, var(--accent-teal) 18%, transparent)";
+                }}
+                onBlur={(e) => {
+                  e.currentTarget.style.borderColor = "var(--border-strong)";
+                  e.currentTarget.style.boxShadow = "2px 2px 0 var(--riso-teal)";
+                }}
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Title"
@@ -116,30 +144,46 @@ export function TaskForm({ open, onClose, onSubmit, initialData, members, sprint
             </div>
           </div>
           <div className="flex flex-col gap-1">
-            <Label>Description</Label>
+            <Label className="font-mono-ui text-[10px] font-semibold tracking-widest uppercase" style={{ color: "var(--muted-foreground)" }}>Description</Label>
             <Textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Optional description"
-              className="resize-none h-16 text-sm"
+              className="resize-none h-16 text-sm font-mono-ui focus-visible:ring-0"
+              style={{
+                background: "var(--background-2)",
+                backgroundImage: "var(--noise-subtle)",
+                backgroundRepeat: "repeat",
+                border: "1.5px solid var(--border-strong)",
+                borderRadius: "4px",
+                boxShadow: "2px 2px 0 var(--riso-teal)",
+              }}
             />
           </div>
           {(itemType === "story" || acceptanceCriteria) && (
             <div className="flex flex-col gap-1">
-              <Label>Acceptance Criteria</Label>
+              <Label className="font-mono-ui text-[10px] font-semibold tracking-widest uppercase" style={{ color: "var(--muted-foreground)" }}>Acceptance Criteria</Label>
               <Textarea
                 value={acceptanceCriteria}
                 onChange={(e) => setAcceptanceCriteria(e.target.value)}
                 placeholder="Given / When / Then…"
-                className="resize-none h-16 text-sm"
+                className="resize-none h-16 text-sm font-mono-ui focus-visible:ring-0"
+                style={{
+                  background: "var(--background-2)",
+                  backgroundImage: "var(--noise-subtle)",
+                  backgroundRepeat: "repeat",
+                  border: "1.5px solid var(--border-strong)",
+                  borderRadius: "4px",
+                  boxShadow: "2px 2px 0 var(--riso-violet)",
+                }}
               />
             </div>
           )}
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1">
-              <Label>Status</Label>
+              <Label className="font-mono-ui text-[10px] font-semibold tracking-widest uppercase" style={{ color: "var(--muted-foreground)" }}>Status</Label>
               <Select value={status} onValueChange={(v) => setStatus(v as PMTaskStatus)}>
-                <SelectTrigger className="h-8 text-sm">
+                <SelectTrigger className="h-8 text-xs font-mono-ui" style={{ border: "1.5px solid var(--border-strong)", background: "var(--background-2)", boxShadow: "2px 2px 0 var(--riso-orange)", borderRadius: "4px" }}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -151,9 +195,9 @@ export function TaskForm({ open, onClose, onSubmit, initialData, members, sprint
               </Select>
             </div>
             <div className="flex flex-col gap-1">
-              <Label>Assignee</Label>
+              <Label className="font-mono-ui text-[10px] font-semibold tracking-widest uppercase" style={{ color: "var(--muted-foreground)" }}>Assignee</Label>
               <Select value={assigneeId} onValueChange={setAssigneeId}>
-                <SelectTrigger className="h-8 text-sm">
+                <SelectTrigger className="h-8 text-xs font-mono-ui" style={{ border: "1.5px solid var(--border-strong)", background: "var(--background-2)", boxShadow: "2px 2px 0 var(--riso-violet)", borderRadius: "4px" }}>
                   <SelectValue placeholder="Unassigned" />
                 </SelectTrigger>
                 <SelectContent>
@@ -167,9 +211,9 @@ export function TaskForm({ open, onClose, onSubmit, initialData, members, sprint
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1">
-              <Label>Sprint</Label>
+              <Label className="font-mono-ui text-[10px] font-semibold tracking-widest uppercase" style={{ color: "var(--muted-foreground)" }}>Sprint</Label>
               <Select value={sprintId} onValueChange={setSprintId}>
-                <SelectTrigger className="h-8 text-sm">
+                <SelectTrigger className="h-8 text-xs font-mono-ui" style={{ border: "1.5px solid var(--border-strong)", background: "var(--background-2)", boxShadow: "2px 2px 0 var(--riso-teal)", borderRadius: "4px" }}>
                   <SelectValue placeholder="Backlog" />
                 </SelectTrigger>
                 <SelectContent>
@@ -181,22 +225,22 @@ export function TaskForm({ open, onClose, onSubmit, initialData, members, sprint
               </Select>
             </div>
             <div className="flex flex-col gap-1">
-              <Label>Due Date</Label>
+              <Label className="font-mono-ui text-[10px] font-semibold tracking-widest uppercase" style={{ color: "var(--muted-foreground)" }}>Due Date</Label>
               <input
                 type="date"
-                className="w-full rounded-md border border-border bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                className="input-riso-date"
                 value={dueDate}
                 onChange={(e) => setDueDate(e.target.value)}
               />
             </div>
           </div>
-          <DialogFooter className="pt-2">
-            <Button type="button" variant="ghost" onClick={onClose} disabled={submitting}>
+          <DialogFooter className="pt-2 shrink-0" style={{ borderTop: "1.5px solid rgba(20,16,10,0.10)", marginTop: "4px" }}>
+            <button type="button" className="btn-tactile btn-tactile-outline" onClick={onClose} disabled={submitting}>
               Cancel
-            </Button>
-            <Button type="submit" disabled={submitting || !title.trim()}>
+            </button>
+            <button type="submit" className="btn-tactile btn-tactile-teal" disabled={submitting || !title.trim()}>
               {submitting ? "Saving…" : initialData?.id ? "Save" : "Create"}
-            </Button>
+            </button>
           </DialogFooter>
         </form>
       </DialogContent>

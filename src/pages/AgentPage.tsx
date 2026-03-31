@@ -486,7 +486,10 @@ export function AgentPage({ tuningParams }: AgentPageProps) {
     axios.get(`${API_BASE}/settings/ai/status`).then(r => {
       setSupportsTools(r.data.supports_tools ?? false);
       setModelLabel(r.data.model_label || r.data.active_engine || "Current model");
-    }).catch(() => {});
+    }).catch(() => {
+      setSupportsTools(false);
+      setModelLabel("AI unavailable");
+    });
   }, []);
 
   // Load scope items
@@ -494,15 +497,14 @@ export function AgentPage({ tuningParams }: AgentPageProps) {
     axios.get(`${API_BASE}/sheets`).then(r => {
       const items = (Array.isArray(r.data) ? r.data : []).map((s: { id: string; title: string }) => ({ id: s.id, title: s.title, type: "sheet" as const }));
       setAllSheets(items);
-      // Default: all selected
       setSelectedSheetIds(new Set(items.map((s: ScopeItem) => s.id)));
-    }).catch(() => {});
+    }).catch(() => { setAllSheets([]); });
     axios.get(`${API_BASE}/documents`).then(r => {
       const docs = Array.isArray(r.data) ? r.data : r.data.documents ?? [];
       const items = docs.map((d: { id: string; title: string }) => ({ id: d.id, title: d.title, type: "document" as const }));
       setAllDocuments(items);
       setSelectedDocumentIds(new Set(items.map((d: ScopeItem) => d.id)));
-    }).catch(() => {});
+    }).catch(() => { setAllDocuments([]); });
   }, []);
 
   useEffect(() => {
@@ -599,7 +601,7 @@ export function AgentPage({ tuningParams }: AgentPageProps) {
 
   // Fetch KB status on mount
   useEffect(() => {
-    axios.get(`${API_BASE}/rag/status`).then(r => setKbStatus(r.data)).catch(() => {});
+    axios.get(`${API_BASE}/rag/status`).then(r => setKbStatus(r.data)).catch(() => { setKbStatus({ indexed: false, chunks: 0, path: null, available: false }); });
   }, []);
 
   // Sidebar resize
@@ -656,7 +658,9 @@ export function AgentPage({ tuningParams }: AgentPageProps) {
     try {
       await axios.put(`${API_BASE}/chat/session/${sessionId}/title`, { title: t });
       setSessions((prev) => prev.map((s) => (s.id === sessionId ? { ...s, title: t } : s)));
-    } catch { /* ignore */ }
+    } catch {
+      toast("Failed to save title.", "error");
+    }
   }
 
   function startRenameSession(id: number, currentTitle: string) {

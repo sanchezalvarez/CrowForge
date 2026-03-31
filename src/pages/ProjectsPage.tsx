@@ -3,7 +3,6 @@ import { Plus, FolderOpen, Radio } from "lucide-react";
 import { useProjects } from "../hooks/useProjects";
 import { ProjectCard } from "../components/PM/ProjectCard";
 import { AIStandup } from "../components/PM/AIStandup";
-import { Button } from "../components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -15,6 +14,7 @@ import { Label } from "../components/ui/label";
 
 interface ProjectsPageProps {
   onNavigateToProject: (projectId: number) => void;
+  onNavigate?: (page: string) => void;
 }
 
 const COLOR_PRESETS = [
@@ -23,10 +23,11 @@ const COLOR_PRESETS = [
 
 const ICON_OPTIONS = ["📋", "🚀", "🎮", "🎨", "🔧", "📊", "🌐", "⚡"];
 
-export function ProjectsPage({ onNavigateToProject }: ProjectsPageProps) {
-  const { projects, loading, create } = useProjects();
+export function ProjectsPage({ onNavigateToProject, onNavigate }: ProjectsPageProps) {
+  const { projects, loading, create, remove } = useProjects();
   const [createOpen, setCreateOpen] = useState(false);
   const [standupOpen, setStandupOpen] = useState(false);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [color, setColor] = useState(COLOR_PRESETS[0]);
@@ -91,12 +92,12 @@ export function ProjectsPage({ onNavigateToProject }: ProjectsPageProps) {
             )}
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={() => setStandupOpen(true)} className="gap-1.5">
-              <Radio size={14} /> Standup
-            </Button>
-            <Button onClick={() => setCreateOpen(true)} className="gap-1.5">
-              <Plus size={14} /> New Project
-            </Button>
+            <button className="btn-tactile btn-tactile-teal gap-1" onClick={() => setStandupOpen(true)}>
+              <Radio size={13} /> Standup
+            </button>
+            <button className="btn-tactile btn-tactile-orange gap-1" onClick={() => setCreateOpen(true)}>
+              <Plus size={13} /> New Project
+            </button>
           </div>
         </div>
 
@@ -113,9 +114,9 @@ export function ProjectsPage({ onNavigateToProject }: ProjectsPageProps) {
               <FolderOpen size={40} className="text-muted-foreground/40" />
               <p className="font-display font-black text-lg text-muted-foreground/70">No projects yet</p>
               <p className="text-xs text-muted-foreground font-mono-ui">Create your first project to get started.</p>
-              <Button onClick={() => setCreateOpen(true)} variant="outline" className="mt-2">
-                <Plus size={14} className="mr-1" /> New Project
-              </Button>
+              <button className="btn-tactile btn-tactile-orange gap-1 mt-2" onClick={() => setCreateOpen(true)}>
+                <Plus size={13} /> New Project
+              </button>
             </div>
           </div>
         ) : (
@@ -129,6 +130,8 @@ export function ProjectsPage({ onNavigateToProject }: ProjectsPageProps) {
                 <ProjectCard
                   project={project}
                   onClick={() => onNavigateToProject(project.id)}
+                  onNavigateIssues={() => onNavigate?.("issues")}
+                  onDelete={(id) => setDeleteConfirmId(id)}
                 />
               </div>
             ))}
@@ -138,10 +141,10 @@ export function ProjectsPage({ onNavigateToProject }: ProjectsPageProps) {
 
       {/* Standup Dialog */}
       <Dialog open={standupOpen} onOpenChange={setStandupOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl surface-noise" style={{ border: "1.5px solid var(--border-strong)" }}>
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Radio size={14} className="text-primary" /> Daily Standup
+            <DialogTitle className="font-display font-black flex items-center gap-2 tracking-tight">
+              <Radio size={14} style={{ color: "var(--accent-teal)" }} /> Daily Standup
             </DialogTitle>
           </DialogHeader>
           <AIStandup />
@@ -150,15 +153,16 @@ export function ProjectsPage({ onNavigateToProject }: ProjectsPageProps) {
 
       {/* Create Project Dialog */}
       <Dialog open={createOpen} onOpenChange={(o) => !o && setCreateOpen(false)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md surface-noise" style={{ border: "1.5px solid var(--border-strong)" }}>
           <DialogHeader>
-            <DialogTitle>New Project</DialogTitle>
+            <DialogTitle className="font-display font-black tracking-tight">New Project</DialogTitle>
           </DialogHeader>
-          <form onSubmit={handleCreate} className="flex flex-col gap-3 py-1">
-            <div className="flex flex-col gap-1">
+          <form onSubmit={handleCreate} className="flex flex-col gap-4 py-2">
+            <div className="flex flex-col gap-1.5">
               <Label>Name *</Label>
               <input
-                className="w-full rounded-md border border-border bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                className="w-full rounded-md bg-background px-3 py-2 text-sm focus:outline-none"
+                style={{ border: "1.5px solid var(--border-strong)", boxShadow: "2px 2px 0 var(--riso-orange)" }}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="My Project"
@@ -166,16 +170,17 @@ export function ProjectsPage({ onNavigateToProject }: ProjectsPageProps) {
                 required
               />
             </div>
-            <div className="flex flex-col gap-1">
+            <div className="flex flex-col gap-1.5">
               <Label>Description</Label>
               <input
-                className="w-full rounded-md border border-border bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                className="w-full rounded-md bg-background px-3 py-2 text-sm focus:outline-none"
+                style={{ border: "1.5px solid var(--border-strong)", boxShadow: "2px 2px 0 var(--riso-orange)" }}
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Optional description"
               />
             </div>
-            <div className="flex flex-col gap-1">
+            <div className="flex flex-col gap-1.5">
               <Label>Icon</Label>
               <div className="flex gap-2 flex-wrap">
                 {ICON_OPTIONS.map((ic) => (
@@ -183,16 +188,19 @@ export function ProjectsPage({ onNavigateToProject }: ProjectsPageProps) {
                     key={ic}
                     type="button"
                     onClick={() => setIcon(ic)}
-                    className={`w-9 h-9 rounded-lg text-lg flex items-center justify-center border-2 transition-colors ${
-                      icon === ic ? "border-primary bg-primary/10" : "border-border hover:border-muted-foreground"
-                    }`}
+                    className={`w-9 h-9 rounded-lg text-lg flex items-center justify-center transition-colors`}
+                    style={{
+                      border: icon === ic ? "2px solid var(--accent-orange)" : "1.5px solid var(--border-strong)",
+                      background: icon === ic ? "color-mix(in srgb, var(--accent-orange) 10%, transparent)" : "transparent",
+                      boxShadow: icon === ic ? "2px 2px 0 var(--riso-orange)" : "none",
+                    }}
                   >
                     {ic}
                   </button>
                 ))}
               </div>
             </div>
-            <div className="flex flex-col gap-1">
+            <div className="flex flex-col gap-1.5">
               <Label>Color</Label>
               <div className="flex gap-2 flex-wrap">
                 {COLOR_PRESETS.map((c) => (
@@ -200,21 +208,47 @@ export function ProjectsPage({ onNavigateToProject }: ProjectsPageProps) {
                     key={c}
                     type="button"
                     onClick={() => setColor(c)}
-                    className={`w-7 h-7 rounded-full border-2 transition-colors ${
-                      color === c ? "border-foreground scale-110" : "border-transparent"
+                    className={`w-7 h-7 rounded-full transition-all ${
+                      color === c ? "scale-110" : ""
                     }`}
-                    style={{ backgroundColor: c }}
+                    style={{
+                      backgroundColor: c,
+                      border: color === c ? "2px solid var(--foreground)" : "1.5px solid rgba(20,16,10,0.18)",
+                    }}
                   />
                 ))}
               </div>
             </div>
-            <DialogFooter className="pt-2">
-              <Button type="button" variant="ghost" onClick={() => setCreateOpen(false)}>Cancel</Button>
-              <Button type="submit" disabled={creating || !name.trim()}>
+            <DialogFooter className="pt-1">
+              <button type="button" className="btn-tactile btn-tactile-outline" onClick={() => setCreateOpen(false)}>Cancel</button>
+              <button type="submit" className="btn-tactile btn-tactile-orange" disabled={creating || !name.trim()}>
                 {creating ? "Creating…" : "Create Project"}
-              </Button>
+              </button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete confirmation dialog */}
+      <Dialog open={deleteConfirmId !== null} onOpenChange={(o) => { if (!o) setDeleteConfirmId(null); }}>
+        <DialogContent className="max-w-sm surface-noise" style={{ border: "1.5px solid var(--border-strong)" }}>
+          <DialogHeader>
+            <DialogTitle className="font-display font-black tracking-tight">Delete Project</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground py-2">
+            This will permanently delete the project and all its tasks. This action cannot be undone.
+          </p>
+          <DialogFooter>
+            <button className="btn-tactile btn-tactile-outline" onClick={() => setDeleteConfirmId(null)}>Cancel</button>
+            <button
+              className="btn-tactile gap-1"
+              style={{ background: "var(--destructive)", backgroundImage: "var(--noise-btn)", borderColor: "rgba(0,0,0,0.15)", color: "#fff" }}
+              onClick={async () => {
+                if (deleteConfirmId) await remove(deleteConfirmId);
+                setDeleteConfirmId(null);
+              }}
+            >Delete</button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

@@ -68,7 +68,13 @@ export function useRssDigest() {
 
       fetch(`${API_BASE}/rss/digest`, { method: "POST" })
         .then((res) => {
-          const reader = res.body!.getReader();
+          if (!res.ok || !res.body) {
+            setError("Failed to connect to AI engine");
+            setIsGenerating(false);
+            resolve();
+            return;
+          }
+          const reader = res.body.getReader();
           const decoder = new TextDecoder();
 
           function read() {

@@ -1,13 +1,15 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { Card, CardContent } from "../components/ui/card";
 import {
   FileText, Table2, MessageSquare, Plus, Sparkles,
   ArrowRight, Loader2, Zap, Clock, Newspaper, Rss, Workflow,
+  User, Bug, CheckSquare, AlertTriangle, CircleDot,
 } from "lucide-react";
 import axios from "axios";
 import { NewsDigest } from "../components/News/NewsDigest";
 import { NewsFeedCard } from "../components/News/NewsFeedCard";
 import { useRssDigest } from "../hooks/useRssDigest";
+import type { PMTask, PMMember } from "../types/pm";
 
 const API_BASE = "http://127.0.0.1:8000";
 
@@ -45,12 +47,255 @@ function greeting(): string {
   return "Good evening";
 }
 
+// ── My Work section — quick overview of assigned tasks/bugs per member ────
+function MyWorkSection({ onNavigate }: { onNavigate: (page: any, id?: string) => void }) {
+  const [members, setMembers] = useState<PMMember[]>([]);
+  const [selectedMember, setSelectedMember] = useState<number>(1);
+  const [tasks, setTasks] = useState<PMTask[]>([]);
+  const [loadingTasks, setLoadingTasks] = useState(false);
+
+  useEffect(() => {
+    axios.get(`${API_BASE}/pm/members`).then((r) => {
+      setMembers(r.data);
+      if (r.data.length > 0) setSelectedMember(r.data[0].id);
+    }).catch(() => {});
+  }, []);
+
+  const loadTasks = useCallback(async (memberId: number) => {
+    setLoadingTasks(true);
+    try {
+      const res = await axios.get(`${API_BASE}/pm/tasks`, { params: { assignee_id: memberId } });
+      setTasks(res.data);
+    } catch {
+      setTasks([]);
+    } finally {
+      setLoadingTasks(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (selectedMember) loadTasks(selectedMember);
+  }, [selectedMember, loadTasks]);
+
+  const activeTasks = useMemo(() => tasks.filter((t) => t.item_type !== "bug" && !["resolved", "closed", "rejected"].includes(t.status)), [tasks]);
+  const activeBugs = useMemo(() => tasks.filter((t) => t.item_type === "bug" && !["resolved", "closed", "rejected"].includes(t.status)), [tasks]);
+  const resolvedCount = useMemo(() => tasks.filter((t) => ["resolved", "closed"].includes(t.status)).length, [tasks]);
+
+  const currentMember = members.find((m) => m.id === selectedMember);
+
+  const statusIcon = (status: string) => {
+    if (status === "active") return <CircleDot size={10} style={{ color: "var(--accent-teal)" }} />;
+    if (status === "needs_testing") return <AlertTriangle size={10} style={{ color: "var(--accent-orange)" }} />;
+    return <CircleDot size={10} className="text-muted-foreground" />;
+  };
+
+  const severityColor = (sev: string) => {
+    if (sev === "Blocker") return "var(--destructive)";
+    if (sev === "Major") return "var(--accent-orange)";
+    return "var(--muted-foreground)";
+  };
+
+  const severityTagClass = (sev: string) => {
+    if (sev === "Blocker") return "tag-riso tag-riso-orange";
+    if (sev === "Major") return "tag-riso";
+    return "tag-riso tag-riso-muted";
+  };
+
+  return (
+    <section>
+      {/* Section header — label left, member picker right */}
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="riso-section-label flex items-center gap-2">
+          <User className="h-3.5 w-3.5" style={{ color: "var(--accent-teal)" }} />
+          My Work
+        </h2>
+        {/* Member picker pills */}
+        <div className="flex items-center gap-2">
+          {members.map((m) => {
+            const isSelected = selectedMember === m.id;
+            return (
+              <button
+                key={m.id}
+                onClick={() => setSelectedMember(m.id)}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-sm font-mono-ui text-[11px] transition-all"
+                style={{
+                  background: isSelected
+                    ? "color-mix(in srgb, var(--accent-teal) 12%, transparent)"
+                    : "color-mix(in srgb, var(--foreground) 4%, transparent)",
+                  border: isSelected
+                    ? "1.5px solid var(--accent-teal)"
+                    : "1.5px solid var(--border-strong)",
+                  fontWeight: isSelected ? 700 : 500,
+                  color: isSelected ? "var(--accent-teal)" : "var(--muted-foreground)",
+                  boxShadow: isSelected ? "2px 2px 0 var(--riso-teal)" : "none",
+                  letterSpacing: "0.03em",
+                }}
+              >
+                <span
+                  className="w-4 h-4 rounded-full flex items-center justify-center font-bold text-white shrink-0"
+                  style={{ background: m.avatar_color, fontSize: 7 }}
+                >
+                  {m.initials}
+                </span>
+                {m.name}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {loadingTasks ? (
+        /* Loading skeleton — matches the card structure so layout doesn't jump */
+        <Card className="card-riso overflow-hidden">
+          <div
+            className="flex items-center gap-2 px-4 py-3 surface-noise"
+            style={{ borderBottom: "1.5px solid var(--border-strong)", backgroundColor: "var(--background-2)" }}
+          >
+            <Loader2 size={11} className="animate-spin" style={{ color: "var(--muted-foreground)" }} />
+            <span className="text-[10px] font-mono-ui font-bold uppercase tracking-widest text-muted-foreground">
+              Loading…
+            </span>
+          </div>
+          <CardContent className="p-8 flex justify-center">
+            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* Tasks card */}
+          <Card className="card-riso overflow-hidden">
+            <div
+              className="flex items-center gap-2 px-4 py-3 surface-noise"
+              style={{ borderBottom: "1.5px solid var(--border-strong)", backgroundColor: "var(--background-2)" }}
+            >
+              <CheckSquare size={11} style={{ color: "var(--accent-teal)" }} />
+              <span className="text-[10px] font-mono-ui font-bold uppercase tracking-widest" style={{ color: "var(--accent-teal)" }}>
+                Tasks
+              </span>
+              <span
+                className="ml-auto text-[9px] font-mono-ui font-bold px-1.5 py-0.5 rounded-sm"
+                style={{
+                  background: "color-mix(in srgb, var(--accent-teal) 14%, transparent)",
+                  color: "var(--accent-teal)",
+                  border: "1px solid color-mix(in srgb, var(--accent-teal) 28%, transparent)",
+                }}
+              >
+                {activeTasks.length}
+              </span>
+            </div>
+            <CardContent className="p-0">
+              {activeTasks.length === 0 ? (
+                <div className="px-4 py-6 flex flex-col items-center gap-1.5">
+                  <CheckSquare size={14} className="text-muted-foreground opacity-40" />
+                  <span className="text-[11px] font-mono-ui text-muted-foreground tracking-wide">No active tasks</span>
+                </div>
+              ) : (
+                <div className="max-h-[260px] overflow-y-auto divide-y" style={{ "--tw-divide-opacity": 1, borderColor: "var(--border)" } as React.CSSProperties}>
+                  {activeTasks.slice(0, 15).map((t) => (
+                    <button
+                      key={t.id}
+                      className="w-full flex items-center gap-2.5 px-4 py-2.5 text-left transition-colors"
+                      style={{ borderBottom: "1px solid var(--border)" }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = "color-mix(in srgb, var(--accent-teal) 5%, transparent)"; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = "transparent"; }}
+                      onClick={() => onNavigate("projects")}
+                    >
+                      <span className="shrink-0 mt-px">{statusIcon(t.status)}</span>
+                      <span className="text-xs truncate flex-1 leading-snug">{t.title}</span>
+                      <span className="tag-riso tag-riso-teal shrink-0">{t.item_type}</span>
+                      <span className="tag-riso tag-riso-muted shrink-0" style={{ minWidth: "fit-content" }}>{t.status.replace(/_/g, " ")}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Bugs card */}
+          <Card className="card-riso card-riso-orange overflow-hidden">
+            <div
+              className="flex items-center gap-2 px-4 py-3 surface-noise"
+              style={{ borderBottom: "1.5px solid var(--border-strong)", backgroundColor: "var(--background-2)" }}
+            >
+              <Bug size={11} style={{ color: "var(--destructive)" }} />
+              <span className="text-[10px] font-mono-ui font-bold uppercase tracking-widest" style={{ color: "var(--destructive)" }}>
+                Bugs
+              </span>
+              <span
+                className="ml-auto text-[9px] font-mono-ui font-bold px-1.5 py-0.5 rounded-sm"
+                style={{
+                  background: "color-mix(in srgb, var(--destructive) 10%, transparent)",
+                  color: "var(--destructive)",
+                  border: "1px solid color-mix(in srgb, var(--destructive) 22%, transparent)",
+                }}
+              >
+                {activeBugs.length}
+              </span>
+            </div>
+            <CardContent className="p-0">
+              {activeBugs.length === 0 ? (
+                <div className="px-4 py-6 flex flex-col items-center gap-1.5">
+                  <Bug size={14} className="text-muted-foreground opacity-40" />
+                  <span className="text-[11px] font-mono-ui text-muted-foreground tracking-wide">No open bugs</span>
+                </div>
+              ) : (
+                <div className="max-h-[260px] overflow-y-auto">
+                  {activeBugs.slice(0, 15).map((t) => (
+                    <button
+                      key={t.id}
+                      className="w-full flex items-center gap-2.5 px-4 py-2.5 text-left transition-colors"
+                      style={{ borderBottom: "1px solid var(--border)" }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = "color-mix(in srgb, var(--destructive) 5%, transparent)"; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = "transparent"; }}
+                      onClick={() => onNavigate("issues")}
+                    >
+                      <Bug size={10} className="shrink-0 mt-px" style={{ color: severityColor(t.severity) }} />
+                      <span className="text-xs truncate flex-1 leading-snug">{t.title}</span>
+                      <span className={`${severityTagClass(t.severity)} shrink-0`}>{t.severity}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Summary stats bar — shown only when there's data */}
+          {(activeTasks.length > 0 || activeBugs.length > 0 || resolvedCount > 0) && (
+            <div
+              className="lg:col-span-2 flex items-center gap-3 px-3 py-2 rounded-sm"
+              style={{
+                background: "color-mix(in srgb, var(--foreground) 4%, transparent)",
+                border: "1px solid var(--border-strong)",
+                color: "var(--muted-foreground)",
+              }}
+            >
+              <span className="font-mono-ui text-[10px] font-bold" style={{ color: "var(--foreground)" }}>
+                {currentMember?.name ?? "—"}
+              </span>
+              <span className="w-px self-stretch" style={{ background: "var(--border-strong)" }} />
+              <span className="font-mono-ui text-[10px]">{activeTasks.length} active task{activeTasks.length !== 1 ? "s" : ""}</span>
+              <span className="w-px self-stretch" style={{ background: "var(--border-strong)" }} />
+              <span className="font-mono-ui text-[10px]">{activeBugs.length} open bug{activeBugs.length !== 1 ? "s" : ""}</span>
+              <span className="w-px self-stretch" style={{ background: "var(--border-strong)" }} />
+              <span className="font-mono-ui text-[10px]" style={{ color: "var(--accent-teal)" }}>
+                {resolvedCount} resolved
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
 // ── Isolated digest section — owns all digest state so streaming chunks
 //    never re-render the rest of the Dashboard. ─────────────────────────────
 function DigestSection() {
+  const [aiAvailable, setAiAvailable] = useState(false);
   const { digest, isGenerating, isFetching, lastGenerated, articleCount, error, loadCached, fetchFeeds, generateDigest } = useRssDigest();
   const [articles, setArticles] = useState<any[]>([]);
   const [feedCount, setFeedCount] = useState(1);
+  const [showFeeds, setShowFeeds] = useState(false);
 
   const loadArticles = () => {
     const perFeed = Math.max(1, Math.floor(40 / Math.max(1, feedCount)));
@@ -63,6 +308,9 @@ function DigestSection() {
       const active = (r.data || []).filter((f: any) => f.is_active).length;
       setFeedCount(Math.max(1, active));
     }).catch(() => {});
+    axios.get(`${API_BASE}/settings/ai`).then((r) => {
+      setAiAvailable(r.data.enable_llm === true);
+    }).catch(() => {});
     loadArticles();
   }, []);
 
@@ -73,10 +321,10 @@ function DigestSection() {
 
   return (
     <section>
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-base font-bold flex items-center gap-2">
-          <Newspaper className="h-4 w-4" style={{ color: 'var(--accent-orange)' }} />
-          <span className="riso-section-label" style={{ fontSize: 12, letterSpacing: '0.08em' }}>Today's Digest</span>
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="riso-section-label flex items-center gap-2">
+          <Newspaper className="h-3.5 w-3.5" style={{ color: 'var(--accent-orange)' }} />
+          Today's Digest
         </h2>
         <div className="flex items-center gap-2">
           <button
@@ -87,38 +335,48 @@ function DigestSection() {
             {isFetching ? <Loader2 className="h-3 w-3 animate-spin" /> : <Rss className="h-3 w-3" />}
             {isFetching ? "Fetching…" : "Fetch"}
           </button>
-          <button
-            onClick={generateDigest}
-            disabled={isGenerating || isFetching}
-            className="btn-tactile btn-tactile-orange"
-          >
-            {isGenerating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
-            {isGenerating ? "Summarizing…" : "Summarize"}
-          </button>
+          {aiAvailable && (
+            <button
+              onClick={generateDigest}
+              disabled={isGenerating || isFetching}
+              className="btn-tactile btn-tactile-orange"
+            >
+              {isGenerating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+              {isGenerating ? "Summarizing…" : "Summarize"}
+            </button>
+          )}
         </div>
       </div>
 
-      <Card className="border-border/50">
-        <CardContent className="p-6">
-          <NewsDigest
-            digest={digest}
-            isGenerating={isGenerating}
-            lastGenerated={lastGenerated}
-            articleCount={articleCount}
-            error={error}
-          />
-        </CardContent>
-      </Card>
+      {aiAvailable && (
+        <Card className="card-riso card-riso-orange">
+          <CardContent className="p-6">
+            <NewsDigest
+              digest={digest}
+              isGenerating={isGenerating}
+              lastGenerated={lastGenerated}
+              articleCount={articleCount}
+              error={error}
+            />
+          </CardContent>
+        </Card>
+      )}
 
       {articles.length > 0 && (
-        <div className="mt-4">
-          <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-1.5">
-            <Rss className="h-3 w-3" />
-            Latest from feeds
-          </h3>
+        <div className="mt-5">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {articles.map((a) => <NewsFeedCard key={a.id} article={a} />)}
+            {articles.slice(0, showFeeds ? 15 : 6).map((a) => <NewsFeedCard key={a.id} article={a} />)}
           </div>
+          {articles.length > 6 && (
+            <div className="mt-3 flex justify-center">
+              <button
+                onClick={() => setShowFeeds((p) => !p)}
+                className="btn-tactile btn-tactile-outline gap-1.5"
+              >
+                {showFeeds ? "Show less" : "Show more"}
+              </button>
+            </div>
+          )}
         </div>
       )}
     </section>
@@ -149,7 +407,7 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
     for (const c of data.recent_chats || [])
       items.push({ type: "chat", id: String(c.id), title: c.title || "New Chat", time: c.created_at || "", meta: c.mode });
     items.sort((a, b) => (b.time || "").localeCompare(a.time || ""));
-    return items.slice(0, 8);
+    return items.slice(0, 5);
   }, [data]);
 
   const counts = data?.counts ?? { documents: 0, sheets: 0, chats: 0 };
@@ -271,7 +529,7 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
 
       </div>
 
-      <div className="relative p-8 max-w-5xl mx-auto space-y-8">
+      <div className="relative p-10 max-w-5xl mx-auto space-y-10">
 
         {/* Header */}
         <header className="animate-ink-in" style={{ position: 'relative', zIndex: 1, animationDelay: '0ms' }}>
@@ -305,10 +563,11 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
         <section className="riso-frame animate-ink-in" style={{ position: 'relative', zIndex: 1, padding: '2px', animationDelay: '70ms' }}>
           <h2 className="riso-section-label mb-3">Create</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            {quickActions.map((a) => (
+            {quickActions.map((a, i) => (
               <button
                 key={a.title}
-                className={`card-riso group flex items-center gap-3 rounded-xl border border-border/50 p-4 text-left transition-all hover:border-border hover:shadow-sm hover:ring-2 ${a.ring} active:scale-[0.98]`}
+                className={`card-riso group flex items-center gap-3 rounded-xl border border-border/50 p-3.5 text-left transition-all hover:border-border hover:shadow-sm hover:ring-2 ${a.ring} active:scale-[0.98] animate-card-in`}
+                style={{ animationDelay: `${i * 40}ms` }}
                 onClick={a.onClick}
               >
                 <div className={`p-2.5 rounded-lg ${a.bg} shrink-0 transition-transform group-hover:scale-110`}>
@@ -324,11 +583,14 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
           </div>
         </section>
 
+        {/* My Work — quick overview of assigned tasks & bugs */}
+        <div className="animate-ink-in" style={{ position: 'relative', zIndex: 1, animationDelay: '140ms' }}><MyWorkSection onNavigate={onNavigate} /></div>
+
         {/* Today's Digest — isolated component, streaming chunks don't re-render above */}
-        <div className="animate-ink-in" style={{ position: 'relative', zIndex: 1, animationDelay: '140ms' }}><DigestSection /></div>
+        <div className="animate-ink-in" style={{ position: 'relative', zIndex: 1, animationDelay: '210ms' }}><DigestSection /></div>
 
         {/* Recent activity */}
-        <section className="animate-ink-in" style={{ position: 'relative', zIndex: 1, animationDelay: '210ms' }}>
+        <section className="animate-ink-in" style={{ position: 'relative', zIndex: 1, animationDelay: '280ms' }}>
           <h2 className="riso-section-label mb-3">Recent activity</h2>
           {activityFeed.length === 0 ? (
             <Card className="border-dashed riso-frame">
@@ -344,10 +606,11 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
             </Card>
           ) : (
             <div className="space-y-1">
-              {activityFeed.map((item) => (
+              {activityFeed.map((item, i) => (
                 <button
                   key={`${item.type}-${item.id}`}
-                  className="w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-left hover:bg-muted/60 group transition-colors"
+                  className="w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-left hover:bg-muted/60 group transition-colors animate-row-in"
+                  style={{ animationDelay: `${i * 25}ms` }}
                   onClick={() => onNavigate(item.type === "doc" ? "documents" : item.type === "sheet" ? "sheets" : "chat", item.id)}
                 >
                   <div className={`p-1.5 rounded-md ${typeBg(item.type)} shrink-0`}>{typeIcon(item.type)}</div>

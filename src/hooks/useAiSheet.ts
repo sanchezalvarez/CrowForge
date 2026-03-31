@@ -74,7 +74,7 @@ export function useAiSheet({
     axios.get(`${API_BASE}/ai/engines`).then(res => {
       const active = (res.data as { name: string; active: boolean }[]).find(e => e.active);
       if (active) setActiveEngine(active.name);
-    }).catch(() => {});
+    }).catch(() => { setActiveEngine("mock"); });
   }, []);
 
   useEffect(() => {
@@ -82,7 +82,7 @@ export function useAiSheet({
       const models = res.data.models.map((m: any) => ({ name: m.filename, id: m.filename }));
       setAvailableModels(models);
       if (models.length > 0) setAiOpModel(models[0].id);
-    }).catch(() => {});
+    }).catch(() => { setAvailableModels([]); });
   }, []);
 
   // ── Schema generation ─────────────────────────────────────────────

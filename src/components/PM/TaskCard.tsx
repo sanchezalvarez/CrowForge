@@ -1,6 +1,5 @@
 import { GripVertical } from "lucide-react";
 import { PMTask, PMMember } from "../../types/pm";
-import { PriorityBadge } from "./PriorityBadge";
 import { MemberAvatar } from "./MemberAvatar";
 import { DeadlineWarning } from "./DeadlineWarning";
 import { WorkItemTypeBadge } from "./WorkItemTypeBadge";
@@ -11,17 +10,48 @@ interface TaskCardProps {
   onClick: () => void;
   dragHandleProps?: Record<string, unknown>;
   compact?: boolean;
+  footer?: React.ReactNode;
 }
 
-export function TaskCard({ task, members, onClick, dragHandleProps, compact }: TaskCardProps) {
+export function TaskCard({ task, members, onClick, dragHandleProps, compact, footer }: TaskCardProps) {
   const memberMap = Object.fromEntries(members.map((m) => [m.id, m]));
   const assignee = task.assignee_id ? memberMap[task.assignee_id] : null;
 
+  const shadowBase = compact ? "1px 1px 0 var(--riso-teal)" : "2px 2px 0 var(--riso-teal)";
+  const shadowHover = compact ? "2px 2px 0 var(--riso-teal)" : "3px 3px 0 var(--riso-teal)";
+
   return (
     <div
-      className="group relative bg-background border border-border rounded-lg p-3 hover:border-primary/40 hover:shadow-sm transition-all cursor-pointer"
+      className={`group relative bg-card surface-noise border rounded-md cursor-pointer transition-all duration-100 ${compact ? "p-2.5" : "p-3.5"}`}
+      style={{
+        borderColor: "rgba(20,16,10,0.18)",
+        boxShadow: shadowBase,
+      }}
       onClick={onClick}
+      onMouseEnter={(e) => {
+        (e.currentTarget as HTMLElement).style.transform = "translate(-1px,-1px)";
+        (e.currentTarget as HTMLElement).style.boxShadow = shadowHover;
+      }}
+      onMouseLeave={(e) => {
+        (e.currentTarget as HTMLElement).style.transform = "";
+        (e.currentTarget as HTMLElement).style.boxShadow = shadowBase;
+      }}
+      onMouseDown={(e) => {
+        (e.currentTarget as HTMLElement).style.transform = "translate(1px,1px)";
+        (e.currentTarget as HTMLElement).style.boxShadow = "0px 0px 0 var(--riso-teal)";
+      }}
+      onMouseUp={(e) => {
+        (e.currentTarget as HTMLElement).style.transform = "translate(-1px,-1px)";
+        (e.currentTarget as HTMLElement).style.boxShadow = shadowHover;
+      }}
     >
+      {/* Assignee in top-right corner for compact mode */}
+      {compact && (
+        <div className="absolute top-2 right-2">
+          <MemberAvatar member={assignee} size="sm" className="flex-shrink-0" />
+        </div>
+      )}
+
       {dragHandleProps && (
         <div
           {...dragHandleProps}
@@ -34,20 +64,29 @@ export function TaskCard({ task, members, onClick, dragHandleProps, compact }: T
 
       <div className={dragHandleProps ? "pl-2" : ""}>
         {/* Type badge */}
-        <div className="flex items-center gap-1.5 mb-1.5">
+        <div className={`flex items-center gap-1.5 ${compact ? "mb-1" : "mb-2"}`}>
           <WorkItemTypeBadge type={task.item_type} />
         </div>
 
         {/* Title */}
-        <p className="text-sm font-medium text-foreground leading-snug line-clamp-2 mb-2">{task.title}</p>
+        <p className={`font-medium text-foreground leading-snug ${compact ? "text-xs line-clamp-1 mb-1.5 pr-7" : "text-sm line-clamp-2 mb-2.5"}`}>{task.title}</p>
 
         {/* Meta row */}
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 flex-wrap">
-            <DeadlineWarning dueDate={task.due_date} status={task.status} />
+        {!compact && (
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <DeadlineWarning dueDate={task.due_date} status={task.status} />
+            </div>
+            <MemberAvatar member={assignee} size="sm" className="flex-shrink-0" />
           </div>
-          <MemberAvatar member={assignee} size="sm" className="flex-shrink-0" />
-        </div>
+        )}
+
+        {/* Footer slot (e.g. sprint dropdown) */}
+        {footer && (
+          <div className={compact ? "mt-1.5" : "mt-2"} onClick={(e) => e.stopPropagation()}>
+            {footer}
+          </div>
+        )}
       </div>
     </div>
   );

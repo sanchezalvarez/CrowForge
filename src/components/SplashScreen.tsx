@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import crowforgeIco from "../assets/crowforge_ico.png";
+import { APP_VERSION } from "../lib/constants";
 
 const STATUS_MESSAGES = [
   "Starting backend…",
@@ -173,7 +174,7 @@ export function SplashScreen({ failed }: { failed?: boolean }) {
               marginBottom: 4,
             }}
           >
-            v0.1.0
+            v{APP_VERSION}
           </p>
           <h1
             className="font-display font-black tracking-tight leading-none riso-title"

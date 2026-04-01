@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import axios from "axios";
+import { APP_VERSION } from "../lib/constants";
 import { Download, CheckCircle2, Loader2, X, AlertCircle, Trash2, ExternalLink, Cpu, HardDrive, Monitor, MemoryStick, Rss, Plus, ToggleLeft, ToggleRight, Check, Newspaper } from "lucide-react";
 import { toast } from "../hooks/useToast";
 import { useWorkflowConfig, invalidateWorkflowCache } from "../hooks/useWorkflowConfig";
@@ -646,11 +647,11 @@ export function SettingsPage({ theme, setTheme }: SettingsPageProps) {
 
   // Plugin state
   interface PluginRecord { name: string; file: string; tools: string[]; status: "ok" | "error"; error: string | null }
-  const [plugins, setPlugins] = useState<PluginRecord[]>([]);
-  const [pluginsLoading, setPluginsLoading] = useState(false);
-  const [pluginsReloading, setPluginsReloading] = useState(false);
-  const [pluginsDir, setPluginsDir] = useState("");
-  const [expandedPlugins, setExpandedPlugins] = useState<Set<string>>(new Set());
+  const [_plugins, setPlugins] = useState<PluginRecord[]>([]);
+  const [_pluginsLoading, setPluginsLoading] = useState(false);
+  const [_pluginsReloading, setPluginsReloading] = useState(false);
+  const [_pluginsDir, setPluginsDir] = useState("");
+  const [_expandedPlugins, _setExpandedPlugins] = useState<Set<string>>(new Set());
 
   function selectAvatar(index: number) {
     setAvatarIndex(index);
@@ -808,6 +809,9 @@ export function SettingsPage({ theme, setTheme }: SettingsPageProps) {
       setPluginsReloading(false);
     }
   }
+
+  // Suppress TS6133 for plugin state (UI section planned)
+  void _plugins; void _pluginsLoading; void _pluginsReloading; void _pluginsDir; void _expandedPlugins; void reloadPlugins;
 
   async function handleDownload(model: GalleryModel) {
     try {
@@ -1679,7 +1683,7 @@ export function SettingsPage({ theme, setTheme }: SettingsPageProps) {
                 <div className="mt-2 space-y-1">
                   <div className="flex items-center gap-2">
                     <span className="riso-section-label">Version</span>
-                    <span className="tag-riso font-mono-ui">0.4.1</span>
+                    <span className="tag-riso font-mono-ui">{APP_VERSION}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="riso-section-label">Storage</span>

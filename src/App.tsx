@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, Component, Fragment, type ReactNode } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import axios from "axios";
+import { APP_VERSION } from "./lib/constants";
 import {
   Gauge,
   MessageSquare,
@@ -386,7 +387,7 @@ export default function App() {
             <span style={{ background: 'var(--accent-teal)' }} />
             <span style={{ background: 'var(--accent-violet)' }} />
           </div>
-          <span className="font-mono-ui" style={{ fontSize: 8, color: 'var(--topbar-muted)', letterSpacing: '0.08em' }}>v0.4.1</span>
+          <span className="font-mono-ui" style={{ fontSize: 8, color: 'var(--topbar-muted)', letterSpacing: '0.08em' }}>v{APP_VERSION}</span>
         </div>
 
         <div className="p-3 space-y-0.5 relative" style={{ borderTop: '1px solid var(--topbar-border)', zIndex: 1 }}>

@@ -26,7 +26,7 @@ import { toast } from "../hooks/useToast";
 import type { DocumentContext } from "../App";
 import type { TuningParams } from "../components/AIControlPanel";
 import agentCrowner from "../assets/AgentCrowner_512.png";
-import crowforgeIco from "../assets/crowforge_ico.png";
+
 
 const API_BASE = "http://127.0.0.1:8000";
 const CTX_SENTINEL = "\n\n[/CONTEXT]\n\n";

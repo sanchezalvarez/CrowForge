@@ -1,6 +1,7 @@
 import { useState } from "react";
 import axios from "axios";
 import { AlertCircle } from "lucide-react";
+import { APP_VERSION } from "../lib/constants";
 import crowforgeIco from "../assets/crowforge_ico.png";
 import { cn } from "../lib/utils";
 
@@ -277,7 +278,7 @@ export function OnboardingPage({ onComplete }: Props) {
                     marginBottom: 4,
                   }}
                 >
-                  v0.1.0
+                  v{APP_VERSION}
                 </p>
                 <h1
                   className="font-display font-black tracking-tight leading-none riso-title"

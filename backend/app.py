@@ -1292,19 +1292,65 @@ async def delete_all_issues():
         conn.commit()
     return {"deleted": count, "module": "issues"}
 
+@app.delete("/data/canvases")
+async def delete_all_canvases():
+    canvases = canvas_repo.delete_all()
+    with db.get_connection() as conn:
+        cursor = conn.execute("DELETE FROM rf_canvases")
+        rf = cursor.rowcount
+        conn.commit()
+    return {"deleted": canvases + rf, "module": "canvases"}
+
 @app.delete("/data/all")
 async def delete_all_data():
     chat = chat_session_repo.delete_all()
     docs = document_repo.delete_all()
     sheets = sheet_repo.delete_all()
+    canvases = canvas_repo.delete_all()
     with db.get_connection() as conn:
+        conn.execute("DELETE FROM rf_canvases")
         conn.execute("DELETE FROM pm_tasks")
         conn.execute("DELETE FROM pm_sprints")
         conn.execute("DELETE FROM pm_project_members")
         conn.execute("DELETE FROM pm_activity")
         conn.execute("DELETE FROM pm_projects")
         conn.commit()
-    return {"deleted": {"chat": chat, "documents": docs, "sheets": sheets, "projects": "all", "issues": "all"}}
+    return {"deleted": {"chat": chat, "documents": docs, "sheets": sheets, "canvases": canvases, "projects": "all", "issues": "all"}}
+
+
+# ── Backup ────────────────────────────────────────────────────────
+
+@app.post("/backup/export")
+async def export_backup(request: Request):
+    body = await request.json()
+    dest = body.get("path")
+    if not dest:
+        raise HTTPException(status_code=400, detail="Missing 'path' parameter")
+    src = os.path.join(get_app_data_dir(), "crowforge.db")
+    if not os.path.exists(src):
+        raise HTTPException(status_code=404, detail="Database file not found")
+    try:
+        shutil.copy2(src, dest)
+        return {"success": True, "path": dest}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/backup/import")
+async def import_backup(request: Request):
+    body = await request.json()
+    src = body.get("path")
+    if not src:
+        raise HTTPException(status_code=400, detail="Missing 'path' parameter")
+    if not os.path.exists(src):
+        raise HTTPException(status_code=404, detail="Source file not found")
+    dest = os.path.join(get_app_data_dir(), "crowforge.db")
+    if os.path.exists(dest):
+        shutil.copy2(dest, dest + ".bak")
+    try:
+        shutil.copy2(src, dest)
+        return {"success": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ── Documents ─────────────────────────────────────────────────────

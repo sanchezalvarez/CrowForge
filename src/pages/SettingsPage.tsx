@@ -594,7 +594,7 @@ export function SettingsPage({ theme, setTheme }: SettingsPageProps) {
   const [avatarIndex, setAvatarIndex] = useState(() =>
     parseInt(localStorage.getItem("user_avatar_index") ?? "0", 10)
   );
-  const [confirmDelete, setConfirmDelete] = useState<"chat" | "documents" | "sheets" | "projects" | "issues" | "all" | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<"chat" | "documents" | "sheets" | "canvases" | "projects" | "issues" | "all" | null>(null);
   const [deleting, setDeleting] = useState(false);
 
   // PM workflow config
@@ -659,11 +659,11 @@ export function SettingsPage({ theme, setTheme }: SettingsPageProps) {
     window.dispatchEvent(new Event("avatarchange"));
   }
 
-  async function deleteData(target: "chat" | "documents" | "sheets" | "projects" | "issues" | "all") {
+  async function deleteData(target: "chat" | "documents" | "sheets" | "canvases" | "projects" | "issues" | "all") {
     setDeleting(true);
     try {
       await axios.delete(`${API_BASE}/data/${target}`);
-      const labels: Record<string, string> = { chat: "Chat", documents: "Documents", sheets: "Sheets", projects: "Projects", issues: "Issues", all: "All data" };
+      const labels: Record<string, string> = { chat: "Chat", documents: "Documents", sheets: "Sheets", canvases: "Canvases", projects: "Projects", issues: "Issues", all: "All data" };
       toast(`${labels[target]} deleted.`);
       // Notify all pages to reload their data
       window.dispatchEvent(new CustomEvent("crowforge:data-deleted", { detail: { target } }));
@@ -1322,6 +1322,61 @@ export function SettingsPage({ theme, setTheme }: SettingsPageProps) {
 
             {/* Plugins section hidden */}
 
+            {/* ── Backup & Restore ── */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-5 rounded-sm shrink-0" style={{ background: 'var(--accent-teal)' }} />
+                <h2 className="font-display font-bold" style={{ fontSize: '1.1rem', letterSpacing: '-0.01em' }}>Backup & Restore</h2>
+              </div>
+              <p className="text-xs text-muted-foreground">Export or import your entire CrowForge database.</p>
+              <div className="flex gap-2">
+                <button
+                  className="btn-tactile btn-tactile-outline flex items-center gap-1.5"
+                  style={{ fontSize: 11 }}
+                  onClick={async () => {
+                    try {
+                      const { save } = await import("@tauri-apps/plugin-dialog");
+                      const path = await save({
+                        defaultPath: "crowforge-backup.db",
+                        filters: [{ name: "Database", extensions: ["db"] }],
+                      });
+                      if (!path) return;
+                      await axios.post(`${API_BASE}/backup/export`, { path });
+                      toast("Backup exported successfully", "success");
+                    } catch (e: any) {
+                      toast(e?.response?.data?.detail || "Export failed", "error");
+                    }
+                  }}
+                >
+                  <Download className="h-3 w-3" />
+                  Export Backup
+                </button>
+                <button
+                  className="btn-tactile btn-tactile-outline flex items-center gap-1.5"
+                  style={{ fontSize: 11 }}
+                  onClick={async () => {
+                    try {
+                      const { open: tauriOpen } = await import("@tauri-apps/plugin-dialog");
+                      const path = await tauriOpen({
+                        filters: [{ name: "Database", extensions: ["db"] }],
+                        multiple: false,
+                      });
+                      if (!path) return;
+                      await axios.post(`${API_BASE}/backup/import`, { path });
+                      toast("Database imported. Restarting backend...", "success");
+                      const { invoke } = await import("@tauri-apps/api/core");
+                      await invoke("restart_backend");
+                    } catch (e: any) {
+                      toast(e?.response?.data?.detail || "Import failed", "error");
+                    }
+                  }}
+                >
+                  <HardDrive className="h-3 w-3" />
+                  Import Backup
+                </button>
+              </div>
+            </div>
+
             {/* ── Data Management ── */}
             <div className="space-y-3">
               <div className="flex items-center gap-2">
@@ -1334,6 +1389,7 @@ export function SettingsPage({ theme, setTheme }: SettingsPageProps) {
                   { key: "chat" as const, label: "Chat history", description: "All chat sessions and messages" },
                   { key: "documents" as const, label: "Documents", description: "All documents and their content" },
                   { key: "sheets" as const, label: "Sheets", description: "All spreadsheets and their data" },
+                  { key: "canvases" as const, label: "Canvases", description: "All canvas boards and their nodes" },
                   { key: "projects" as const, label: "Projects", description: "All projects, tasks, sprints and roadmap data" },
                   { key: "issues" as const, label: "Issues", description: "All bug reports from the issue tracker" },
                 ]).map(({ key, label, description }) => (
@@ -1355,7 +1411,7 @@ export function SettingsPage({ theme, setTheme }: SettingsPageProps) {
                 <div className="flex items-center justify-between rounded-lg px-3 py-2.5 surface-noise" style={{ border: '1.5px solid color-mix(in srgb, var(--destructive) 30%, transparent)', background: 'color-mix(in srgb, var(--destructive) 6%, var(--background-2))' }}>
                   <div>
                     <p className="text-sm font-semibold text-destructive">Delete everything</p>
-                    <p className="text-[11px] text-muted-foreground">Wipe all chats, documents, sheets, projects and issues</p>
+                    <p className="text-[11px] text-muted-foreground">Wipe all chats, documents, sheets, canvases, projects and issues</p>
                   </div>
                   <button
                     onClick={() => setConfirmDelete("all")}
@@ -1384,7 +1440,7 @@ export function SettingsPage({ theme, setTheme }: SettingsPageProps) {
                         {confirmDelete === "all" ? "Delete all data?" : `Delete ${confirmDelete} data?`}
                       </p>
                       <p className="text-xs text-muted-foreground mt-1">
-                        This will permanently remove {confirmDelete === "all" ? "all chats, documents, sheets, projects and issues" : `all ${confirmDelete}`}. This cannot be undone.
+                        This will permanently remove {confirmDelete === "all" ? "all chats, documents, sheets, canvases, projects and issues" : `all ${confirmDelete}`}. This cannot be undone.
                       </p>
                     </div>
                   </div>

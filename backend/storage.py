@@ -1051,3 +1051,10 @@ class CanvasRepository:
         with self.db.get_connection() as conn:
             conn.execute("DELETE FROM canvases WHERE id = ?", (canvas_id,))
             conn.commit()
+
+    def delete_all(self) -> int:
+        with self.db.get_connection() as conn:
+            cursor = conn.execute("DELETE FROM canvases")
+            count = cursor.rowcount
+            conn.commit()
+        return count

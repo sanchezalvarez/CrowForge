@@ -1,10 +1,10 @@
-# CrowForge 0.4.2 — Final production build script (Windows)
+# CrowForge 0.4.3 — Final production build script (Windows)
 # Run from the project root: .\build.ps1
 
 $ErrorActionPreference = "Stop"
 
 Write-Host ""
-Write-Host "=== CrowForge v0.4.2 Build Started ===" -ForegroundColor Cyan
+Write-Host "=== CrowForge v0.4.3 Build Started ===" -ForegroundColor Cyan
 Write-Host ""
 
 # ── Step 0: Ensure dependencies are installed ────────────────────────────────
@@ -63,6 +63,6 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Write-Host ""
-Write-Host "=== CrowForge v0.4.2 Build Complete! ===" -ForegroundColor Cyan
+Write-Host "=== CrowForge v0.4.3 Build Complete! ===" -ForegroundColor Cyan
 Write-Host "Final Installers can be found in: src-tauri\target\release\bundle\" -ForegroundColor Green
 Write-Host ""

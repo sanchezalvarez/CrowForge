@@ -10,6 +10,8 @@ import {
   Settings,
   PanelRightClose,
   PanelRightOpen,
+  PanelLeftClose,
+  PanelLeftOpen,
   Bot,
   Wrench,
   Workflow,
@@ -85,6 +87,7 @@ export default function App() {
   const [currentPage, setCurrentPage] = useState<AppPage>("home");
   const [docContext, setDocContext] = useState<DocumentContext | null>(null);
   const [docContextLocked, setDocContextLocked] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(() => localStorage.getItem("sidebar_open") !== "false");
 
   // Persistence of active IDs to allow Dashboard -> Page navigation
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
@@ -323,7 +326,7 @@ export default function App() {
       <div className="riso-strip" />
       <div className="flex flex-1 min-h-0 overflow-hidden">
       {/* SIDEBAR */}
-      <aside className="hidden lg:flex w-[220px] shrink-0 flex-col relative overflow-hidden" style={{ background: 'var(--topbar-bg)', borderRight: '1px solid var(--topbar-border)' }}>
+      <aside className="hidden lg:flex shrink-0 flex-col relative overflow-hidden transition-all duration-200" style={{ width: sidebarOpen ? 220 : 56, background: 'var(--topbar-bg)', borderRight: '1px solid var(--topbar-border)' }}>
 
         {/* ── Riso sidebar BG elements ── */}
         {/* Teal glow — top, large */}
@@ -352,13 +355,18 @@ export default function App() {
         <div className="absolute pointer-events-none" style={{ top: 60, right: 0, width: 180, height: 180, opacity: 0.11, backgroundImage: 'radial-gradient(circle, rgba(11,114,104,0.9) 1.7px, transparent 1.7px)', backgroundSize: '9px 9px', zIndex: 0 }} />
 
         <div className="flex-1 overflow-y-auto relative" style={{ zIndex: 1 }}>
-          <div className="p-3 space-y-0.5">
+          <div className={cn("p-3 space-y-0.5", !sidebarOpen && "px-1.5")}>
             {navItems.map(({ page, label, icon: Icon }, i) => (
               <Fragment key={page}>
                 {page === "projects" && <div className="mx-1 my-1.5" style={{ borderTop: '1px solid var(--topbar-border)' }} />}
                 <button
                   onClick={() => setCurrentPage(page)}
-                  className={cn("w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-sm transition-colors animate-row-in", currentPage === page ? "font-semibold" : "")}
+                  title={!sidebarOpen ? label : undefined}
+                  className={cn(
+                    "w-full flex items-center rounded-md text-sm transition-colors animate-row-in",
+                    sidebarOpen ? "gap-2 px-2.5 py-1.5" : "justify-center px-0 py-1.5",
+                    currentPage === page ? "font-semibold" : ""
+                  )}
                   style={{
                     animationDelay: `${i * 25}ms`,
                     ...(page === "agent"
@@ -373,7 +381,7 @@ export default function App() {
                   onMouseLeave={(e) => { if (currentPage !== page) { (e.currentTarget as HTMLButtonElement).style.background = ''; (e.currentTarget as HTMLButtonElement).style.color = 'var(--topbar-muted)'; } }}
                 >
                   <Icon size={14} />
-                  {label}
+                  {sidebarOpen && label}
                 </button>
               </Fragment>
             ))}
@@ -381,6 +389,7 @@ export default function App() {
         </div>
 
         {/* Riso color chips — print registration marks */}
+        {sidebarOpen && (
         <div className="flex items-center justify-between px-4 py-1.5 relative" style={{ zIndex: 1 }}>
           <div className="riso-color-chips">
             <span style={{ background: 'var(--accent-orange)' }} />
@@ -389,13 +398,19 @@ export default function App() {
           </div>
           <span className="font-mono-ui" style={{ fontSize: 8, color: 'var(--topbar-muted)', letterSpacing: '0.08em' }}>v{APP_VERSION}</span>
         </div>
+        )}
 
-        <div className="p-3 space-y-0.5 relative" style={{ borderTop: '1px solid var(--topbar-border)', zIndex: 1 }}>
+        <div className={cn("p-3 space-y-0.5 relative", !sidebarOpen && "px-1.5")} style={{ borderTop: '1px solid var(--topbar-border)', zIndex: 1 }}>
           {bottomNavItems.map(({ page, label, icon: Icon }, i) => (
             <button
               key={page}
               onClick={() => setCurrentPage(page)}
-              className={cn("w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-sm transition-colors animate-row-in", currentPage === page ? "font-semibold" : "")}
+              title={!sidebarOpen ? label : undefined}
+              className={cn(
+                "w-full flex items-center rounded-md text-sm transition-colors animate-row-in",
+                sidebarOpen ? "gap-2 px-2.5 py-1.5" : "justify-center px-0 py-1.5",
+                currentPage === page ? "font-semibold" : ""
+              )}
               style={{
                 animationDelay: `${(i + 10) * 25}ms`,
                 ...(currentPage === page
@@ -406,9 +421,21 @@ export default function App() {
               onMouseLeave={(e) => { if (currentPage !== page) { (e.currentTarget as HTMLButtonElement).style.background = ''; (e.currentTarget as HTMLButtonElement).style.color = 'var(--topbar-muted)'; } }}
             >
               <Icon size={14} />
-              {label}
+              {sidebarOpen && label}
             </button>
           ))}
+          {/* Sidebar toggle */}
+          <button
+            onClick={() => { const next = !sidebarOpen; setSidebarOpen(next); localStorage.setItem("sidebar_open", String(next)); }}
+            title={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
+            className="w-full flex items-center rounded-md text-sm transition-colors py-1.5 mt-1"
+            style={{ color: 'var(--topbar-muted)', justifyContent: sidebarOpen ? 'flex-start' : 'center', paddingLeft: sidebarOpen ? 10 : 0, gap: sidebarOpen ? 8 : 0 }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.06)'; (e.currentTarget as HTMLButtonElement).style.color = 'var(--topbar-fg)'; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = ''; (e.currentTarget as HTMLButtonElement).style.color = 'var(--topbar-muted)'; }}
+          >
+            {sidebarOpen ? <PanelLeftClose size={14} /> : <PanelLeftOpen size={14} />}
+            {sidebarOpen && "Collapse"}
+          </button>
         </div>
       </aside>
 

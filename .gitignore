@@ -10,6 +10,13 @@ build/
 src-tauri/target/
 src-tauri/bin/*.exe
 
+# Installer build artifacts
+installer/node_modules/
+installer/src-tauri/target/
+installer/dist/
+installer/build/
+installer/package-lock.json
+
 # Python
 __pycache__/
 *.pyc

@@ -50,26 +50,29 @@ export function ProjectsPage({ onNavigateToProject, onNavigate }: ProjectsPagePr
   };
 
   return (
-    <div className="h-full overflow-y-auto overflow-x-hidden relative riso-noise riso-noise-live projects-scroll">
-      {/* ── Riso background blob glows ── */}
-      <div className="absolute pointer-events-none animate-blob-drift-b" style={{ top: -120, right: -60, width: 520, height: 400, background: 'rgba(11,114,104,0.18)', borderRadius: '50%', mixBlendMode: 'multiply', filter: 'blur(80px)', zIndex: 0 }} />
-      <div className="absolute pointer-events-none animate-blob-drift-c" style={{ bottom: -80, left: -80, width: 480, height: 380, background: 'rgba(224,78,14,0.18)', borderRadius: '50%', mixBlendMode: 'multiply', filter: 'blur(70px)', zIndex: 0 }} />
-      <div className="absolute pointer-events-none animate-blob-drift" style={{ top: '40%', left: '40%', width: 400, height: 340, background: 'rgba(92,58,156,0.13)', borderRadius: '50%', mixBlendMode: 'multiply', filter: 'blur(60px)', zIndex: 0 }} />
-
-      {/* Registration crosshairs */}
-      <svg className="absolute pointer-events-none" style={{ top: 14, right: 14, opacity: 0.25, zIndex: 2 }} width="20" height="20" viewBox="0 0 20 20">
-        <line x1="10" y1="0" x2="10" y2="20" stroke="#E04E0E" strokeWidth="1" />
-        <line x1="0" y1="10" x2="20" y2="10" stroke="#E04E0E" strokeWidth="1" />
-        <circle cx="10" cy="10" r="4" fill="none" stroke="#E04E0E" strokeWidth="1" />
-      </svg>
-      <svg className="absolute pointer-events-none" style={{ bottom: 14, left: 14, opacity: 0.22, zIndex: 2 }} width="20" height="20" viewBox="0 0 20 20">
-        <line x1="10" y1="0" x2="10" y2="20" stroke="#0B7268" strokeWidth="1" />
-        <line x1="0" y1="10" x2="20" y2="10" stroke="#0B7268" strokeWidth="1" />
-        <circle cx="10" cy="10" r="4" fill="none" stroke="#0B7268" strokeWidth="1" />
-      </svg>
-
-      {/* Halftone dot cluster — bottom right */}
-      <div className="absolute pointer-events-none" style={{ bottom: 0, right: 0, width: 220, height: 260, opacity: 0.06, backgroundImage: 'radial-gradient(circle, rgba(92,58,156,0.9) 1.8px, transparent 1.8px)', backgroundSize: '12px 12px', zIndex: 0 }} />
+    <div className="h-full overflow-hidden relative riso-noise">
+      <div className="pointer-events-none select-none" style={{ position: 'absolute', inset: 0, zIndex: 0 }}>
+        <div className="animate-blob-drift" style={{ position: 'absolute', width: 600, height: 600, borderRadius: '50%', background: 'var(--accent-teal)', opacity: 0.10, mixBlendMode: 'multiply', top: -200, right: -180 }} />
+        <div className="animate-blob-drift-b" style={{ position: 'absolute', width: 500, height: 500, borderRadius: '50%', background: 'var(--accent-orange)', opacity: 0.09, mixBlendMode: 'multiply', bottom: -160, left: -160 }} />
+        <div className="animate-blob-drift-c" style={{ position: 'absolute', width: 380, height: 380, borderRadius: '50%', background: 'var(--accent-violet)', opacity: 0.07, mixBlendMode: 'multiply', bottom: 80, right: -100 }} />
+        <div className="animate-blob-drift-d" style={{ position: 'absolute', width: 260, height: 260, borderRadius: '50%', background: 'var(--accent-teal)', opacity: 0.06, mixBlendMode: 'multiply', top: '35%', left: -100 }} />
+        <svg style={{ position: 'absolute', top: 12, right: 12, width: 44, height: 44 }} xmlns="http://www.w3.org/2000/svg">
+          <line x1="4" y1="18" x2="26" y2="18" stroke="rgba(11,114,104,0.40)" strokeWidth="1.5" />
+          <line x1="15" y1="7" x2="15" y2="29" stroke="rgba(11,114,104,0.40)" strokeWidth="1.5" />
+          <circle cx="15" cy="18" r="5" stroke="rgba(11,114,104,0.28)" strokeWidth="1" fill="none" />
+        </svg>
+        <svg style={{ position: 'absolute', bottom: 12, left: 12, width: 44, height: 44 }} xmlns="http://www.w3.org/2000/svg">
+          <line x1="4" y1="26" x2="26" y2="26" stroke="rgba(224,78,14,0.40)" strokeWidth="1.5" />
+          <line x1="15" y1="15" x2="15" y2="37" stroke="rgba(224,78,14,0.40)" strokeWidth="1.5" />
+          <circle cx="15" cy="26" r="5" stroke="rgba(224,78,14,0.28)" strokeWidth="1" fill="none" />
+        </svg>
+        <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} xmlns="http://www.w3.org/2000/svg">
+          <circle cx="18%" cy="12%" r="3" fill="rgba(224,78,14,0.20)" />
+          <circle cx="72%" cy="55%" r="2.5" fill="rgba(11,114,104,0.18)" />
+          <circle cx="88%" cy="30%" r="2" fill="rgba(92,58,156,0.18)" />
+          <circle cx="10%" cy="70%" r="2" fill="rgba(11,114,104,0.16)" />
+        </svg>
+      </div>
 
       {/* Content */}
       <div className="relative z-10 flex flex-col gap-6 p-6">
@@ -80,7 +83,7 @@ export function ProjectsPage({ onNavigateToProject, onNavigate }: ProjectsPagePr
               className="font-display font-black tracking-tight text-3xl text-foreground"
               style={{ textShadow: '3px 3px 0 rgba(224,78,14,0.20), -1.5px -1.5px 0 rgba(11,114,104,0.16)' }}
             >
-              Tasks
+              Projects
             </h1>
             {!loading && (
               <span

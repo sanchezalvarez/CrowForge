@@ -142,7 +142,7 @@ export function DocumentsPage({ onContextChange, tuningParams, initialDocId }: D
 
   // ── Render ──────────────────────────────────────────────────────────────
   return (
-    <div className="flex h-full relative">
+    <div className="flex h-full relative overflow-hidden">
       {/* Documents sidebar */}
       <div className="w-[220px] shrink-0 border-r flex flex-col" style={{ background: 'var(--background-2)' }}>
         <div className="h-20 flex items-center px-3 border-b">

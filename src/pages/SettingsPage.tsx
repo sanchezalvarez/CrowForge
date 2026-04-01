@@ -593,7 +593,7 @@ export function SettingsPage({ theme, setTheme }: SettingsPageProps) {
   const [avatarIndex, setAvatarIndex] = useState(() =>
     parseInt(localStorage.getItem("user_avatar_index") ?? "0", 10)
   );
-  const [confirmDelete, setConfirmDelete] = useState<"chat" | "documents" | "sheets" | "all" | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<"chat" | "documents" | "sheets" | "projects" | "issues" | "all" | null>(null);
   const [deleting, setDeleting] = useState(false);
 
   // PM workflow config
@@ -658,11 +658,11 @@ export function SettingsPage({ theme, setTheme }: SettingsPageProps) {
     window.dispatchEvent(new Event("avatarchange"));
   }
 
-  async function deleteData(target: "chat" | "documents" | "sheets" | "all") {
+  async function deleteData(target: "chat" | "documents" | "sheets" | "projects" | "issues" | "all") {
     setDeleting(true);
     try {
       await axios.delete(`${API_BASE}/data/${target}`);
-      const labels: Record<string, string> = { chat: "Chat", documents: "Documents", sheets: "Sheets", all: "All data" };
+      const labels: Record<string, string> = { chat: "Chat", documents: "Documents", sheets: "Sheets", projects: "Projects", issues: "Issues", all: "All data" };
       toast(`${labels[target]} deleted.`);
       // Notify all pages to reload their data
       window.dispatchEvent(new CustomEvent("crowforge:data-deleted", { detail: { target } }));
@@ -1330,6 +1330,8 @@ export function SettingsPage({ theme, setTheme }: SettingsPageProps) {
                   { key: "chat" as const, label: "Chat history", description: "All chat sessions and messages" },
                   { key: "documents" as const, label: "Documents", description: "All documents and their content" },
                   { key: "sheets" as const, label: "Sheets", description: "All spreadsheets and their data" },
+                  { key: "projects" as const, label: "Projects", description: "All projects, tasks, sprints and roadmap data" },
+                  { key: "issues" as const, label: "Issues", description: "All bug reports from the issue tracker" },
                 ]).map(({ key, label, description }) => (
                   <div key={key} className="flex items-center justify-between rounded-lg px-3 py-2.5 surface-noise" style={{ border: '1.5px solid var(--border-strong)', background: 'var(--background-2)' }}>
                     <div>
@@ -1349,7 +1351,7 @@ export function SettingsPage({ theme, setTheme }: SettingsPageProps) {
                 <div className="flex items-center justify-between rounded-lg px-3 py-2.5 surface-noise" style={{ border: '1.5px solid color-mix(in srgb, var(--destructive) 30%, transparent)', background: 'color-mix(in srgb, var(--destructive) 6%, var(--background-2))' }}>
                   <div>
                     <p className="text-sm font-semibold text-destructive">Delete everything</p>
-                    <p className="text-[11px] text-muted-foreground">Wipe all chat, documents and sheets</p>
+                    <p className="text-[11px] text-muted-foreground">Wipe all chats, documents, sheets, projects and issues</p>
                   </div>
                   <button
                     onClick={() => setConfirmDelete("all")}
@@ -1378,7 +1380,7 @@ export function SettingsPage({ theme, setTheme }: SettingsPageProps) {
                         {confirmDelete === "all" ? "Delete all data?" : `Delete ${confirmDelete} data?`}
                       </p>
                       <p className="text-xs text-muted-foreground mt-1">
-                        This will permanently remove {confirmDelete === "all" ? "all chats, documents and sheets" : `all ${confirmDelete}`}. This cannot be undone.
+                        This will permanently remove {confirmDelete === "all" ? "all chats, documents, sheets, projects and issues" : `all ${confirmDelete}`}. This cannot be undone.
                       </p>
                     </div>
                   </div>

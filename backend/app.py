@@ -1271,12 +1271,40 @@ async def delete_all_sheets():
     count = sheet_repo.delete_all()
     return {"deleted": count, "module": "sheets"}
 
+@app.delete("/data/projects")
+async def delete_all_projects():
+    with db.get_connection() as conn:
+        conn.execute("DELETE FROM pm_tasks")
+        conn.execute("DELETE FROM pm_sprints")
+        conn.execute("DELETE FROM pm_project_members")
+        conn.execute("DELETE FROM pm_activity")
+        count = conn.execute("SELECT changes()").fetchone()[0]
+        conn.execute("DELETE FROM pm_projects")
+        count = conn.execute("SELECT COUNT(*) FROM pm_projects").fetchone()[0]
+        conn.commit()
+    return {"deleted": count, "module": "projects"}
+
+@app.delete("/data/issues")
+async def delete_all_issues():
+    with db.get_connection() as conn:
+        cursor = conn.execute("DELETE FROM pm_tasks WHERE item_type = 'bug'")
+        count = cursor.rowcount
+        conn.commit()
+    return {"deleted": count, "module": "issues"}
+
 @app.delete("/data/all")
 async def delete_all_data():
     chat = chat_session_repo.delete_all()
     docs = document_repo.delete_all()
     sheets = sheet_repo.delete_all()
-    return {"deleted": {"chat": chat, "documents": docs, "sheets": sheets}}
+    with db.get_connection() as conn:
+        conn.execute("DELETE FROM pm_tasks")
+        conn.execute("DELETE FROM pm_sprints")
+        conn.execute("DELETE FROM pm_project_members")
+        conn.execute("DELETE FROM pm_activity")
+        conn.execute("DELETE FROM pm_projects")
+        conn.commit()
+    return {"deleted": {"chat": chat, "documents": docs, "sheets": sheets, "projects": "all", "issues": "all"}}
 
 
 # ── Documents ─────────────────────────────────────────────────────

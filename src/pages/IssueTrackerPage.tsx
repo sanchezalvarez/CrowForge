@@ -166,115 +166,51 @@ export function IssueTrackerPage() {
   }, [formProjectId, formTitle, formDescription, formStepsToReproduce, formOccurredAt, formSeverity, formAssigneeId, formParentId, formScreenshots, create, load]);
 
   return (
-    <div className="flex flex-col h-full overflow-hidden pm-surface" style={{ position: "relative" }}>
-      {/* Riso background graphics */}
-      <div
-        className="pointer-events-none select-none"
-        style={{ position: "absolute", inset: 0, zIndex: 0, overflow: "hidden" }}
-      >
-        {/* Blob — orange, top-left */}
-        <div
-          className="animate-blob-drift-b"
-          style={{
-            position: "absolute",
-            width: 480,
-            height: 480,
-            borderRadius: "50%",
-            background: "var(--accent-orange)",
-            opacity: 0.08,
-            mixBlendMode: "multiply",
-            top: -160,
-            left: -160,
-          }}
-        />
-        {/* Blob — teal, bottom-right */}
-        <div
-          className="animate-blob-drift"
-          style={{
-            position: "absolute",
-            width: 440,
-            height: 440,
-            borderRadius: "50%",
-            background: "var(--accent-teal)",
-            opacity: 0.07,
-            mixBlendMode: "multiply",
-            bottom: -150,
-            right: -150,
-          }}
-        />
-        {/* Blob — violet, mid-left */}
-        <div
-          className="animate-blob-drift-c"
-          style={{
-            position: "absolute",
-            width: 240,
-            height: 240,
-            borderRadius: "50%",
-            background: "var(--accent-violet)",
-            opacity: 0.06,
-            mixBlendMode: "multiply",
-            top: "35%",
-            left: -60,
-          }}
-        />
-        {/* Registration crosshair — top-right */}
-        <svg
-          style={{ position: "absolute", top: 12, right: 12, width: 44, height: 44 }}
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          <line x1="4" y1="18" x2="26" y2="18" stroke="rgba(11,114,104,0.38)" strokeWidth="1.5" />
-          <line x1="15" y1="7" x2="15" y2="29" stroke="rgba(11,114,104,0.38)" strokeWidth="1.5" />
-          <circle cx="15" cy="18" r="5" stroke="rgba(11,114,104,0.26)" strokeWidth="1" fill="none" />
+    <div className="flex flex-col h-full overflow-hidden riso-noise" style={{ position: "relative" }}>
+      <div className="pointer-events-none select-none" style={{ position: 'absolute', inset: 0, zIndex: 0 }}>
+        <div className="animate-blob-drift" style={{ position: 'absolute', width: 600, height: 600, borderRadius: '50%', background: 'var(--accent-teal)', opacity: 0.10, mixBlendMode: 'multiply', top: -200, right: -180 }} />
+        <div className="animate-blob-drift-b" style={{ position: 'absolute', width: 500, height: 500, borderRadius: '50%', background: 'var(--accent-orange)', opacity: 0.09, mixBlendMode: 'multiply', bottom: -160, left: -160 }} />
+        <div className="animate-blob-drift-c" style={{ position: 'absolute', width: 380, height: 380, borderRadius: '50%', background: 'var(--accent-violet)', opacity: 0.07, mixBlendMode: 'multiply', bottom: 80, right: -100 }} />
+        <div className="animate-blob-drift-d" style={{ position: 'absolute', width: 260, height: 260, borderRadius: '50%', background: 'var(--accent-teal)', opacity: 0.06, mixBlendMode: 'multiply', top: '35%', left: -100 }} />
+        <svg style={{ position: 'absolute', top: 12, right: 12, width: 44, height: 44 }} xmlns="http://www.w3.org/2000/svg">
+          <line x1="4" y1="18" x2="26" y2="18" stroke="rgba(11,114,104,0.40)" strokeWidth="1.5" />
+          <line x1="15" y1="7" x2="15" y2="29" stroke="rgba(11,114,104,0.40)" strokeWidth="1.5" />
+          <circle cx="15" cy="18" r="5" stroke="rgba(11,114,104,0.28)" strokeWidth="1" fill="none" />
         </svg>
-        {/* Registration crosshair — bottom-left */}
-        <svg
-          style={{ position: "absolute", bottom: 12, left: 12, width: 44, height: 44 }}
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          <line x1="4" y1="26" x2="26" y2="26" stroke="rgba(224,78,14,0.38)" strokeWidth="1.5" />
-          <line x1="15" y1="15" x2="15" y2="37" stroke="rgba(224,78,14,0.38)" strokeWidth="1.5" />
-          <circle cx="15" cy="26" r="5" stroke="rgba(224,78,14,0.26)" strokeWidth="1" fill="none" />
+        <svg style={{ position: 'absolute', bottom: 12, left: 12, width: 44, height: 44 }} xmlns="http://www.w3.org/2000/svg">
+          <line x1="4" y1="26" x2="26" y2="26" stroke="rgba(224,78,14,0.40)" strokeWidth="1.5" />
+          <line x1="15" y1="15" x2="15" y2="37" stroke="rgba(224,78,14,0.40)" strokeWidth="1.5" />
+          <circle cx="15" cy="26" r="5" stroke="rgba(224,78,14,0.28)" strokeWidth="1" fill="none" />
         </svg>
-        {/* Halftone cluster — top-right area */}
-        <svg
-          style={{ position: "absolute", right: 48, top: 72, width: 72, height: 72 }}
-          viewBox="0 0 72 72"
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          {(
-            [
-              [12, 12, 2.0],
-              [26, 9, 1.4],
-              [7, 26, 1.7],
-              [22, 24, 1.2],
-              [36, 15, 1.3],
-              [10, 38, 1.2],
-              [30, 36, 0.9],
-            ] as [number, number, number][]
-          ).map(([x, y, r], i) => (
-            <circle key={i} cx={x} cy={y} r={r} fill="rgba(11,114,104,0.22)" />
-          ))}
+        <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} xmlns="http://www.w3.org/2000/svg">
+          <circle cx="18%" cy="12%" r="3" fill="rgba(224,78,14,0.20)" />
+          <circle cx="72%" cy="55%" r="2.5" fill="rgba(11,114,104,0.18)" />
+          <circle cx="88%" cy="30%" r="2" fill="rgba(92,58,156,0.18)" />
+          <circle cx="10%" cy="70%" r="2" fill="rgba(11,114,104,0.16)" />
         </svg>
       </div>
 
-      {/* Header — riso styled */}
-      <div
-        className="flex items-center gap-3 px-6 py-3.5 flex-shrink-0 surface-noise"
-        style={{
-          position: "relative",
-          zIndex: 1,
-          borderBottom: "1.5px solid rgba(20,16,10,0.14)",
-          background: "var(--background-2)",
-        }}
-      >
-        <Bug size={15} style={{ color: "var(--destructive)" }} />
-        <h1
-          className="font-display font-black text-sm tracking-tight"
-          style={{ textShadow: "1.5px 1.5px 0 rgba(220,38,38,0.18)" }}
-        >Issue Tracker</h1>
-        <div className="ml-auto">
+      {/* Header — matches ProjectsPage layout */}
+      <div className="flex items-center justify-between px-6 pt-6 pb-4 flex-shrink-0" style={{ position: "relative", zIndex: 1 }}>
+        <div className="flex items-center gap-3">
+          <h1
+            className="font-display font-black tracking-tight text-3xl text-foreground"
+            style={{ textShadow: '3px 3px 0 rgba(224,78,14,0.20), -1.5px -1.5px 0 rgba(11,114,104,0.16)' }}
+          >
+            Issue Tracker
+          </h1>
+          {!loading && issues.length > 0 && (
+            <span
+              className="riso-stamp riso-stamp-press font-mono-ui text-[11px] px-2 py-0.5 rounded-full select-none"
+              style={{ background: 'rgba(224,78,14,0.12)', color: 'var(--accent-orange)', border: '1.5px solid rgba(224,78,14,0.28)' }}
+            >
+              {issues.length}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
           <button className="btn-tactile btn-tactile-orange gap-1" onClick={() => setDialogOpen(true)}>
-            <Plus size={12} /> Report Bug
+            <Plus size={13} /> Report Bug
           </button>
         </div>
       </div>

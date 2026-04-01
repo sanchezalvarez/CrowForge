@@ -186,96 +186,27 @@ export function ProjectDetailPage({ projectId, onBack, onNavigate }: ProjectDeta
   }
 
   return (
-    <div className="flex-1 flex flex-col h-full overflow-hidden pm-surface" style={{ position: "relative" }}>
-      {/* Riso background graphics */}
-      <div
-        className="pointer-events-none select-none"
-        style={{ position: "absolute", inset: 0, zIndex: 0, overflow: "hidden" }}
-      >
-        {/* Blob — teal, top-right */}
-        <div
-          className="animate-blob-drift"
-          style={{
-            position: "absolute",
-            width: 520,
-            height: 520,
-            borderRadius: "50%",
-            background: "var(--accent-teal)",
-            opacity: 0.07,
-            mixBlendMode: "multiply",
-            top: -180,
-            right: -180,
-          }}
-        />
-        {/* Blob — orange, bottom-left */}
-        <div
-          className="animate-blob-drift-b"
-          style={{
-            position: "absolute",
-            width: 400,
-            height: 400,
-            borderRadius: "50%",
-            background: "var(--accent-orange)",
-            opacity: 0.07,
-            mixBlendMode: "multiply",
-            bottom: -140,
-            left: -140,
-          }}
-        />
-        {/* Blob — violet, mid-right */}
-        <div
-          className="animate-blob-drift-c"
-          style={{
-            position: "absolute",
-            width: 280,
-            height: 280,
-            borderRadius: "50%",
-            background: "var(--accent-violet)",
-            opacity: 0.06,
-            mixBlendMode: "multiply",
-            top: "40%",
-            right: -80,
-          }}
-        />
-        {/* Registration crosshair — top-right */}
-        <svg
-          style={{ position: "absolute", top: 12, right: 12, width: 44, height: 44 }}
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          <line x1="4" y1="18" x2="26" y2="18" stroke="rgba(11,114,104,0.38)" strokeWidth="1.5" />
-          <line x1="15" y1="7" x2="15" y2="29" stroke="rgba(11,114,104,0.38)" strokeWidth="1.5" />
-          <circle cx="15" cy="18" r="5" stroke="rgba(11,114,104,0.26)" strokeWidth="1" fill="none" />
+    <div className="flex-1 flex flex-col h-full overflow-hidden riso-noise" style={{ position: "relative" }}>
+      <div className="pointer-events-none select-none" style={{ position: 'absolute', inset: 0, zIndex: 0 }}>
+        <div className="animate-blob-drift" style={{ position: 'absolute', width: 600, height: 600, borderRadius: '50%', background: 'var(--accent-teal)', opacity: 0.10, mixBlendMode: 'multiply', top: -200, right: -180 }} />
+        <div className="animate-blob-drift-b" style={{ position: 'absolute', width: 500, height: 500, borderRadius: '50%', background: 'var(--accent-orange)', opacity: 0.09, mixBlendMode: 'multiply', bottom: -160, left: -160 }} />
+        <div className="animate-blob-drift-c" style={{ position: 'absolute', width: 380, height: 380, borderRadius: '50%', background: 'var(--accent-violet)', opacity: 0.07, mixBlendMode: 'multiply', bottom: 80, right: -100 }} />
+        <div className="animate-blob-drift-d" style={{ position: 'absolute', width: 260, height: 260, borderRadius: '50%', background: 'var(--accent-teal)', opacity: 0.06, mixBlendMode: 'multiply', top: '35%', left: -100 }} />
+        <svg style={{ position: 'absolute', top: 12, right: 12, width: 44, height: 44 }} xmlns="http://www.w3.org/2000/svg">
+          <line x1="4" y1="18" x2="26" y2="18" stroke="rgba(11,114,104,0.40)" strokeWidth="1.5" />
+          <line x1="15" y1="7" x2="15" y2="29" stroke="rgba(11,114,104,0.40)" strokeWidth="1.5" />
+          <circle cx="15" cy="18" r="5" stroke="rgba(11,114,104,0.28)" strokeWidth="1" fill="none" />
         </svg>
-        {/* Registration crosshair — bottom-left */}
-        <svg
-          style={{ position: "absolute", bottom: 12, left: 12, width: 44, height: 44 }}
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          <line x1="4" y1="26" x2="26" y2="26" stroke="rgba(224,78,14,0.38)" strokeWidth="1.5" />
-          <line x1="15" y1="15" x2="15" y2="37" stroke="rgba(224,78,14,0.38)" strokeWidth="1.5" />
-          <circle cx="15" cy="26" r="5" stroke="rgba(224,78,14,0.26)" strokeWidth="1" fill="none" />
+        <svg style={{ position: 'absolute', bottom: 12, left: 12, width: 44, height: 44 }} xmlns="http://www.w3.org/2000/svg">
+          <line x1="4" y1="26" x2="26" y2="26" stroke="rgba(224,78,14,0.40)" strokeWidth="1.5" />
+          <line x1="15" y1="15" x2="15" y2="37" stroke="rgba(224,78,14,0.40)" strokeWidth="1.5" />
+          <circle cx="15" cy="26" r="5" stroke="rgba(224,78,14,0.28)" strokeWidth="1" fill="none" />
         </svg>
-        {/* Halftone cluster — bottom-right */}
-        <svg
-          style={{ position: "absolute", right: 52, bottom: 60, width: 76, height: 76 }}
-          viewBox="0 0 76 76"
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          {(
-            [
-              [10, 10, 2.2],
-              [24, 8, 1.5],
-              [6, 24, 1.8],
-              [20, 22, 1.3],
-              [34, 14, 1.4],
-              [38, 28, 1.0],
-              [10, 36, 1.3],
-              [28, 34, 0.9],
-              [42, 42, 0.8],
-            ] as [number, number, number][]
-          ).map(([x, y, r], i) => (
-            <circle key={i} cx={x} cy={y} r={r} fill="rgba(224,78,14,0.22)" />
-          ))}
+        <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} xmlns="http://www.w3.org/2000/svg">
+          <circle cx="18%" cy="12%" r="3" fill="rgba(224,78,14,0.20)" />
+          <circle cx="72%" cy="55%" r="2.5" fill="rgba(11,114,104,0.18)" />
+          <circle cx="88%" cy="30%" r="2" fill="rgba(92,58,156,0.18)" />
+          <circle cx="10%" cy="70%" r="2" fill="rgba(11,114,104,0.16)" />
         </svg>
       </div>
 

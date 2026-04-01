@@ -130,10 +130,14 @@ function AgentStatusBanner({ events, isSending, isStreaming }: { events: AgentEv
   }
 
   return (
-    <div className={cn(
-      "flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-md border",
-      "bg-violet-500/10 border-violet-500/30 text-violet-700 dark:text-violet-300",
-    )}>
+    <div
+      className="flex items-center gap-2 px-3 py-1 font-mono-ui text-[11px] font-medium rounded-md border animate-riso-pulse"
+      style={{
+        background: 'color-mix(in srgb, var(--accent-violet) 10%, transparent)',
+        borderColor: 'color-mix(in srgb, var(--accent-violet) 30%, transparent)',
+        color: 'var(--accent-violet)',
+      }}
+    >
       {icon}
       {label}
     </div>
@@ -229,7 +233,7 @@ function AgentToolBubble({ events, sessionId, isSending }: { events: AgentEvent[
       {steps.map((step, i) => {
         if (step.kind === "thinking") {
           return (
-            <div key={`t${i}`} className="text-xs text-violet-600/70 dark:text-violet-400/70 italic px-1 py-0.5">
+            <div key={`t${i}`} className="font-mono-ui text-[11px] italic px-1 py-0.5 opacity-70" style={{ color: 'var(--accent-violet)' }}>
               {step.content}
             </div>
           );
@@ -246,13 +250,20 @@ function AgentToolBubble({ events, sessionId, isSending }: { events: AgentEvent[
         const isOpen = expanded[key] ?? false;
         const applyState = applyStates[key] ?? "idle";
         return (
-          <div key={key} className={cn("border rounded-md text-xs", step.hasError ? "border-red-500/30 bg-red-500/5" : "border-violet-500/20 bg-violet-500/5")}>
+          <div
+            key={key}
+            className="border rounded-md font-mono-ui text-xs"
+            style={step.hasError
+              ? { borderColor: 'rgba(220,38,38,0.30)', background: 'rgba(220,38,38,0.05)' }
+              : { borderColor: 'color-mix(in srgb, var(--accent-violet) 20%, transparent)', background: 'color-mix(in srgb, var(--accent-violet) 5%, transparent)' }
+            }
+          >
             <button
-              className="flex items-center gap-1.5 w-full px-2.5 py-1.5 text-left hover:bg-violet-500/10 transition-colors"
+              className="flex items-center gap-1.5 w-full px-2.5 py-1.5 text-left transition-colors hover:bg-muted/60"
               onClick={() => setExpanded(prev => ({ ...prev, [key]: !prev[key] }))}
             >
               {isOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-              <Wrench className="h-3 w-3 text-violet-500" />
+              <Wrench className="h-3 w-3" style={{ color: 'var(--accent-violet)' }} />
               <span className="font-medium">{step.tool}</span>
               {step.finished ? (
                 <span className="ml-auto flex items-center gap-1.5">
@@ -262,17 +273,17 @@ function AgentToolBubble({ events, sessionId, isSending }: { events: AgentEvent[
                   {step.hasError ? (
                     <XCircle className="h-3 w-3 text-red-500" />
                   ) : step.isPreview ? (
-                    <span className="text-violet-500 text-[10px] font-medium">Preview</span>
+                    <span className="font-mono-ui text-[10px] font-medium" style={{ color: 'var(--accent-violet)' }}>Preview</span>
                   ) : (
                     <Check className="h-3 w-3 text-green-600 dark:text-green-400" />
                   )}
                 </span>
               ) : (
-                <Loader2 className="h-3 w-3 animate-spin ml-auto text-violet-500" />
+                <Loader2 className="h-3 w-3 animate-spin ml-auto" style={{ color: 'var(--accent-violet)' }} />
               )}
             </button>
             {isOpen && (
-              <div className="px-2.5 pb-2 space-y-1 border-t border-violet-500/20">
+              <div className="px-2.5 pb-2 space-y-1 border-t" style={{ borderColor: 'color-mix(in srgb, var(--accent-violet) 20%, transparent)' }}>
                 {Object.keys(step.args).length > 0 && (
                   <div className="mt-1.5">
                     <span className="text-muted-foreground">Args: </span>
@@ -297,28 +308,29 @@ function AgentToolBubble({ events, sessionId, isSending }: { events: AgentEvent[
                 )}
                 {step.isPreview && step.previewDesc && (
                   <div className="mt-1.5 flex items-center gap-2">
-                    <span className="text-violet-600 dark:text-violet-400">{step.previewDesc}</span>
+                    <span style={{ color: 'var(--accent-violet)' }}>{step.previewDesc}</span>
                     {applyState === "idle" && (
                       <button
                         onClick={(e) => { e.stopPropagation(); handleApply(step); }}
                         disabled={isSending}
-                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-violet-600 text-white text-[10px] font-medium hover:bg-violet-700 disabled:opacity-50 transition-colors"
+                        className="btn-tactile btn-tactile-violet"
+                        style={{ fontSize: 10, padding: '2px 7px' }}
                       >
                         <Play className="h-2.5 w-2.5" /> Apply
                       </button>
                     )}
                     {applyState === "applying" && (
-                      <span className="inline-flex items-center gap-1 text-[10px] text-violet-500">
+                      <span className="inline-flex items-center gap-1 font-mono-ui text-[10px]" style={{ color: 'var(--accent-violet)' }}>
                         <Loader2 className="h-2.5 w-2.5 animate-spin" /> Applying...
                       </span>
                     )}
                     {applyState === "applied" && (
-                      <span className="inline-flex items-center gap-1 text-[10px] text-green-600 dark:text-green-400 font-medium">
+                      <span className="inline-flex items-center gap-1 font-mono-ui text-[10px] text-green-600 dark:text-green-400 font-medium">
                         <Check className="h-2.5 w-2.5" /> Applied
                       </span>
                     )}
                     {applyState === "error" && (
-                      <span className="text-[10px] text-red-500">{applyErrors[key] ?? "Failed"}</span>
+                      <span className="font-mono-ui text-[10px] text-destructive">{applyErrors[key] ?? "Failed"}</span>
                     )}
                   </div>
                 )}
@@ -359,38 +371,39 @@ function ContextSelector({
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Agent Context</span>
+        <span className="riso-section-label">Agent Context</span>
         {totalSelected > 0 && (
-          <button onClick={onClearAll} className="text-[10px] text-muted-foreground hover:text-foreground">
+          <button onClick={onClearAll} className="btn-tactile btn-tactile-outline" style={{ fontSize: 10, padding: '1px 6px' }}>
             Clear all
           </button>
         )}
       </div>
 
       {allSelected && (
-        <div className="text-[11px] text-violet-600 dark:text-violet-400 font-medium">
+        <div className="font-mono-ui text-[11px] font-medium" style={{ color: 'var(--accent-violet)' }}>
           All items selected — agent can access everything
         </div>
       )}
 
       {sheets.length > 0 && (
         <div>
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-xs font-medium flex items-center gap-1">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="riso-section-label">
               <Table2 className="h-3 w-3" /> Sheets
             </span>
-            <button onClick={onSelectAllSheets} className="text-[10px] text-muted-foreground hover:text-foreground">
+            <button onClick={onSelectAllSheets} className="btn-tactile btn-tactile-outline" style={{ fontSize: 10, padding: '1px 6px' }}>
               {selectedSheetIds.size === sheets.length ? "Deselect all" : "Select all"}
             </button>
           </div>
           <div className="space-y-0.5">
             {sheets.map(s => (
-              <label key={s.id} className="flex items-center gap-2 px-2 py-1 rounded hover:bg-muted/50 cursor-pointer text-xs">
+              <label key={s.id} className="flex items-center gap-2 px-2 py-1 rounded hover:bg-muted/50 cursor-pointer font-mono-ui text-xs transition-colors">
                 <input
                   type="checkbox"
                   checked={selectedSheetIds.has(s.id)}
                   onChange={() => onToggleSheet(s.id)}
-                  className="rounded border-muted-foreground accent-violet-600"
+                  className="rounded border-muted-foreground"
+                  style={{ accentColor: 'var(--accent-violet)' }}
                 />
                 <span className="truncate">{s.title}</span>
               </label>
@@ -401,22 +414,23 @@ function ContextSelector({
 
       {documents.length > 0 && (
         <div>
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-xs font-medium flex items-center gap-1">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="riso-section-label">
               <FileText className="h-3 w-3" /> Documents
             </span>
-            <button onClick={onSelectAllDocuments} className="text-[10px] text-muted-foreground hover:text-foreground">
+            <button onClick={onSelectAllDocuments} className="btn-tactile btn-tactile-outline" style={{ fontSize: 10, padding: '1px 6px' }}>
               {selectedDocumentIds.size === documents.length ? "Deselect all" : "Select all"}
             </button>
           </div>
           <div className="space-y-0.5">
             {documents.map(d => (
-              <label key={d.id} className="flex items-center gap-2 px-2 py-1 rounded hover:bg-muted/50 cursor-pointer text-xs">
+              <label key={d.id} className="flex items-center gap-2 px-2 py-1 rounded hover:bg-muted/50 cursor-pointer font-mono-ui text-xs transition-colors">
                 <input
                   type="checkbox"
                   checked={selectedDocumentIds.has(d.id)}
                   onChange={() => onToggleDocument(d.id)}
-                  className="rounded border-muted-foreground accent-violet-600"
+                  className="rounded border-muted-foreground"
+                  style={{ accentColor: 'var(--accent-violet)' }}
                 />
                 <span className="truncate">{d.title}</span>
               </label>
@@ -426,7 +440,7 @@ function ContextSelector({
       )}
 
       {sheets.length === 0 && documents.length === 0 && (
-        <p className="text-xs text-muted-foreground py-2">No sheets or documents yet. Create some first.</p>
+        <p className="font-mono-ui text-[11px] text-muted-foreground py-2">No sheets or documents yet. Create some first.</p>
       )}
     </div>
   );
@@ -471,6 +485,7 @@ export function AgentPage({ tuningParams }: AgentPageProps) {
   } = useChatStream();
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
   const isDark = useIsDark();
   const contextPanelRef = useRef<HTMLDivElement>(null);
@@ -557,7 +572,8 @@ export function AgentPage({ tuningParams }: AgentPageProps) {
   }, [handleStreamDone, handleStreamError]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const el = messagesContainerRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
   }, [messages, streamingContent, agentEvents]);
 
   useEffect(() => {
@@ -763,30 +779,40 @@ export function AgentPage({ tuningParams }: AgentPageProps) {
   }
 
   return (
-    <div className="flex h-full">
+    <div className="flex h-full overflow-hidden">
       {/* Sessions sidebar */}
-      <div className="shrink-0 border-r flex flex-col relative" style={{ width: sidebarWidth, background: 'var(--background-2)' }}>
-        <div className="h-20 flex items-center px-3 border-b">
+      <div className="shrink-0 border-r flex flex-col relative surface-noise" style={{ width: sidebarWidth, background: 'var(--background-2)' }}>
+        <div className="h-14 flex items-center px-3 border-b shrink-0">
           <button
-            className="btn-tactile w-full justify-center"
-            style={{ background: 'var(--accent-violet)', color: '#fff', borderColor: 'rgba(0,0,0,0.15)' }}
+            className="btn-tactile btn-tactile-violet w-full justify-center"
             onClick={createSession}
           >
             <PlusCircle className="h-3.5 w-3.5" />
             New Agent Chat
           </button>
         </div>
+        <div className="px-3 pt-3 pb-1">
+          <span className="riso-section-label">Sessions</span>
+        </div>
         <ScrollArea className="flex-1">
-          <div className="p-2 space-y-0.5">
-            {sessions.map((s) => (
+          <div className="px-2 pb-2 space-y-0.5">
+            {sessions.map((s, i) => (
               <div
                 key={s.id}
                 className={cn(
-                  "group flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-sm cursor-pointer transition-colors",
+                  "group flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-sm cursor-pointer transition-colors animate-row-in border",
                   activeSessionId === s.id
-                    ? "bg-violet-500/15 text-violet-600 dark:text-violet-400 font-medium"
-                    : "text-muted-foreground hover:bg-violet-500/10 hover:text-violet-600 dark:hover:text-violet-400"
+                    ? "font-medium"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground border-transparent"
                 )}
+                style={{
+                  animationDelay: `${Math.min(i, 20) * 20}ms`,
+                  ...(activeSessionId === s.id ? {
+                    background: 'color-mix(in srgb, var(--accent-violet) 10%, transparent)',
+                    color: 'var(--accent-violet)',
+                    borderColor: 'color-mix(in srgb, var(--accent-violet) 20%, transparent)',
+                  } : {}),
+                }}
                 onClick={() => { if (renamingSessionId !== s.id) setActiveSessionId(s.id); }}
                 onDoubleClick={() => startRenameSession(s.id, s.title)}
                 onContextMenu={(e) => { e.preventDefault(); setSessionMenu({ sessionId: s.id, x: e.clientX, y: e.clientY }); }}
@@ -803,15 +829,16 @@ export function AgentPage({ tuningParams }: AgentPageProps) {
                       if (e.key === "Escape") setRenamingSessionId(null);
                     }}
                     onClick={(e) => e.stopPropagation()}
-                    className="flex-1 bg-transparent outline-none border-b border-violet-500 text-xs min-w-0"
+                    className="flex-1 bg-transparent outline-none border-b text-xs min-w-0"
+                    style={{ borderColor: 'var(--accent-violet)' }}
                   />
                 ) : (
-                  <span className="flex-1 min-w-0 truncate">{s.title}</span>
+                  <span className="flex-1 min-w-0 truncate font-mono-ui text-xs">{s.title}</span>
                 )}
               </div>
             ))}
             {sessions.length === 0 && (
-              <p className="text-xs text-muted-foreground text-center py-6">No agent chats yet.</p>
+              <p className="font-mono-ui text-[11px] text-muted-foreground text-center py-6 opacity-60">No agent chats yet.</p>
             )}
           </div>
         </ScrollArea>
@@ -830,19 +857,19 @@ export function AgentPage({ tuningParams }: AgentPageProps) {
       {/* Session context menu */}
       {sessionMenu && (
         <div
-          className="fixed z-50 bg-background border border-border rounded-md shadow-lg py-1 min-w-[150px] text-sm"
+          className="fixed z-50 bg-card border border-border-strong rounded-md card-riso card-riso-violet py-1 min-w-[150px] text-sm"
           style={{ left: sessionMenu.x, top: sessionMenu.y }}
           onMouseDown={(e) => e.stopPropagation()}
         >
           <button
-            className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2"
+            className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2 font-mono-ui text-xs transition-colors"
             onClick={() => { startRenameSession(sessionMenu.sessionId, sessions.find(s => s.id === sessionMenu.sessionId)?.title ?? ""); setSessionMenu(null); }}
           >
             <Pencil className="h-3.5 w-3.5 text-muted-foreground" /> Rename
           </button>
           <div className="border-t border-border my-1" />
           <button
-            className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2 text-destructive"
+            className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2 text-destructive font-mono-ui text-xs transition-colors"
             onClick={() => { deleteSession(sessionMenu.sessionId); setSessionMenu(null); }}
           >
             <Trash2 className="h-3.5 w-3.5" /> Delete
@@ -851,7 +878,7 @@ export function AgentPage({ tuningParams }: AgentPageProps) {
       )}
 
       {/* Main chat area */}
-      <div className="relative flex-1 flex flex-col min-w-0 overflow-hidden riso-noise">
+      <div className="relative flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden riso-noise">
         {/* Riso background — vždy viditeľný, violet dominant */}
         <div className="pointer-events-none" style={{ position: 'absolute', inset: 0, zIndex: 0 }}>
           <div className="animate-blob-drift" style={{ position: 'absolute', width: 600, height: 600, borderRadius: '50%', background: 'var(--accent-violet)', opacity: 0.10, mixBlendMode: 'multiply', top: -200, right: -180 }} />
@@ -907,43 +934,37 @@ export function AgentPage({ tuningParams }: AgentPageProps) {
         {activeSessionId ? (
           <>
             {/* Header */}
-            <div className="h-20 border-b px-4 flex items-center gap-3" style={{ position: 'relative', zIndex: 1 }}>
+            <div className="h-14 shrink-0 border-b px-4 flex items-center gap-3" style={{ position: 'relative', zIndex: 1 }}>
               <div className="flex items-center gap-1.5 shrink-0">
-                <Bot className="h-4 w-4 text-violet-500" />
-                <span className="text-sm font-semibold text-violet-600 dark:text-violet-400">Agent</span>
+                <Bot className="h-4 w-4" style={{ color: 'var(--accent-violet)' }} />
+                <span className="font-display font-bold text-base riso-misreg-hover" style={{ color: 'var(--accent-violet)' }}>
+                  {activeSession?.title ?? "Agent Mode"}
+                </span>
               </div>
 
-              <span className="text-sm text-muted-foreground truncate flex-1">
-                {activeSession?.title ?? "New Agent Chat"}
-              </span>
+              <div className="flex-1" />
 
               {/* Context selector trigger */}
               <div className="relative" ref={contextPanelRef}>
                 <button
                   onClick={() => setShowContextPanel(!showContextPanel)}
                   className={cn(
-                    "flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md border transition-colors",
-                    showContextPanel
-                      ? "bg-violet-500/15 border-violet-500/40 text-violet-600 dark:text-violet-400"
-                      : "border-border text-muted-foreground hover:text-foreground hover:border-violet-500/30",
+                    "btn-tactile",
+                    showContextPanel ? "btn-tactile-violet" : "btn-tactile-outline"
                   )}
                 >
                   <Settings2 className="h-3.5 w-3.5" />
                   Context
                   <span className={cn(
-                    "text-[10px] px-1.5 py-0.5 rounded-full font-medium",
-                    scopeCount === totalCount
-                      ? "bg-violet-500/20 text-violet-600 dark:text-violet-400"
-                      : scopeCount === 0
-                        ? "bg-red-500/20 text-red-600 dark:text-red-400"
-                        : "bg-violet-500/20 text-violet-600 dark:text-violet-400",
-                  )}>
+                    "tag-riso",
+                    scopeCount === totalCount ? "tag-riso-violet" : scopeCount === 0 ? "" : "tag-riso-violet"
+                  )} style={{ fontSize: 9, padding: '0px 5px' }}>
                     {scopeCount === totalCount ? "All" : `${scopeCount}/${totalCount}`}
                   </span>
                 </button>
 
                 {showContextPanel && (
-                  <div className="absolute top-full mt-1 right-0 z-50 bg-background border rounded-lg shadow-lg p-3 min-w-[260px] max-h-[400px] overflow-y-auto">
+                  <div className="absolute top-full mt-1 right-0 z-50 bg-card border border-border-strong rounded-lg card-riso card-riso-violet p-3 min-w-[260px] max-h-[400px] overflow-y-auto">
                     <ContextSelector
                       sheets={allSheets}
                       documents={allDocuments}
@@ -976,70 +997,66 @@ export function AgentPage({ tuningParams }: AgentPageProps) {
                 <button
                   onClick={() => setShowKbPanel(!showKbPanel)}
                   className={cn(
-                    "flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md border transition-colors",
-                    showKbPanel
-                      ? "bg-violet-500/15 border-violet-500/40 text-violet-600 dark:text-violet-400"
-                      : "border-border text-muted-foreground hover:text-foreground hover:border-violet-500/30",
+                    "btn-tactile",
+                    showKbPanel ? "btn-tactile-violet" : "btn-tactile-outline"
                   )}
                   title="Knowledge Base — index a folder for RAG search"
                 >
                   <BookOpen className="h-3.5 w-3.5" />
                   KB
                   {kbStatus.indexed && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-violet-500/20 text-violet-600 dark:text-violet-400">
+                    <span className="tag-riso tag-riso-violet" style={{ fontSize: 9, padding: '0px 5px' }}>
                       {kbStatus.chunks}
                     </span>
                   )}
                 </button>
 
                 {showKbPanel && (
-                  <div className="absolute top-full mt-1 right-0 z-50 bg-background border rounded-lg shadow-lg p-4 w-[320px]">
-                    <p className="text-xs font-semibold mb-2 flex items-center gap-1.5">
-                      <BookOpen className="h-3.5 w-3.5 text-violet-500" />
+                  <div className="absolute top-full mt-1 right-0 z-50 bg-card border border-border-strong rounded-lg card-riso card-riso-violet p-4 w-[320px]">
+                    <p className="riso-section-label mb-3">
+                      <BookOpen className="h-3.5 w-3.5" />
                       Knowledge Base (RAG)
                     </p>
                     {kbStatus.indexed ? (
-                      <div className="mb-3 text-xs text-muted-foreground bg-violet-500/8 border border-violet-500/20 rounded px-3 py-2">
-                        <span className="font-medium text-violet-600 dark:text-violet-400">{kbStatus.chunks} chunks indexed</span>
+                      <div className="mb-3 font-mono-ui text-[11px] text-muted-foreground rounded px-3 py-2 border border-border-strong" style={{ background: 'color-mix(in srgb, var(--accent-violet) 6%, transparent)' }}>
+                        <span className="font-medium" style={{ color: 'var(--accent-violet)' }}>{kbStatus.chunks} chunks indexed</span>
                         <br />
                         <span className="truncate block mt-0.5" title={kbStatus.path ?? ""}>{kbStatus.path}</span>
                       </div>
                     ) : (
-                      <p className="text-xs text-muted-foreground mb-3">No folder indexed yet. Select a folder to enable semantic search across your local files.</p>
+                      <p className="font-mono-ui text-[11px] text-muted-foreground mb-3">No folder indexed yet. Select a folder to enable semantic search across your local files.</p>
                     )}
                     <div className="flex gap-2 mb-2">
                       <input
                         type="text"
-                        className="flex-1 text-xs border rounded px-2 py-1.5 bg-background placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-violet-500"
+                        className="flex-1 font-mono-ui text-xs border border-border-strong rounded px-2 py-1.5 bg-background placeholder:text-muted-foreground focus:outline-none focus:border-accent-violet transition-colors"
+                        style={{ '--tw-ring-color': 'var(--accent-violet)' } as React.CSSProperties}
                         placeholder="/path/to/folder"
                         value={kbPath}
                         onChange={e => setKbPath(e.target.value)}
                       />
                       <button
                         onClick={browseFolder}
-                        className="shrink-0 px-2 py-1.5 rounded border text-xs text-muted-foreground hover:text-foreground hover:border-violet-500/30 transition-colors"
+                        className="btn-tactile btn-tactile-outline shrink-0 px-2"
                         title="Browse for folder"
                       >
                         <FolderOpen className="h-3.5 w-3.5" />
                       </button>
                     </div>
-                    {kbError && <p className="text-xs text-red-500 mb-2">{kbError}</p>}
+                    {kbError && <p className="font-mono-ui text-[11px] text-destructive mb-2">{kbError}</p>}
                     <button
                       onClick={indexKnowledgeBase}
                       disabled={kbIndexing || !kbPath.trim()}
-                      className={cn(
-                        "w-full text-xs px-3 py-1.5 rounded-md font-medium transition-colors",
-                        "bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed",
-                      )}
+                      className="btn-tactile btn-tactile-violet w-full justify-center"
                     >
                       {kbIndexing ? (
-                        <span className="flex items-center justify-center gap-1.5">
-                          <Loader2 className="h-3 w-3 animate-spin" /> Indexing…
-                        </span>
+                        <>
+                          <Loader2 className="h-3 w-3 animate-spin" /> Indexing...
+                        </>
                       ) : kbStatus.indexed ? "Re-index Folder" : "Index Folder"}
                     </button>
-                    <p className="text-[10px] text-muted-foreground mt-2">
-                      Supports PDF, DOCX, TXT, MD. The agent will use <code className="font-mono">query_knowledge_base</code> automatically.
+                    <p className="font-mono-ui text-[10px] text-muted-foreground mt-2">
+                      Supports PDF, DOCX, TXT, MD. The agent will use <code>query_knowledge_base</code> automatically.
                     </p>
                   </div>
                 )}
@@ -1047,7 +1064,7 @@ export function AgentPage({ tuningParams }: AgentPageProps) {
 
               {/* Web Access badge */}
               <span
-                className="flex items-center gap-1 text-xs px-2 py-1.5 rounded-md border border-border text-muted-foreground"
+                className="btn-tactile btn-tactile-outline cursor-default"
                 title="Web search is available — agent can use web_search and read_web_page tools"
               >
                 <Globe className="h-3.5 w-3.5" />
@@ -1060,7 +1077,10 @@ export function AgentPage({ tuningParams }: AgentPageProps) {
 
             {/* Tool support warning */}
             {supportsTools === false && (
-              <div className="mx-4 mt-2 flex items-center gap-2 text-xs text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/30 px-3 py-2 rounded-md">
+              <div
+                className="mx-4 mt-2 flex items-center gap-2 font-mono-ui text-[11px] px-3 py-2 rounded-md border"
+                style={{ background: 'color-mix(in srgb, var(--accent-gold) 10%, transparent)', borderColor: 'color-mix(in srgb, var(--accent-gold) 30%, transparent)', color: 'var(--accent-gold)' }}
+              >
                 <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
                 <span>
                   <strong>{modelLabel}</strong> does not support tool calling — the agent cannot read or write your data.
@@ -1071,14 +1091,14 @@ export function AgentPage({ tuningParams }: AgentPageProps) {
 
             {/* Scope warning — only show if user explicitly deselected everything */}
             {scopeCount === 0 && totalCount > 0 && supportsTools !== false && (
-              <div className="mx-4 mt-2 flex items-center gap-2 text-xs text-muted-foreground bg-muted/50 border px-3 py-2 rounded-md">
+              <div className="mx-4 mt-2 flex items-center gap-2 font-mono-ui text-[11px] text-muted-foreground bg-muted/50 border border-border-strong px-3 py-2 rounded-md">
                 Agent context is empty — it won't see any sheets or documents.
                 <button
                   onClick={() => {
                     setSelectedSheetIds(new Set(allSheets.map(s => s.id)));
                     setSelectedDocumentIds(new Set(allDocuments.map(d => d.id)));
                   }}
-                  className="underline hover:no-underline font-medium"
+                  className="underline hover:no-underline font-medium transition-colors hover:text-foreground"
                 >
                   Select all
                 </button>
@@ -1086,20 +1106,23 @@ export function AgentPage({ tuningParams }: AgentPageProps) {
             )}
 
             {/* Messages */}
-            <ScrollArea className="flex-1 p-4" style={{ position: 'relative', zIndex: 1 }}>
+            <div ref={messagesContainerRef} className="flex-1 min-h-0 overflow-y-auto p-4" style={{ position: 'relative', zIndex: 1 }}>
               <div className="max-w-3xl mx-auto space-y-4">
                 {messages.map((msg) => (
                   <div
                     key={msg.id}
-                    className={cn("flex gap-2", msg.role === "user" ? "flex-row-reverse" : "flex-row")}
+                    className={cn("flex gap-2.5 animate-msg-in", msg.role === "user" ? "flex-row-reverse" : "flex-row")}
                   >
                     {/* Avatar */}
                     {msg.role === "assistant" ? (
-                      <div className="shrink-0 w-7 h-7 rounded-full bg-violet-500/15 border border-violet-500/30 flex items-center justify-center">
-                        <Bot className="h-4 w-4 text-violet-500" />
+                      <div
+                        className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center border"
+                        style={{ background: 'color-mix(in srgb, var(--accent-violet) 12%, transparent)', borderColor: 'color-mix(in srgb, var(--accent-violet) 28%, transparent)' }}
+                      >
+                        <Bot className="h-4 w-4" style={{ color: 'var(--accent-violet)' }} />
                       </div>
                     ) : (
-                      <div className="shrink-0 w-14 h-14 rounded-full flex items-center justify-center text-3xl leading-none bg-muted">
+                      <div className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-lg leading-none bg-muted border border-border-strong">
                         {(() => {
                           const idx = parseInt(localStorage.getItem("user_avatar_index") ?? "0", 10);
                           const avatars = ["🐱","🐶","🐰","🦜","🐟","🦊","🐢","🐸","🐼","🦋","🐧","🦔"];
@@ -1113,9 +1136,10 @@ export function AgentPage({ tuningParams }: AgentPageProps) {
                       className={cn(
                         "px-4 py-2.5 max-w-[80%] text-sm",
                         msg.role === "user"
-                          ? "bg-violet-600 dark:bg-violet-500 text-white"
-                          : "bg-muted"
+                          ? "text-white card-riso card-riso-violet"
+                          : "bg-card riso-bubble-ai-violet"
                       )}
+                      style={msg.role === "user" ? { background: 'var(--accent-violet)' } : undefined}
                     >
                       {msg.role === "user" ? (
                         <span className="whitespace-pre-wrap">{msg.content}</span>
@@ -1143,11 +1167,14 @@ export function AgentPage({ tuningParams }: AgentPageProps) {
 
                 {/* Streaming bubble */}
                 {sending && (
-                  <div className="flex gap-2 min-w-0">
-                    <div className="shrink-0 w-7 h-7 rounded-full bg-violet-500/15 border border-violet-500/30 flex items-center justify-center">
-                      <Bot className="h-4 w-4 text-violet-500" />
+                  <div className="flex gap-2.5 min-w-0">
+                    <div
+                      className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center border"
+                      style={{ background: 'color-mix(in srgb, var(--accent-violet) 12%, transparent)', borderColor: 'color-mix(in srgb, var(--accent-violet) 28%, transparent)' }}
+                    >
+                      <Bot className="h-4 w-4" style={{ color: 'var(--accent-violet)' }} />
                     </div>
-                    <Card className="px-4 py-2.5 bg-muted text-sm max-w-[80%] min-w-0 overflow-hidden">
+                    <Card className="px-4 py-2.5 bg-card riso-bubble-ai-violet text-sm max-w-[80%] min-w-0 overflow-hidden">
                       {agentEvents.length > 0 && <AgentToolBubble events={agentEvents} sessionId={activeSessionId} isSending={sending} />}
                       {isStreaming && streamingContent ? (
                         <div className="prose prose-sm dark:prose-invert max-w-none break-words [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
@@ -1156,20 +1183,22 @@ export function AgentPage({ tuningParams }: AgentPageProps) {
                           </ReactMarkdown>
                         </div>
                       ) : agentEvents.length === 0 ? (
-                        <div className="flex items-center gap-2 text-violet-500">
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          <span className="text-xs">Agent is thinking...</span>
-                        </div>
+                        <span className="inline-flex items-center gap-1.5 font-mono-ui text-[11px] animate-riso-pulse" style={{ color: 'var(--accent-violet)' }}>
+                          <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--accent-violet)', display: 'inline-block' }} />
+                          <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--accent-orange)', display: 'inline-block' }} className="animate-riso-pulse" />
+                          <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--accent-teal)', display: 'inline-block' }} className="animate-riso-pulse" />
+                          <span className="ml-1">Agent is thinking...</span>
+                        </span>
                       ) : null}
                     </Card>
                   </div>
                 )}
                 <div ref={messagesEndRef} />
               </div>
-            </ScrollArea>
+            </div>
 
             {/* Input */}
-            <div className="border-t p-4" style={{ position: 'relative', zIndex: 1 }}>
+            <div className="border-t px-4 py-3 shrink-0 surface-noise" style={{ position: 'relative', zIndex: 1 }}>
               <div className="max-w-3xl mx-auto">
                 <div className="flex gap-2">
                   <Textarea
@@ -1177,7 +1206,8 @@ export function AgentPage({ tuningParams }: AgentPageProps) {
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={handleKeyDown}
                     placeholder={supportsTools === false ? "Current model does not support agent tools — switch model in Settings" : "Ask the agent to read, search, or update your sheets & documents..."}
-                    className={cn("min-h-[44px] max-h-[160px] resize-none", "focus-visible:ring-violet-500")}
+                    className="min-h-[44px] max-h-[160px] resize-none border-border-strong"
+                    style={{ '--tw-ring-color': 'var(--accent-violet)' } as React.CSSProperties}
                     rows={1}
                     disabled={sending}
                   />
@@ -1193,8 +1223,7 @@ export function AgentPage({ tuningParams }: AgentPageProps) {
                     <button
                       onClick={sendMessage}
                       disabled={!input.trim()}
-                      className="btn-tactile shrink-0 h-[44px] w-[44px] justify-center"
-                      style={{ background: 'var(--accent-violet)', color: '#fff', borderColor: 'rgba(0,0,0,0.15)' }}
+                      className="btn-tactile btn-tactile-violet shrink-0 h-[44px] w-[44px] justify-center"
                     >
                       <Send className="h-4 w-4" />
                     </button>

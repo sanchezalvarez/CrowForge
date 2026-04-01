@@ -262,6 +262,7 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
   } = useChatStream();
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
@@ -353,7 +354,8 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
   }, [handleStreamDone, handleStreamError]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const el = messagesContainerRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
   }, [messages, streamingContent]);
 
   useEffect(() => {
@@ -632,27 +634,37 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
   };
 
   return (
-    <div className="flex h-full">
+    <div className="flex h-full overflow-hidden">
       {/* Sessions sidebar */}
-      <div className="shrink-0 border-r flex flex-col relative" style={{ width: sidebarWidth, background: 'var(--background-2)' }}>
-        <div className="h-20 flex items-center px-3 border-b">
+      <div className="shrink-0 border-r flex flex-col relative surface-noise" style={{ width: sidebarWidth, background: 'var(--background-2)' }}>
+        <div className="h-14 flex items-center px-3 border-b shrink-0">
           <button className="btn-tactile btn-tactile-teal w-full justify-center" onClick={createSession}>
             <PlusCircle className="h-3.5 w-3.5" />
             New Chat
           </button>
         </div>
+        <div className="px-3 pt-3 pb-1">
+          <span className="riso-section-label">Sessions</span>
+        </div>
         <ScrollArea className="flex-1">
-          <div className="p-2 space-y-0.5">
+          <div className="px-2 pb-2 space-y-0.5">
             {sessions.map((s, i) => (
               <div
                 key={s.id}
                 className={cn(
-                  "group flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-sm cursor-pointer transition-colors animate-row-in",
+                  "group flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-sm cursor-pointer transition-colors animate-row-in border",
                   activeSessionId === s.id
-                    ? "bg-primary/10 text-primary font-medium"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                    ? "font-medium"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground border-transparent"
                 )}
-                style={{ animationDelay: `${Math.min(i, 20) * 20}ms` }}
+                style={{
+                  animationDelay: `${Math.min(i, 20) * 20}ms`,
+                  ...(activeSessionId === s.id ? {
+                    background: 'color-mix(in srgb, var(--accent-teal) 10%, transparent)',
+                    color: 'var(--accent-teal)',
+                    borderColor: 'color-mix(in srgb, var(--accent-teal) 20%, transparent)',
+                  } : {}),
+                }}
                 onClick={() => { if (renamingSessionId !== s.id) setActiveSessionId(s.id); }}
                 onDoubleClick={() => startRenameSession(s.id, s.title)}
                 onContextMenu={(e) => { e.preventDefault(); setSessionMenu({ sessionId: s.id, x: e.clientX, y: e.clientY }); }}
@@ -672,12 +684,12 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
                     className="flex-1 bg-transparent outline-none border-b border-primary text-xs min-w-0"
                   />
                 ) : (
-                  <span className="flex-1 min-w-0 truncate">{s.title}</span>
+                  <span className="flex-1 min-w-0 truncate font-mono-ui text-xs">{s.title}</span>
                 )}
               </div>
             ))}
             {sessions.length === 0 && (
-              <p className="text-xs text-muted-foreground text-center py-6">No chats yet.</p>
+              <p className="font-mono-ui text-[11px] text-muted-foreground text-center py-6 opacity-60">No chats yet.</p>
             )}
           </div>
         </ScrollArea>
@@ -696,19 +708,19 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
       {/* Session context menu */}
       {sessionMenu && (
         <div
-          className="fixed z-50 bg-background border border-border rounded-md shadow-lg py-1 min-w-[150px] text-sm"
+          className="fixed z-50 bg-card border border-border-strong rounded-md card-riso py-1 min-w-[150px] text-sm"
           style={{ left: sessionMenu.x, top: sessionMenu.y }}
           onMouseDown={(e) => e.stopPropagation()}
         >
           <button
-            className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2"
+            className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2 font-mono-ui text-xs transition-colors"
             onClick={() => { startRenameSession(sessionMenu.sessionId, sessions.find(s => s.id === sessionMenu.sessionId)?.title ?? ""); setSessionMenu(null); }}
           >
             <Pencil className="h-3.5 w-3.5 text-muted-foreground" /> Rename
           </button>
           <div className="border-t border-border my-1" />
           <button
-            className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2 text-destructive"
+            className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2 text-destructive font-mono-ui text-xs transition-colors"
             onClick={() => { deleteSession(sessionMenu.sessionId); setSessionMenu(null); }}
           >
             <Trash2 className="h-3.5 w-3.5" /> Delete
@@ -718,7 +730,7 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
 
       {/* Main chat area */}
       <div
-        className="relative flex-1 flex flex-col min-w-0 overflow-hidden riso-noise"
+        className="relative flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden riso-noise"
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
@@ -778,7 +790,7 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
         {activeSessionId ? (
           <>
             {/* Header */}
-            <div className="h-20 border-b px-4 flex items-center gap-3" style={{ position: 'relative', zIndex: 1 }}>
+            <div className="h-14 shrink-0 border-b px-4 flex items-center gap-3" style={{ position: 'relative', zIndex: 10 }}>
               {/* Editable session title */}
               {editingTitle ? (
                 <input
@@ -790,11 +802,11 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
                     if (e.key === "Enter") commitTitle();
                     if (e.key === "Escape") setEditingTitle(false);
                   }}
-                  className="flex-1 text-sm font-medium bg-transparent border-b border-primary outline-none min-w-0"
+                  className="flex-1 font-display font-bold text-base bg-transparent border-b border-primary outline-none min-w-0"
                 />
               ) : (
                 <span
-                  className="flex-1 text-sm font-medium truncate cursor-pointer hover:text-primary transition-colors"
+                  className="flex-1 font-display font-bold text-base truncate cursor-pointer hover:text-primary transition-colors riso-misreg-hover"
                   title="Click to rename"
                   onClick={startEditTitle}
                 >
@@ -808,18 +820,18 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
                   // Connected pill
                   <button
                     onClick={() => setShowDocPicker(v => !v)}
-                    className="flex items-center gap-1.5 text-xs bg-blue-500/10 border border-blue-500/30 text-blue-700 dark:text-blue-300 px-2.5 py-1 rounded-full hover:bg-blue-500/15 transition-colors"
+                    className="btn-tactile btn-tactile-teal"
                     title="Manage document connection"
                   >
                     <FileText className="h-3 w-3 shrink-0" />
-                    <span className="truncate max-w-[140px] font-medium">{documentContext.title}</span>
+                    <span className="truncate max-w-[140px]">{documentContext.title}</span>
                     <ChevronDown className="h-3 w-3 shrink-0 opacity-70" />
                   </button>
                 ) : (
                   // Connect button
                   <button
                     onClick={() => setShowDocPicker(v => !v)}
-                    className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground border border-border/50 hover:border-border px-2.5 py-1 rounded-full transition-colors"
+                    className="btn-tactile btn-tactile-outline"
                     title="Connect a document to provide context"
                   >
                     <Link2 className="h-3 w-3 shrink-0" />
@@ -830,42 +842,63 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
 
                 {/* Dropdown popup */}
                 {showDocPicker && (
-                  <div className="absolute top-full mt-1.5 left-0 z-50 bg-background border rounded-lg shadow-xl min-w-[220px] overflow-hidden">
-                    <div className="px-3 py-2 border-b text-[11px] text-muted-foreground uppercase tracking-wider font-semibold">
-                      Context Document
+                  <div className="absolute top-full mt-1.5 right-0 z-50 bg-card border border-border-strong rounded-md min-w-[240px] max-w-[300px]"
+                    style={{ boxShadow: "3px 3px 0 var(--riso-teal)" }}
+                  >
+                    <div className="flex items-center justify-between px-3 py-2 border-b">
+                      <span className="riso-section-label">Context Document</span>
+                      {documentContext && (
+                        <button
+                          onClick={() => { onDisconnectDoc?.(); setShowDocPicker(false); }}
+                          className="btn-tactile shrink-0"
+                          style={{ fontSize: 10, padding: '1px 6px', color: 'var(--destructive)', borderColor: 'color-mix(in srgb, var(--destructive) 30%, transparent)' }}
+                        >
+                          <X className="h-2.5 w-2.5" />
+                          Disconnect
+                        </button>
+                      )}
                     </div>
-                    {documentContext && (
-                      <div className="px-3 py-2 border-b bg-blue-500/5">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-1.5 min-w-0">
-                            <FileText className="h-3.5 w-3.5 text-blue-500 shrink-0" />
-                            <span className="text-xs font-medium truncate">{documentContext.title}</span>
-                          </div>
-                          <button
-                            onClick={() => { onDisconnectDoc?.(); setShowDocPicker(false); }}
-                            className="text-[10px] text-destructive hover:text-destructive/80 shrink-0 flex items-center gap-0.5"
-                          >
-                            <X className="h-3 w-3" />
-                            Disconnect
-                          </button>
-                        </div>
-                      </div>
-                    )}
                     {docList.length > 0 ? (
-                      <div className="max-h-[200px] overflow-y-auto py-1">
-                        {docList.map(doc => (
-                          <button
-                            key={doc.id}
-                            className={`w-full text-left px-3 py-1.5 text-xs hover:bg-muted transition-colors flex items-center gap-2 ${documentContext?.title === doc.title ? "text-primary font-medium" : "text-foreground"}`}
-                            onClick={() => { onConnectDoc?.({ title: doc.title, outline: [], selectedText: null, fullText: null }); setShowDocPicker(false); }}
-                          >
-                            <FileText className="h-3 w-3 shrink-0 text-muted-foreground" />
-                            <span className="truncate">{doc.title}</span>
-                          </button>
-                        ))}
+                      <div className="max-h-[240px] overflow-y-auto py-1">
+                        {docList.map(doc => {
+                          const isActive = documentContext?.title === doc.title;
+                          return (
+                            <button
+                              key={doc.id}
+                              className="w-full text-left px-3 py-1.5 font-mono-ui text-xs transition-colors flex items-center gap-2"
+                              style={{
+                                background: isActive ? "color-mix(in srgb, var(--accent-teal) 10%, transparent)" : undefined,
+                                color: isActive ? "var(--accent-teal)" : undefined,
+                                fontWeight: isActive ? 600 : 400,
+                              }}
+                              onMouseEnter={(e) => { if (!isActive) (e.currentTarget as HTMLElement).style.background = "var(--background-3)"; }}
+                              onMouseLeave={(e) => { if (!isActive) (e.currentTarget as HTMLElement).style.background = ""; }}
+                              onClick={async () => {
+                                try {
+                                  const res = await axios.get(`${API_BASE}/documents/${doc.id}`);
+                                  const extractText = (node: any): string => {
+                                    if (!node) return "";
+                                    if (node.type === "text") return node.text || "";
+                                    if (node.content) return node.content.map(extractText).join(node.type === "paragraph" ? "\n" : "");
+                                    return "";
+                                  };
+                                  const fullText = extractText(res.data.content_json);
+                                  onConnectDoc?.({ title: doc.title, outline: [], selectedText: null, fullText });
+                                } catch {
+                                  onConnectDoc?.({ title: doc.title, outline: [], selectedText: null, fullText: null });
+                                }
+                                setShowDocPicker(false);
+                              }}
+                            >
+                              <FileText className="h-3 w-3 shrink-0" style={{ color: isActive ? "var(--accent-teal)" : "var(--muted-foreground)" }} />
+                              <span className="truncate">{doc.title}</span>
+                              {isActive && <Check className="h-3 w-3 shrink-0 ml-auto" style={{ color: "var(--accent-teal)" }} />}
+                            </button>
+                          );
+                        })}
                       </div>
                     ) : (
-                      <div className="px-3 py-3 text-xs text-muted-foreground text-center">
+                      <div className="px-3 py-3 font-mono-ui text-[11px] text-muted-foreground text-center">
                         No documents available
                       </div>
                     )}
@@ -873,14 +906,29 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
                 )}
               </div>
 
-              <span className="text-xs font-medium text-muted-foreground shrink-0">Mode</span>
+              <span className="riso-section-label shrink-0">Mode</span>
               <Select value={activeMode} onValueChange={changeMode}>
-                <SelectTrigger className="w-[130px] h-8 text-sm">
+                <SelectTrigger
+                  className="w-[130px] h-8 font-mono-ui text-xs tracking-wide"
+                  style={{
+                    border: "1.5px solid var(--border-strong)",
+                    background: "var(--background-2)",
+                    boxShadow: "2px 2px 0 var(--riso-teal)",
+                    borderRadius: "4px",
+                  }}
+                >
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent
+                  style={{
+                    border: "1.5px solid var(--border-strong)",
+                    background: "var(--card)",
+                    boxShadow: "3px 3px 0 var(--riso-teal)",
+                    borderRadius: "4px",
+                  }}
+                >
                   {Object.entries(MODE_LABELS).map(([value, label]) => (
-                    <SelectItem key={value} value={value}>{label}</SelectItem>
+                    <SelectItem key={value} value={value} className="font-mono-ui text-xs">{label}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -890,23 +938,23 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
             </div>
 
             {/* Messages */}
-            <ScrollArea className="flex-1 p-4" style={{ position: 'relative', zIndex: 1 }}>
+            <div ref={messagesContainerRef} className="flex-1 min-h-0 overflow-y-auto p-4" style={{ position: 'relative', zIndex: 1 }}>
               <div className="max-w-3xl mx-auto space-y-4">
                 {messages.map((msg) => (
                   <div
                     key={msg.id}
                     className={cn(
-                      "flex gap-2",
+                      "flex gap-2.5 animate-msg-in",
                       msg.role === "user" ? "flex-row-reverse" : "flex-row"
                     )}
                   >
                     {/* Avatar */}
                     {msg.role === "assistant" ? (
-                      <div className="shrink-0 w-14 h-14 rounded-full bg-muted border flex items-center justify-center overflow-hidden">
-                        <img src={crowforgeIco} alt="CrowForge" className="w-9 h-9 object-contain" />
+                      <div className="shrink-0 w-8 h-8 rounded-full bg-muted border border-border-strong flex items-center justify-center overflow-hidden">
+                        <img src={agentCrowner} alt="AgentCrowner" className="w-5 h-5 object-contain" />
                       </div>
                     ) : (
-                      <div className="shrink-0 w-14 h-14 rounded-full flex items-center justify-center text-3xl leading-none bg-muted">
+                      <div className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-lg leading-none bg-muted border border-border-strong">
                         {userAvatar.emoji}
                       </div>
                     )}
@@ -916,8 +964,8 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
                       className={cn(
                         "px-4 py-2.5 max-w-[80%] text-sm",
                         msg.role === "user"
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-muted riso-bubble-ai"
+                          ? "bg-primary text-primary-foreground card-riso card-riso-orange"
+                          : "bg-card riso-bubble-ai"
                       )}
                     >
                       {msg.role === "user" ? (() => {
@@ -954,11 +1002,11 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
                   </div>
                 ))}
                 {sending && (
-                  <div className="flex gap-2 min-w-0">
-                    <div className="shrink-0 w-7 h-7 rounded-full bg-muted border flex items-center justify-center overflow-hidden">
-                      <img src={agentCrowner} alt="AgentCrowner" className="w-5 h-5 rounded-full object-contain shrink-0" />
+                  <div className="flex gap-2.5 min-w-0">
+                    <div className="shrink-0 w-8 h-8 rounded-full bg-muted border border-border-strong flex items-center justify-center overflow-hidden">
+                      <img src={agentCrowner} alt="AgentCrowner" className="w-5 h-5 object-contain" />
                     </div>
-                    <Card className="px-4 py-2.5 bg-muted text-sm max-w-[80%] min-w-0 overflow-hidden">
+                    <Card className="px-4 py-2.5 bg-card riso-bubble-ai text-sm max-w-[80%] min-w-0 overflow-hidden">
                       {agentEvents.length > 0 && <ToolCallBubble events={agentEvents} />}
                       {isStreaming && streamingContent ? (
                         <div className="prose prose-sm dark:prose-invert max-w-none break-words [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
@@ -967,26 +1015,30 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
                           </ReactMarkdown>
                         </div>
                       ) : agentEvents.length === 0 ? (
-                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                        <span className="inline-flex items-center gap-1.5 font-mono-ui text-[11px] text-muted-foreground animate-riso-pulse">
+                          <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--accent-teal)', display: 'inline-block' }} />
+                          <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--accent-orange)', display: 'inline-block', animationDelay: '0.2s' }} className="animate-riso-pulse" />
+                          <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--accent-violet)', display: 'inline-block', animationDelay: '0.4s' }} className="animate-riso-pulse" />
+                        </span>
                       ) : null}
                     </Card>
                   </div>
                 )}
                 <div ref={messagesEndRef} />
               </div>
-            </ScrollArea>
+            </div>
 
             {/* Input */}
-            <div className="border-t p-4" style={{ position: 'relative', zIndex: 1 }}>
+            <div className="border-t px-4 py-3 shrink-0 surface-noise" style={{ position: 'relative', zIndex: 1 }}>
               <div className="max-w-3xl mx-auto space-y-2">
                 {/* Attached file chip */}
                 {attachedFile && (
-                  <div className="flex items-center gap-1.5 text-xs bg-primary/10 border border-primary/30 text-primary px-2.5 py-1.5 rounded-md w-fit max-w-full font-medium">
+                  <div className="tag-riso tag-riso-teal inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md w-fit max-w-full">
                     <FileText className="h-3.5 w-3.5 shrink-0" />
                     <span className="truncate max-w-[200px]">{attachedFile.name}</span>
                     <button
                       onClick={() => setAttachedFile(null)}
-                      className="text-muted-foreground hover:text-destructive ml-1"
+                      className="hover:text-destructive ml-1 transition-colors"
                     >
                       <X className="h-3.5 w-3.5" />
                     </button>
@@ -1002,7 +1054,7 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
                     onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileSelect(f); e.target.value = ""; }}
                   />
                   <button
-                    className="btn-tactile shrink-0 h-[44px] w-[44px] justify-center"
+                    className="btn-tactile btn-tactile-outline shrink-0 h-[44px] w-[44px] justify-center"
                     onClick={() => fileInputRef.current?.click()}
                     disabled={uploadingFile}
                     title="Attach PDF"
@@ -1017,7 +1069,7 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={handleKeyDown}
                     placeholder="Type a message... (Enter to send, Shift+Enter for newline)"
-                    className="min-h-[44px] max-h-[160px] resize-none"
+                    className="min-h-[44px] max-h-[160px] resize-none border-border-strong"
                     rows={1}
                     disabled={sending}
                   />

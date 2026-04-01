@@ -413,7 +413,7 @@ export default function App() {
 
       {/* MAIN + AI CONTROLS */}
       <div className="flex flex-1 min-w-0 flex-col lg:flex-row overflow-hidden">
-        <main className={`flex-1 min-w-0 ${["canvas", "settings", "chat", "agent", "tools", "help", "project_detail", "projects", "issues"].includes(currentPage) ? "overflow-hidden" : "overflow-y-auto"}`}>
+        <main className={`flex-1 min-w-0 h-full ${["canvas", "settings", "chat", "agent", "tools", "help", "project_detail", "projects", "issues"].includes(currentPage) ? "overflow-hidden" : "overflow-y-auto"}`}>
           <PageErrorBoundary page={currentPage}>
           {currentPage === "home" ? (
             <DashboardPage onNavigate={handleNavigate} />

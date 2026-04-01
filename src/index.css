@@ -196,10 +196,12 @@
 .doc-riso-bg {
   background-color: var(--background-2);
   background-image:
+    radial-gradient(circle, rgba(11,114,104,0.12) 1.5px, transparent 1.5px),
     radial-gradient(circle 420px at 12% 18%, rgba(220, 70, 50, 0.13) 0%, transparent 70%),
     radial-gradient(circle 420px at 16% 24%, rgba(25, 150, 170, 0.10) 0%, transparent 70%),
     radial-gradient(circle 380px at 88% 82%, rgba(25, 150, 170, 0.11) 0%, transparent 70%),
     radial-gradient(circle 380px at 84% 76%, rgba(220, 70, 50, 0.09) 0%, transparent 70%);
+  background-size: 14px 14px, auto, auto, auto, auto;
 }
 
 /* Disable spellcheck red underlines globally */
@@ -546,6 +548,17 @@ input, textarea, [contenteditable] {
   box-shadow:
     2.5px 2.5px 0 rgba(20,184,166,0.22),
     -1px -1px 0 rgba(255,90,26,0.14);
+}
+/* Violet variant — for AgentPage assistant bubbles */
+.riso-bubble-ai-violet {
+  box-shadow:
+    2.5px 2.5px 0 var(--riso-violet),
+    -1px -1px 0 rgba(224,78,14,0.10);
+}
+.dark .riso-bubble-ai-violet {
+  box-shadow:
+    2.5px 2.5px 0 rgba(139,98,212,0.22),
+    -1px -1px 0 rgba(255,90,26,0.12);
 }
 
 /* ── Riso corner registration marks — L-brackets in teal/orange ─────────── */

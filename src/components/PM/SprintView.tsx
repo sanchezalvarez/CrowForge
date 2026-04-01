@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronDown, ChevronRight, Plus, CheckCircle2, Circle } from "lucide-react";
+import { ChevronDown, ChevronRight, Plus } from "lucide-react";
 import { PMProject, PMSprint, PMTask, PMMember } from "../../types/pm";
 import { formatDate } from "../../lib/pmUtils";
 import { TaskCard } from "./TaskCard";
@@ -160,23 +160,25 @@ export function SprintView({ project, sprints, tasks, members, onTaskClick, onSp
 
             {isExpanded && (
               <div className="p-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2" style={{ background: "var(--background)" }}>
-                {sprintTasks.map((task, taskIdx) => {
-                  const isDone = task.status === "resolved" || task.status === "closed";
-                  return (
-                    <div key={task.id} className="flex items-start gap-2.5 animate-card-in" style={{ animationDelay: `${taskIdx * 30}ms` }}>
-                      <button
-                        onClick={() => handleAssignToSprint(task, null)}
-                        className="mt-1 text-muted-foreground hover:text-destructive transition-colors flex-shrink-0"
-                        title="Remove from sprint"
-                      >
-                        {isDone ? <CheckCircle2 size={14} className="text-teal-500" /> : <Circle size={14} />}
-                      </button>
-                      <div className="flex-1 min-w-0">
-                        <TaskCard task={task} members={members} onClick={() => onTaskClick(task)} compact />
-                      </div>
-                    </div>
-                  );
-                })}
+                {sprintTasks.map((task, taskIdx) => (
+                  <div key={task.id} className="animate-card-in" style={{ animationDelay: `${taskIdx * 30}ms` }}>
+                    <TaskCard
+                      task={task}
+                      members={members}
+                      onClick={() => onTaskClick(task)}
+                      compact
+                      footer={
+                        <button
+                          onClick={() => handleAssignToSprint(task, null)}
+                          className="btn-tactile btn-tactile-outline w-full justify-center gap-1"
+                          style={{ fontSize: 10, color: 'var(--destructive)', borderColor: 'color-mix(in srgb, var(--destructive) 30%, transparent)' }}
+                        >
+                          Remove from sprint
+                        </button>
+                      }
+                    />
+                  </div>
+                ))}
                 {sprintTasks.length === 0 && (
                   <p className="text-xs text-muted-foreground py-2 col-span-2">No items in this sprint yet.</p>
                 )}

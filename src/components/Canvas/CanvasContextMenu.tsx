@@ -21,12 +21,12 @@ interface Props {
 }
 
 const ItemCls = cn(
-  "flex items-center gap-2 px-3 py-1.5 text-xs rounded-md cursor-pointer",
-  "hover:bg-muted text-foreground transition-colors select-none",
+  "flex items-center gap-2 px-3 py-1.5 rounded-md cursor-pointer select-none transition-colors",
+  "font-mono-ui text-[11px] text-foreground hover:bg-muted/60",
 );
 const DangerCls = cn(ItemCls, "text-destructive hover:text-destructive hover:bg-destructive/10");
 const DisabledCls = cn(ItemCls, "opacity-40 pointer-events-none");
-const SepCls = "h-px bg-border my-1";
+const SepCls = "h-px my-1 bg-border-strong" as const;
 
 let _pasteCounter = 0;
 function pasteId() {
@@ -216,8 +216,13 @@ export function CanvasContextMenu({ target, onClose, onAddNode }: Props) {
         top: target.y,
         zIndex: 9999,
         minWidth: 190,
+        border: "1.5px solid var(--border-strong)",
+        background: "var(--card)",
+        boxShadow: "3px 3px 0 var(--riso-teal)",
+        backgroundImage: "var(--noise-subtle)",
+        backgroundRepeat: "repeat",
       }}
-      className="bg-background border rounded-lg shadow-xl p-1"
+      className="rounded-lg p-1"
       onContextMenu={(e) => e.preventDefault()}
     >
       {target.type === "pane" && (
@@ -282,7 +287,7 @@ export function CanvasContextMenu({ target, onClose, onAddNode }: Props) {
           {nodeHasEdges && (
             <>
               <div className={SepCls} />
-              <div className="px-3 py-1 text-[10px] text-muted-foreground uppercase tracking-wider">
+              <div className="px-3 py-1 font-mono-ui text-[10px] text-muted-foreground uppercase tracking-widest">
                 Connected Edge Style
               </div>
               <div className={ItemCls} onClick={() => handleNodeEdgeStyle("solid")}>
@@ -308,7 +313,7 @@ export function CanvasContextMenu({ target, onClose, onAddNode }: Props) {
             Delete
           </div>
           <div className={SepCls} />
-          <div className="px-3 py-1 text-[10px] text-muted-foreground uppercase tracking-wider">
+          <div className="px-3 py-1 font-mono-ui text-[10px] text-muted-foreground uppercase tracking-widest">
             Style
           </div>
           <div className={ItemCls} onClick={() => handleEdgeStyle("solid")}>
@@ -321,7 +326,7 @@ export function CanvasContextMenu({ target, onClose, onAddNode }: Props) {
             Animated
           </div>
           <div className={SepCls} />
-          <div className="px-3 py-1 text-[10px] text-muted-foreground uppercase tracking-wider">
+          <div className="px-3 py-1 font-mono-ui text-[10px] text-muted-foreground uppercase tracking-widest">
             Width
           </div>
           <div className={ItemCls} onClick={() => { updateEdgeData(target.edgeId, { width: "thin" }); onClose(); }}>

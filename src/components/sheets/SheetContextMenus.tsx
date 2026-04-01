@@ -4,7 +4,6 @@ import {
   Filter, X, Eraser, ListChecks, Tags, Sparkles, ChevronRight,
   RotateCcw, Loader2,
 } from "lucide-react";
-import { Button } from "../ui/button";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "../ui/dialog";
@@ -131,35 +130,35 @@ export function SheetContextMenus({
       {/* Column context menu */}
       {colMenu && (
         <div
-          className="fixed z-50 bg-background border border-border rounded-md shadow-lg py-1 min-w-[170px] text-sm"
-          style={{ left: colMenu.x, top: colMenu.y }}
+          className="fixed z-50 surface-noise rounded-md py-1 min-w-[170px]"
+          style={{ left: colMenu.x, top: colMenu.y, border: "1.5px solid var(--border-strong)", background: "var(--card)", boxShadow: "3px 3px 0 var(--riso-teal)" }}
           onClick={(e) => e.stopPropagation()}
         >
           <button
-            className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2"
+            className="w-full px-3 py-1.5 text-left hover:bg-muted/60 flex items-center gap-2 font-mono-ui text-xs transition-colors"
             onClick={() => colRenameStart(colMenu.colIndex)}
           >
             <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
             Rename column
           </button>
-          <div className="border-t border-border my-1" />
+          <div className="h-px my-1 bg-border-strong" />
           <button
-            className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2"
+            className="w-full px-3 py-1.5 text-left hover:bg-muted/60 flex items-center gap-2 font-mono-ui text-xs transition-colors"
             onClick={() => colInsertAt(colMenu.colIndex)}
           >
             <ArrowLeft className="h-3.5 w-3.5 text-muted-foreground" />
             Insert column left
           </button>
           <button
-            className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2"
+            className="w-full px-3 py-1.5 text-left hover:bg-muted/60 flex items-center gap-2 font-mono-ui text-xs transition-colors"
             onClick={() => colInsertAt(colMenu.colIndex + 1)}
           >
             <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
             Insert column right
           </button>
-          <div className="border-t border-border my-1" />
+          <div className="h-px my-1 bg-border-strong" />
           <button
-            className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2 disabled:opacity-40 disabled:cursor-default"
+            className="w-full px-3 py-1.5 text-left hover:bg-muted/60 flex items-center gap-2 font-mono-ui text-xs disabled:opacity-40 disabled:cursor-default transition-colors"
             onClick={() => colMoveLeft(colMenu.colIndex)}
             disabled={colMenu.colIndex === 0}
           >
@@ -167,31 +166,31 @@ export function SheetContextMenus({
             Move left
           </button>
           <button
-            className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2 disabled:opacity-40 disabled:cursor-default"
+            className="w-full px-3 py-1.5 text-left hover:bg-muted/60 flex items-center gap-2 font-mono-ui text-xs disabled:opacity-40 disabled:cursor-default transition-colors"
             onClick={() => colMoveRight(colMenu.colIndex)}
             disabled={!activeSheet || colMenu.colIndex >= activeSheet.columns.length - 1}
           >
             <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
             Move right
           </button>
-          <div className="border-t border-border my-1" />
+          <div className="h-px my-1 bg-border-strong" />
           <button
-            className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2"
+            className="w-full px-3 py-1.5 text-left hover:bg-muted/60 flex items-center gap-2 font-mono-ui text-xs transition-colors"
             onClick={() => colSort(colMenu.colIndex, true)}
           >
             <ArrowUp className="h-3.5 w-3.5 text-muted-foreground" />
             Sort ascending
           </button>
           <button
-            className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2"
+            className="w-full px-3 py-1.5 text-left hover:bg-muted/60 flex items-center gap-2 font-mono-ui text-xs transition-colors"
             onClick={() => colSort(colMenu.colIndex, false)}
           >
             <ArrowDown className="h-3.5 w-3.5 text-muted-foreground" />
             Sort descending
           </button>
-          <div className="border-t border-border my-1" />
+          <div className="h-px my-1 bg-border-strong" />
           <button
-            className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2"
+            className="w-full px-3 py-1.5 text-left hover:bg-muted/60 flex items-center gap-2 font-mono-ui text-xs transition-colors"
             onClick={() => openFilterEditor(colMenu.colIndex)}
           >
             <Filter className="h-3.5 w-3.5 text-muted-foreground" />
@@ -199,21 +198,22 @@ export function SheetContextMenus({
           </button>
           {filters.has(colMenu.colIndex) && (
             <button
-              className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2 text-orange-500"
+              className="w-full px-3 py-1.5 text-left hover:bg-muted/60 flex items-center gap-2 font-mono-ui text-xs transition-colors"
+              style={{ color: "var(--accent-orange)" }}
               onClick={() => removeFilter(colMenu.colIndex)}
             >
               <X className="h-3.5 w-3.5" />
               Remove filter
             </button>
           )}
-          <div className="border-t border-border my-1" />
-          <div className="px-3 py-1 text-[10px] text-muted-foreground/60 uppercase tracking-wider">AI Tools</div>
+          <div className="h-px my-1 bg-border-strong" />
+          <div className="px-3 py-1 font-mono-ui text-[10px] text-muted-foreground/60 uppercase tracking-widest">AI Tools</div>
           {aiDisabled ? (
-            <div className="px-3 py-1.5 text-xs text-muted-foreground/50">Disabled for large tables</div>
+            <div className="px-3 py-1.5 font-mono-ui text-xs text-muted-foreground/50">Disabled for large tables</div>
           ) : (
             <>
               <button
-                className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2 disabled:opacity-40"
+                className="w-full px-3 py-1.5 text-left hover:bg-muted/60 flex items-center gap-2 font-mono-ui text-xs disabled:opacity-40 transition-colors"
                 onClick={() => colToolClean(colMenu.colIndex)}
                 disabled={aiFilling}
               >
@@ -221,7 +221,7 @@ export function SheetContextMenus({
                 Clean data
               </button>
               <button
-                className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2 disabled:opacity-40"
+                className="w-full px-3 py-1.5 text-left hover:bg-muted/60 flex items-center gap-2 font-mono-ui text-xs disabled:opacity-40 transition-colors"
                 onClick={() => colToolNormalize(colMenu.colIndex)}
                 disabled={aiFilling}
               >
@@ -229,7 +229,7 @@ export function SheetContextMenus({
                 Normalize values
               </button>
               <button
-                className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2 disabled:opacity-40"
+                className="w-full px-3 py-1.5 text-left hover:bg-muted/60 flex items-center gap-2 font-mono-ui text-xs disabled:opacity-40 transition-colors"
                 onClick={() => colToolCategorize(colMenu.colIndex)}
                 disabled={aiFilling}
               >
@@ -238,16 +238,16 @@ export function SheetContextMenus({
               </button>
             </>
           )}
-          <div className="border-t border-border my-1" />
+          <div className="h-px my-1 bg-border-strong" />
           <button
-            className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2"
+            className="w-full px-3 py-1.5 text-left hover:bg-muted/60 flex items-center gap-2 font-mono-ui text-xs transition-colors"
             onClick={() => colHide(colMenu.colIndex)}
           >
             <ArrowLeft className="h-3.5 w-3.5" />
             Hide column
           </button>
           <button
-            className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2 text-destructive"
+            className="w-full px-3 py-1.5 text-left hover:bg-muted/60 flex items-center gap-2 font-mono-ui text-xs text-destructive transition-colors"
             onClick={() => colDelete(colMenu.colIndex)}
           >
             <Trash2 className="h-3.5 w-3.5" />
@@ -259,14 +259,21 @@ export function SheetContextMenus({
       {/* Filter editor popup */}
       {filterEditCol !== null && activeSheet && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setFilterEditCol(null)}>
-          <div className="bg-background border rounded-lg shadow-lg w-[320px] p-4" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center gap-2 mb-3">
-              <Filter className="h-4 w-4 text-primary" />
-              <h3 className="text-sm font-medium">Filter: {activeSheet.columns[filterEditCol]?.name}</h3>
+          <div
+            className="card-riso card-riso-teal surface-noise riso-frame w-[320px] p-4 rounded-lg relative overflow-hidden animate-ink-in"
+            style={{ border: "1.5px solid var(--border-strong)", boxShadow: "4px 4px 0 var(--riso-teal)" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Riso color strip */}
+            <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, borderRadius: "6px 6px 0 0", background: "var(--riso-strip)", opacity: 0.75 }} />
+            <div className="flex items-center gap-2 mb-3 mt-1">
+              <Filter className="h-4 w-4" style={{ color: "var(--accent-teal)" }} />
+              <h3 className="font-display font-black text-sm tracking-tight">Filter: {activeSheet.columns[filterEditCol]?.name}</h3>
             </div>
             <div className="flex gap-2 mb-3">
               <select
-                className="h-8 px-2 text-sm border border-border rounded-md bg-background outline-none"
+                className="h-7 px-2 font-mono-ui text-xs rounded-md outline-none"
+                style={{ border: "1.5px solid var(--border-strong)", background: "var(--background-2)" }}
                 value={filterOp}
                 onChange={(e) => setFilterOp(e.target.value)}
               >
@@ -276,7 +283,8 @@ export function SheetContextMenus({
                 <option value="<">&lt;</option>
               </select>
               <input
-                className="flex-1 h-8 px-2 text-sm border border-border rounded-md bg-background outline-none focus:ring-1 focus:ring-primary/40"
+                className="flex-1 h-7 px-2 font-mono-ui text-xs rounded-md outline-none"
+                style={{ border: "1.5px solid var(--border-strong)", background: "var(--background-2)", boxShadow: "2px 2px 0 var(--riso-teal)" }}
                 placeholder="Value..."
                 value={filterVal}
                 onChange={(e) => setFilterVal(e.target.value)}
@@ -285,8 +293,8 @@ export function SheetContextMenus({
               />
             </div>
             <div className="flex justify-end gap-2">
-              <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setFilterEditCol(null)}>Cancel</Button>
-              <Button variant="default" size="sm" className="h-7 text-xs" onClick={() => applyFilter(filterEditCol)}>Apply</Button>
+              <button className="btn-tactile btn-tactile-outline" onClick={() => setFilterEditCol(null)}>Cancel</button>
+              <button className="btn-tactile btn-tactile-teal" onClick={() => applyFilter(filterEditCol)}>Apply</button>
             </div>
           </div>
         </div>
@@ -295,29 +303,29 @@ export function SheetContextMenus({
       {/* Cell context menu (formula cells only) */}
       {cellMenu && (
         <div
-          className="fixed z-50 bg-background border border-border rounded-md shadow-lg py-1 min-w-[160px] text-sm"
-          style={{ left: cellMenu.x, top: cellMenu.y }}
+          className="fixed z-50 surface-noise rounded-md py-1 min-w-[160px]"
+          style={{ left: cellMenu.x, top: cellMenu.y, border: "1.5px solid var(--border-strong)", background: "var(--card)", boxShadow: "3px 3px 0 var(--riso-teal)" }}
           onClick={(e) => e.stopPropagation()}
         >
           <button
-            className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2"
+            className="w-full px-3 py-1.5 text-left flex items-center gap-2 font-mono-ui text-xs hover:bg-muted/60 transition-colors"
             onClick={() => explainFormula(cellMenu.row, cellMenu.col)}
           >
-            <Sparkles className="h-3.5 w-3.5 text-muted-foreground" />
+            <Sparkles className="h-3.5 w-3.5" style={{ color: "var(--accent-violet)" }} />
             Explain formula
           </button>
 
-          <div className="border-t border-border my-1" />
+          <div className="my-1" style={{ borderTop: "1px solid var(--border-strong)" }} />
 
           <div className="relative group/ai">
-            <button className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2">
-              <Sparkles className="h-3.5 w-3.5 text-primary" />
+            <button className="w-full px-3 py-1.5 text-left hover:bg-muted/60 flex items-center gap-2 font-mono-ui text-xs transition-colors">
+              <Sparkles className="h-3.5 w-3.5" style={{ color: "var(--accent-orange)" }} />
               <span>AI</span>
               <ChevronRight className="h-3.5 w-3.5 ml-auto text-muted-foreground" />
             </button>
-            <div className="absolute left-full top-[-5px] hidden group-hover/ai:block bg-background border border-border rounded-md shadow-lg py-1 min-w-[180px]">
+            <div className="absolute left-full top-[-5px] hidden group-hover/ai:block rounded-md py-1 min-w-[180px]" style={{ border: "1.5px solid var(--border-strong)", background: "var(--card)", boxShadow: "3px 3px 0 var(--riso-teal)" }}>
               <button
-                className="w-full px-3 py-1.5 text-left hover:bg-muted"
+                className="w-full px-3 py-1.5 text-left hover:bg-muted/60 font-mono-ui text-xs transition-colors"
                 onClick={() => {
                   setAiOpSourceStr(`${idxToCol(cellMenu.col)}${cellMenu.row + 1}`);
                   setAiOpTargetStr(`${idxToCol(cellMenu.col)}${cellMenu.row + 1}`);
@@ -343,24 +351,24 @@ export function SheetContextMenus({
         const y = rect ? rect.bottom + 4 : 200;
         return (
           <div
-            className="fixed z-50 bg-background border border-border rounded-lg shadow-lg p-3 max-w-[320px] text-sm"
-            style={{ left: x, top: y }}
+            className="fixed z-50 card-riso card-riso-violet surface-noise rounded-lg p-3 max-w-[320px] animate-ink-in"
+            style={{ left: x, top: y, border: "1.5px solid var(--border-strong)", boxShadow: "3px 3px 0 var(--riso-violet)" }}
             data-formula-explanation
           >
             <div className="flex items-center gap-1.5 mb-1.5">
-              <Sparkles className="h-3.5 w-3.5 text-primary shrink-0" />
-              <span className="text-xs font-medium text-muted-foreground">Formula Explanation</span>
-              <button className="ml-auto text-muted-foreground hover:text-foreground" onClick={() => setFormulaExplanation(null)}>
+              <Sparkles className="h-3.5 w-3.5 shrink-0" style={{ color: "var(--accent-violet)" }} />
+              <span className="riso-section-label" style={{ fontSize: "10px" }}>Formula Explanation</span>
+              <button className="ml-auto btn-tactile btn-tactile-outline h-5 w-5 p-0 flex items-center justify-center" onClick={() => setFormulaExplanation(null)}>
                 <X className="h-3 w-3" />
               </button>
             </div>
             {formulaExplanation.loading ? (
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <Loader2 className="h-3 w-3 animate-spin" />
+              <div className="flex items-center gap-1.5 font-mono-ui text-xs text-muted-foreground">
+                <Loader2 className="h-3 w-3 animate-spin" style={{ color: "var(--accent-violet)" }} />
                 Thinking...
               </div>
             ) : (
-              <p className="text-xs leading-relaxed text-foreground">{formulaExplanation.text}</p>
+              <p className="font-mono-ui text-xs leading-relaxed text-foreground">{formulaExplanation.text}</p>
             )}
           </div>
         );
@@ -369,26 +377,26 @@ export function SheetContextMenus({
       {/* Row context menu */}
       {rowMenu && (
         <div
-          className="fixed z-50 bg-background border border-border rounded-md shadow-lg py-1 min-w-[160px] text-sm"
-          style={{ left: rowMenu.x, top: rowMenu.y }}
+          className="fixed z-50 surface-noise rounded-md py-1 min-w-[160px]"
+          style={{ left: rowMenu.x, top: rowMenu.y, border: "1.5px solid var(--border-strong)", background: "var(--card)", boxShadow: "3px 3px 0 var(--riso-orange)" }}
           onClick={(e) => e.stopPropagation()}
         >
           <button
-            className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2"
+            className="w-full px-3 py-1.5 text-left hover:bg-muted/60 flex items-center gap-2 font-mono-ui text-xs transition-colors"
             onClick={() => rowInsertAbove(rowMenu.rowIndex)}
           >
             <ArrowUp className="h-3.5 w-3.5 text-muted-foreground" />
             Insert row above
           </button>
           <button
-            className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2"
+            className="w-full px-3 py-1.5 text-left hover:bg-muted/60 flex items-center gap-2 font-mono-ui text-xs transition-colors"
             onClick={() => rowInsertBelow(rowMenu.rowIndex)}
           >
             <ArrowDown className="h-3.5 w-3.5 text-muted-foreground" />
             Insert row below
           </button>
           <button
-            className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2"
+            className="w-full px-3 py-1.5 text-left hover:bg-muted/60 flex items-center gap-2 font-mono-ui text-xs transition-colors"
             onClick={() => rowDuplicate(rowMenu.rowIndex)}
           >
             <Copy className="h-3.5 w-3.5 text-muted-foreground" />
@@ -396,7 +404,7 @@ export function SheetContextMenus({
           </button>
           {rowMenu.rowIndex in rowHeights && (
             <button
-              className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2"
+              className="w-full px-3 py-1.5 text-left hover:bg-muted/60 flex items-center gap-2 font-mono-ui text-xs transition-colors"
               onClick={() => {
                 const next = { ...rowHeights };
                 delete next[rowMenu.rowIndex];
@@ -412,16 +420,16 @@ export function SheetContextMenus({
               Reset row height
             </button>
           )}
-          <div className="border-t border-border my-1" />
+          <div className="h-px my-1 bg-border-strong" />
           <button
-            className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2"
+            className="w-full px-3 py-1.5 text-left hover:bg-muted/60 flex items-center gap-2 font-mono-ui text-xs transition-colors"
             onClick={() => hideRow(rowMenu.rowIndex)}
           >
             <ArrowUp className="h-3.5 w-3.5" />
             Hide row
           </button>
           <button
-            className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2 text-destructive"
+            className="w-full px-3 py-1.5 text-left hover:bg-muted/60 flex items-center gap-2 font-mono-ui text-xs text-destructive transition-colors"
             onClick={() => rowDelete(rowMenu.rowIndex)}
           >
             <Trash2 className="h-3.5 w-3.5" />
@@ -440,8 +448,12 @@ export function SheetContextMenus({
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setPendingDelete(null)}>Cancel</Button>
-            <Button variant="destructive" size="sm" onClick={confirmDelete}>Delete</Button>
+            <button className="btn-tactile btn-tactile-outline" onClick={() => setPendingDelete(null)}>Cancel</button>
+            <button
+              className="btn-tactile"
+              style={{ background: "var(--destructive)", backgroundImage: "var(--noise-btn)", borderColor: "rgba(0,0,0,0.15)", color: "#fff" }}
+              onClick={confirmDelete}
+            >Delete</button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

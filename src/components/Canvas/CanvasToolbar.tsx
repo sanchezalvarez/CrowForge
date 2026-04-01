@@ -228,26 +228,29 @@ export function CanvasToolbar({
       {/* Shortcuts overlay */}
       {showHelp && (
         <div
-          className="absolute top-12 right-0 z-50 bg-background border rounded-lg shadow-xl p-4 w-72"
+          className="absolute top-12 right-0 z-50 card-riso surface-noise riso-frame rounded-lg p-4 w-72 animate-ink-in"
+          style={{ border: "1.5px solid var(--border-strong)", boxShadow: "4px 4px 0 var(--riso-teal)" }}
         >
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          {/* Riso strip */}
+          <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, borderRadius: "6px 6px 0 0", background: "var(--riso-strip)", opacity: 0.75 }} />
+          <div className="flex items-center justify-between mb-3 mt-1">
+            <span className="riso-section-label">
               Keyboard Shortcuts
             </span>
             <button
-              className="text-muted-foreground hover:text-foreground"
+              className="btn-tactile btn-tactile-outline h-5 w-5 p-0 flex items-center justify-center"
               onClick={() => setShowHelp(false)}
             >
-              <X size={14} />
+              <X size={12} />
             </button>
           </div>
           <div className="flex flex-col gap-1.5">
             {SHORTCUTS.map(({ key, desc }) => (
-              <div key={key} className="flex items-start justify-between gap-3 text-xs">
-                <kbd className="shrink-0 px-1.5 py-0.5 rounded bg-muted border text-[10px] font-mono text-foreground">
+              <div key={key} className="flex items-start justify-between gap-3">
+                <kbd className="shrink-0 px-1.5 py-0.5 rounded font-mono-ui text-[10px] text-foreground" style={{ background: "var(--background-3)", border: "1px solid var(--border-strong)" }}>
                   {key}
                 </kbd>
-                <span className="text-muted-foreground text-right">{desc}</span>
+                <span className="font-mono-ui text-[10px] text-muted-foreground text-right">{desc}</span>
               </div>
             ))}
           </div>

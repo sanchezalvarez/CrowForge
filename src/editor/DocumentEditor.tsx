@@ -409,19 +409,19 @@ export function DocumentEditor({
             <DialogTitle>Import file?</DialogTitle>
             <DialogDescription>A new document will be created from this file.</DialogDescription>
           </DialogHeader>
-          <div className="flex items-start gap-3 rounded-md border border-border bg-muted/40 px-4 py-3 my-1">
-            <FileText className="h-8 w-8 text-muted-foreground shrink-0 mt-0.5" />
+          <div className="flex items-start gap-3 rounded-md px-4 py-3 my-1" style={{ border: "1.5px solid var(--border-strong)", background: "var(--background-2)", boxShadow: "2px 2px 0 var(--riso-teal)" }}>
+            <FileText className="h-8 w-8 shrink-0 mt-0.5" style={{ color: "var(--accent-teal)" }} />
             <div className="min-w-0">
               <p className="text-sm font-medium text-foreground truncate">{pendingFile?.name}</p>
-              <p className="text-xs text-muted-foreground mt-0.5">{pendingLabel}</p>
+              <p className="font-mono-ui text-xs text-muted-foreground mt-0.5">{pendingLabel}</p>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" size="sm" onClick={clearPending}>Cancel</Button>
-            <Button size="sm" onClick={confirmImport} disabled={importing}>
-              {importing && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
+            <button className="btn-tactile btn-tactile-outline" onClick={clearPending}>Cancel</button>
+            <button className="btn-tactile btn-tactile-teal gap-1" onClick={confirmImport} disabled={importing}>
+              {importing && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
               Import
-            </Button>
+            </button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

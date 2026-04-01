@@ -129,9 +129,9 @@ export function SplashScreen({ failed }: { failed?: boolean }) {
         style={{
           position: "relative",
           zIndex: 1,
-          width: "min(420px, 90vw)",
-          minHeight: "min(340px, 70vh)",
-          maxHeight: "80vh",
+          width: "min(800px, 90vw)",
+          minHeight: "min(600px, 90vh)",
+          maxHeight: "90vh",
           padding: "40px 36px",
           background: "var(--card)",
           borderColor: "var(--border-strong)",

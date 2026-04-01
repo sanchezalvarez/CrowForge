@@ -1,6 +1,6 @@
 # /build-release
 
-Spusti release build CrowForge s aktuálnou (alebo novou) verziou.
+Spusti release build CrowForge s branded splash installer.
 
 ## Postup
 
@@ -26,7 +26,12 @@ Ak sa verzia mení, aktualizuj ju pomocou Edit tool v týchto súboroch (všetky
 2. **`src-tauri/Cargo.toml`** — riadok `version = "X.Y.Z"` (iba prvý výskyt, v sekcii `[package]`)
 3. **`src-tauri/tauri.conf.json`** — pole `"version": "X.Y.Z"`
 4. **`src/lib/constants.ts`** — `export const APP_VERSION = "X.Y.Z";`
-5. **`build.ps1`** — všetky výskyty starej verzie v komentároch/Write-Host riadkoch (napr. `CrowForge 0.3.0` → `CrowForge X.Y.Z`, `v0.3.0` → `vX.Y.Z`)
+5. **`build.ps1`** — všetky výskyty starej verzie v komentároch/Write-Host riadkoch
+6. **`installer/package.json`** — pole `"version": "X.Y.Z"`
+7. **`installer/src-tauri/Cargo.toml`** — riadok `version = "X.Y.Z"` (v sekcii `[package]`)
+8. **`installer/src-tauri/tauri.conf.json`** — pole `"version": "X.Y.Z"`
+9. **`installer/src/index.html`** — text `vX.Y.Z · Local AI Workspace`
+10. **`installer/build.ps1`** — default parameter `$Version = "X.Y.Z"`
 
 ### Krok 4 — Spusti build
 Spusti pomocou Bash tool:
@@ -34,12 +39,20 @@ Spusti pomocou Bash tool:
 powershell -ExecutionPolicy Bypass -File ./build.ps1
 ```
 
+Toto automaticky:
+1. Zabalí Python backend cez PyInstaller
+2. Skopíruje sidecar binary
+3. Buildne hlavnú CrowForge app (NSIS silent installer)
+4. Skopíruje NSIS setup do `installer/` pre embedding
+5. Buildne branded splash installer wrapper (`CrowForge-Install.exe`)
+
 Počas behu informuj používateľa o progrese (build môže trvať niekoľko minút).
 
 ### Krok 5 — Reportuj výsledok
 Po úspešnom builde vypiš:
 - Verzia: X.Y.Z
-- Inštalátory: `src-tauri/target/release/bundle/nsis/` a `src-tauri/target/release/bundle/msi/`
-- Zoznam `.exe` a `.msi` súborov ktoré tam nájdeš (použiť Glob alebo Bash `ls`)
+- Hlavný installer: `src-tauri/target/release/bundle/nsis/` (silent, len pre interné použitie)
+- **Branded installer**: `installer/src-tauri/target/release/bundle/nsis/` — toto je finálny `CrowForge-Install.exe` na distribúciu
+- Zoznam `.exe` súborov z oboch priečinkov (použiť Glob alebo Bash `ls`)
 
 Ak build zlyhá, zobraz posledných 50 riadkov chybového výstupu a navrhni riešenie.

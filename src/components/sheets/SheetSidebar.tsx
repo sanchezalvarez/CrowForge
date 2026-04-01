@@ -118,14 +118,17 @@ export function SheetSidebar({
           onClick={() => setPickerOpen(false)}
         >
           <div
-            className="bg-background border border-border rounded-lg shadow-xl w-[520px] p-5"
+            className="card-riso card-riso-teal surface-noise riso-frame w-[520px] p-5 rounded-lg relative overflow-hidden animate-ink-in"
+            style={{ border: "1.5px solid var(--border-strong)", boxShadow: "4px 4px 0 var(--riso-teal)" }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-semibold">New Sheet</h3>
+            {/* Riso color strip */}
+            <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, borderRadius: "6px 6px 0 0", background: "var(--riso-strip)", opacity: 0.75 }} />
+            <div className="flex items-center justify-between mb-4 mt-1">
+              <h3 className="font-display font-black text-sm tracking-tight">New Sheet</h3>
               <button
                 onClick={() => setPickerOpen(false)}
-                className="p-1 rounded hover:bg-muted text-muted-foreground transition-colors"
+                className="btn-tactile btn-tactile-outline h-6 w-6 p-0 flex items-center justify-center"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -139,12 +142,15 @@ export function SheetSidebar({
                   <button
                     key={t.id}
                     onClick={() => { createFromTemplate(t); setPickerOpen(false); }}
-                    className="flex flex-col items-start gap-1.5 p-3 rounded-md border border-border hover:border-primary/40 hover:bg-primary/5 text-left transition-colors"
+                    className="flex flex-col items-start gap-1.5 p-3 rounded-md text-left transition-all duration-100"
+                    style={{ border: "1.5px solid var(--border-strong)", background: "var(--background-2)", boxShadow: "2px 2px 0 var(--riso-teal)" }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.transform = "translate(-1px,-1px)"; (e.currentTarget as HTMLElement).style.boxShadow = "3px 3px 0 var(--riso-teal)"; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.transform = ""; (e.currentTarget as HTMLElement).style.boxShadow = "2px 2px 0 var(--riso-teal)"; }}
                   >
-                    <Icon className="h-5 w-5 text-muted-foreground" />
+                    <Icon className="h-5 w-5" style={{ color: "var(--accent-teal)" }} />
                     <div className="min-w-0 w-full">
                       <p className="text-xs font-medium text-foreground truncate">{t.name}</p>
-                      <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-2">{t.description}</p>
+                      <p className="font-mono-ui text-[10px] text-muted-foreground mt-0.5 line-clamp-2">{t.description}</p>
                     </div>
                   </button>
                 );
@@ -153,12 +159,15 @@ export function SheetSidebar({
               {/* AI Generate */}
               <button
                 onClick={() => { setAiGenOpen(true); setPickerOpen(false); }}
-                className="flex flex-col items-start gap-1.5 p-3 rounded-md border border-border hover:border-primary/40 hover:bg-primary/5 text-left transition-colors"
+                className="flex flex-col items-start gap-1.5 p-3 rounded-md text-left transition-all duration-100"
+                style={{ border: "1.5px solid var(--border-strong)", background: "var(--background-2)", boxShadow: "2px 2px 0 var(--riso-violet)" }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.transform = "translate(-1px,-1px)"; (e.currentTarget as HTMLElement).style.boxShadow = "3px 3px 0 var(--riso-violet)"; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.transform = ""; (e.currentTarget as HTMLElement).style.boxShadow = "2px 2px 0 var(--riso-violet)"; }}
               >
-                <Sparkles className="h-5 w-5 text-muted-foreground" />
+                <Sparkles className="h-5 w-5" style={{ color: "var(--accent-violet)" }} />
                 <div className="min-w-0 w-full">
                   <p className="text-xs font-medium text-foreground">AI Generate</p>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">Describe a sheet, AI builds it</p>
+                  <p className="font-mono-ui text-[10px] text-muted-foreground mt-0.5">Describe a sheet, AI builds it</p>
                 </div>
               </button>
 
@@ -166,14 +175,17 @@ export function SheetSidebar({
               <button
                 disabled={importing}
                 onClick={() => { importInputRef.current?.click(); setPickerOpen(false); }}
-                className="flex flex-col items-start gap-1.5 p-3 rounded-md border border-border hover:border-primary/40 hover:bg-primary/5 text-left transition-colors disabled:opacity-50"
+                className="flex flex-col items-start gap-1.5 p-3 rounded-md text-left transition-all duration-100 disabled:opacity-50"
+                style={{ border: "1.5px solid var(--border-strong)", background: "var(--background-2)", boxShadow: "2px 2px 0 var(--riso-orange)" }}
+                onMouseEnter={(e) => { if (!importing) { (e.currentTarget as HTMLElement).style.transform = "translate(-1px,-1px)"; (e.currentTarget as HTMLElement).style.boxShadow = "3px 3px 0 var(--riso-orange)"; }}}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.transform = ""; (e.currentTarget as HTMLElement).style.boxShadow = "2px 2px 0 var(--riso-orange)"; }}
               >
                 {importing
-                  ? <Loader2 className="h-5 w-5 text-muted-foreground animate-spin" />
-                  : <Upload className="h-5 w-5 text-muted-foreground" />}
+                  ? <Loader2 className="h-5 w-5 animate-spin" style={{ color: "var(--accent-orange)" }} />
+                  : <Upload className="h-5 w-5" style={{ color: "var(--accent-orange)" }} />}
                 <div className="min-w-0 w-full">
                   <p className="text-xs font-medium text-foreground">Import</p>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">XLSX / CSV / TSV file</p>
+                  <p className="font-mono-ui text-[10px] text-muted-foreground mt-0.5">XLSX / CSV / TSV file</p>
                 </div>
               </button>
             </div>

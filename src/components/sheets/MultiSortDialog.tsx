@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { X, Plus, Trash2, ArrowUp, ArrowDown } from "lucide-react";
-import { Button } from "../ui/button";
 import type { Sheet } from "../../lib/cellUtils";
 
 export interface SortLevel {
@@ -33,24 +32,30 @@ export function MultiSortDialog({ sheet, onApply, onClose }: MultiSortDialogProp
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-background border border-border rounded-xl shadow-2xl w-[420px] max-w-[95vw] p-5 flex flex-col gap-4">
+      <div
+        className="card-riso card-riso-orange surface-noise riso-frame w-[420px] max-w-[95vw] p-5 flex flex-col gap-4 rounded-lg relative overflow-hidden animate-ink-in"
+        style={{ border: "1.5px solid var(--border-strong)", boxShadow: "4px 4px 0 var(--riso-orange)" }}
+      >
+        {/* Riso color strip */}
+        <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, borderRadius: "6px 6px 0 0", background: "var(--riso-strip)", opacity: 0.75 }} />
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold">Multi-level Sort</h2>
-          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={onClose}>
+        <div className="flex items-center justify-between mt-1">
+          <h2 className="font-display font-black text-sm tracking-tight">Multi-level Sort</h2>
+          <button className="btn-tactile btn-tactile-outline h-6 w-6 p-0 flex items-center justify-center" onClick={onClose}>
             <X className="h-3.5 w-3.5" />
-          </Button>
+          </button>
         </div>
 
         {/* Levels */}
         <div className="flex flex-col gap-2">
           {levels.map((lv, i) => (
             <div key={i} className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground w-16 shrink-0">
+              <span className="font-mono-ui text-[10px] text-muted-foreground uppercase tracking-widest w-16 shrink-0">
                 {i === 0 ? "Sort by" : "Then by"}
               </span>
               <select
-                className="flex-1 h-7 px-2 text-xs border border-border rounded bg-background outline-none"
+                className="flex-1 h-7 px-2 font-mono-ui text-xs rounded outline-none"
+                style={{ border: "1.5px solid var(--border-strong)", background: "var(--background-2)" }}
                 value={lv.col_index}
                 onChange={(e) => updateLevel(i, { col_index: parseInt(e.target.value) })}
               >
@@ -59,39 +64,45 @@ export function MultiSortDialog({ sheet, onApply, onClose }: MultiSortDialogProp
                 ))}
               </select>
               <button
-                className={`flex items-center gap-1 px-2 h-7 text-xs border rounded transition-colors ${lv.ascending ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-muted"}`}
+                className="btn-tactile gap-1"
+                style={lv.ascending
+                  ? { background: "color-mix(in srgb, var(--accent-teal) 15%, transparent)", borderColor: "var(--accent-teal)", color: "var(--accent-teal)" }
+                  : {}}
                 onClick={() => updateLevel(i, { ascending: true })}
               >
                 <ArrowUp className="h-3 w-3" /> A→Z
               </button>
               <button
-                className={`flex items-center gap-1 px-2 h-7 text-xs border rounded transition-colors ${!lv.ascending ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-muted"}`}
+                className="btn-tactile gap-1"
+                style={!lv.ascending
+                  ? { background: "color-mix(in srgb, var(--accent-teal) 15%, transparent)", borderColor: "var(--accent-teal)", color: "var(--accent-teal)" }
+                  : {}}
                 onClick={() => updateLevel(i, { ascending: false })}
               >
                 <ArrowDown className="h-3 w-3" /> Z→A
               </button>
-              <Button
-                variant="ghost" size="icon" className="h-6 w-6 shrink-0"
+              <button
+                className="btn-tactile btn-tactile-outline h-6 w-6 p-0 flex items-center justify-center shrink-0"
                 onClick={() => removeLevel(i)}
                 disabled={levels.length === 1}
               >
                 <Trash2 className="h-3 w-3" />
-              </Button>
+              </button>
             </div>
           ))}
         </div>
 
         {/* Add level */}
         {levels.length < sheet.columns.length && (
-          <Button variant="outline" size="sm" className="self-start h-7 text-xs gap-1" onClick={addLevel}>
+          <button className="btn-tactile btn-tactile-outline gap-1 self-start" onClick={addLevel}>
             <Plus className="h-3 w-3" /> Add level
-          </Button>
+          </button>
         )}
 
         {/* Footer */}
-        <div className="flex justify-end gap-2 pt-1 border-t border-border">
-          <Button variant="outline" size="sm" onClick={onClose}>Cancel</Button>
-          <Button size="sm" onClick={() => { onApply(levels); onClose(); }}>Apply Sort</Button>
+        <div className="flex justify-end gap-2 pt-2" style={{ borderTop: "1px solid var(--border-strong)" }}>
+          <button className="btn-tactile btn-tactile-outline" onClick={onClose}>Cancel</button>
+          <button className="btn-tactile btn-tactile-orange" onClick={() => { onApply(levels); onClose(); }}>Apply Sort</button>
         </div>
       </div>
     </div>

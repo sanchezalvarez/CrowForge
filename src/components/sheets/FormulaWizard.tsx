@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect } from "react";
 import { X, Sparkles, Loader2, Check, RefreshCw } from "lucide-react";
-import { Button } from "../ui/button";
 import axios from "axios";
 import type { Sheet } from "../../lib/cellUtils";
 import { idxToCol } from "../../lib/cellUtils";
@@ -71,21 +70,24 @@ export function FormulaWizard({ sheet, selection, onInsert, onClose }: FormulaWi
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
       <div
-        className="bg-background border border-border rounded-xl shadow-2xl w-[480px] max-w-[96vw] p-5 flex flex-col gap-4"
+        className="card-riso card-riso-violet surface-noise riso-frame w-[480px] max-w-[96vw] p-5 flex flex-col gap-4 rounded-lg relative overflow-hidden animate-ink-in"
+        style={{ border: "1.5px solid var(--border-strong)", boxShadow: "4px 4px 0 var(--riso-violet)" }}
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Riso color strip */}
+        <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, borderRadius: "6px 6px 0 0", background: "var(--riso-strip)", opacity: 0.75 }} />
         {/* Header */}
-        <div className="flex items-center gap-2">
-          <Sparkles className="h-4 w-4 text-primary shrink-0" />
-          <h2 className="text-sm font-semibold flex-1">AI Formula Assistant</h2>
+        <div className="flex items-center gap-2 mt-1">
+          <Sparkles className="h-4 w-4 shrink-0" style={{ color: "var(--accent-violet)" }} />
+          <h2 className="font-display font-black text-sm tracking-tight flex-1">AI Formula Assistant</h2>
           {currentCell && (
-            <span className="text-[10px] font-mono text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+            <span className="font-mono-ui text-[10px] text-muted-foreground px-1.5 py-0.5 rounded" style={{ background: "var(--background-3)", border: "1px solid var(--border-strong)" }}>
               Insert into {currentCell}
             </span>
           )}
-          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={onClose}>
+          <button className="btn-tactile btn-tactile-outline h-6 w-6 p-0 flex items-center justify-center" onClick={onClose}>
             <X className="h-3.5 w-3.5" />
-          </Button>
+          </button>
         </div>
 
         {/* Column hint */}
@@ -94,7 +96,8 @@ export function FormulaWizard({ sheet, selection, onInsert, onClose }: FormulaWi
             {sheet.columns.map((col, i) => (
               <span
                 key={i}
-                className="text-[10px] px-1.5 py-0.5 rounded bg-muted font-mono text-muted-foreground"
+                className="font-mono-ui text-[10px] px-1.5 py-0.5 rounded text-muted-foreground"
+                style={{ background: "var(--background-3)", border: "1px solid var(--border)" }}
                 title={`Column ${idxToCol(i)} — ${col.type}`}
               >
                 {idxToCol(i)}: {col.name}
@@ -105,10 +108,11 @@ export function FormulaWizard({ sheet, selection, onInsert, onClose }: FormulaWi
 
         {/* Description input */}
         <div className="flex flex-col gap-1.5">
-          <label className="text-xs text-muted-foreground">Describe the formula you need:</label>
+          <label className="riso-section-label">Describe the formula you need:</label>
           <textarea
             ref={inputRef}
-            className="w-full h-20 px-2.5 py-2 text-xs border border-border rounded-lg bg-background outline-none focus:ring-1 focus:ring-primary/40 resize-none font-mono"
+            className="w-full h-20 px-2.5 py-2 font-mono-ui text-xs rounded-md outline-none resize-none"
+            style={{ border: "1.5px solid var(--border-strong)", background: "var(--background-2)", boxShadow: "2px 2px 0 var(--riso-violet)" }}
             placeholder='e.g. "sum of Sales column" or "if A > 100 show OK else NOK"'
             value={description}
             onChange={(e) => setDescription(e.target.value)}
@@ -123,7 +127,8 @@ export function FormulaWizard({ sheet, selection, onInsert, onClose }: FormulaWi
             {EXAMPLES.map((ex) => (
               <button
                 key={ex}
-                className="text-[10px] px-1.5 py-0.5 rounded-full border border-border hover:bg-muted text-muted-foreground transition-colors"
+                className="font-mono-ui text-[10px] px-2 py-0.5 rounded-full text-muted-foreground hover:text-foreground transition-colors"
+                style={{ border: "1px solid var(--border-strong)", background: "var(--background-2)" }}
                 onClick={() => { setDescription(ex); inputRef.current?.focus(); }}
               >
                 {ex}
@@ -133,8 +138,8 @@ export function FormulaWizard({ sheet, selection, onInsert, onClose }: FormulaWi
         </div>
 
         {/* Generate button */}
-        <Button
-          className="self-start h-8 text-xs gap-1.5"
+        <button
+          className="btn-tactile btn-tactile-violet gap-1.5 self-start"
           onClick={generate}
           disabled={!description.trim() || loading}
         >
@@ -143,46 +148,47 @@ export function FormulaWizard({ sheet, selection, onInsert, onClose }: FormulaWi
           ) : (
             <><Sparkles className="h-3 w-3" /> Generate formula</>
           )}
-        </Button>
+        </button>
 
         {/* Error */}
         {error && (
-          <p className="text-xs text-destructive bg-destructive/10 rounded px-2 py-1.5">{error}</p>
+          <p className="font-mono-ui text-xs text-destructive rounded px-2 py-1.5" style={{ background: "color-mix(in srgb, var(--destructive) 10%, transparent)" }}>{error}</p>
         )}
 
         {/* Result */}
         {formula && (
           <div className="flex flex-col gap-2">
-            <label className="text-xs text-muted-foreground">Generated formula:</label>
+            <label className="riso-section-label">Generated formula:</label>
             <div className="flex items-center gap-2">
               <input
-                className="flex-1 h-8 px-2.5 text-xs font-mono border border-primary/40 rounded-lg bg-primary/5 outline-none focus:ring-1 focus:ring-primary/40"
+                className="flex-1 h-8 px-2.5 font-mono-ui text-xs rounded-md outline-none"
+                style={{ border: "1.5px solid var(--accent-violet)", background: "color-mix(in srgb, var(--accent-violet) 8%, var(--background-2))", boxShadow: "2px 2px 0 var(--riso-violet)" }}
                 value={formula}
                 onChange={(e) => setFormula(e.target.value)}
               />
-              <Button
-                variant="ghost" size="icon" className="h-8 w-8 shrink-0"
+              <button
+                className="btn-tactile btn-tactile-outline h-8 w-8 p-0 flex items-center justify-center shrink-0"
                 title="Regenerate"
                 onClick={generate}
                 disabled={loading}
               >
                 <RefreshCw className="h-3.5 w-3.5" />
-              </Button>
+              </button>
             </div>
           </div>
         )}
 
         {/* Footer */}
-        <div className="flex justify-end gap-2 pt-1 border-t border-border">
-          <Button variant="outline" size="sm" onClick={onClose}>Cancel</Button>
-          <Button
-            size="sm" className="gap-1.5"
+        <div className="flex justify-end gap-2 pt-2" style={{ borderTop: "1px solid var(--border-strong)" }}>
+          <button className="btn-tactile btn-tactile-outline" onClick={onClose}>Cancel</button>
+          <button
+            className="btn-tactile btn-tactile-violet gap-1.5"
             onClick={handleInsert}
             disabled={!formula}
           >
             <Check className="h-3.5 w-3.5" />
             Insert formula
-          </Button>
+          </button>
         </div>
       </div>
     </div>

@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { X, Plus, Trash2 } from "lucide-react";
-import { Button } from "../ui/button";
 import type { Sheet, ConditionalRule, CondOperator } from "../../lib/cellUtils";
 
 const OPERATORS: { value: CondOperator; label: string; noValue?: boolean }[] = [
@@ -51,28 +50,34 @@ export function CondFormatDialog({ sheet, rules: initial, onSave, onClose }: Con
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-background border border-border rounded-xl shadow-2xl w-[540px] max-w-[96vw] p-5 flex flex-col gap-4 max-h-[90vh] overflow-auto">
+      <div
+        className="card-riso card-riso-teal surface-noise riso-frame w-[540px] max-w-[96vw] p-5 flex flex-col gap-4 max-h-[90vh] overflow-auto rounded-lg relative"
+        style={{ border: "1.5px solid var(--border-strong)", boxShadow: "4px 4px 0 var(--riso-teal)" }}
+      >
+        {/* Riso color strip */}
+        <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, borderRadius: "6px 6px 0 0", background: "var(--riso-strip)", opacity: 0.75 }} />
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold">Conditional Formatting</h2>
-          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={onClose}>
+        <div className="flex items-center justify-between mt-1">
+          <h2 className="font-display font-black text-sm tracking-tight">Conditional Formatting</h2>
+          <button className="btn-tactile btn-tactile-outline h-6 w-6 p-0 flex items-center justify-center" onClick={onClose}>
             <X className="h-3.5 w-3.5" />
-          </Button>
+          </button>
         </div>
 
         {rules.length === 0 && (
-          <p className="text-xs text-muted-foreground text-center py-4">No rules yet. Add one below.</p>
+          <p className="font-mono-ui text-xs text-muted-foreground text-center py-4">No rules yet. Add one below.</p>
         )}
 
         {/* Rules */}
         {rules.map((rule) => {
           const opMeta = OPERATORS.find((o) => o.value === rule.operator);
           return (
-            <div key={rule.id} className="border border-border rounded-lg p-3 flex flex-col gap-2.5">
+            <div key={rule.id} className="p-3 flex flex-col gap-2.5 rounded-md" style={{ border: "1.5px solid var(--border-strong)", background: "var(--background-2)", boxShadow: "2px 2px 0 var(--riso-teal)" }}>
               {/* Row 1: column scope + operator + value */}
               <div className="flex items-center gap-2 flex-wrap">
                 <select
-                  className="h-7 px-2 text-xs border border-border rounded bg-background outline-none"
+                  className="h-7 px-2 font-mono-ui text-xs rounded outline-none"
+                  style={{ border: "1.5px solid var(--border-strong)", background: "var(--background)" }}
                   value={rule.col === null ? "" : String(rule.col)}
                   onChange={(e) => update(rule.id, { col: e.target.value === "" ? null : parseInt(e.target.value) })}
                 >
@@ -82,7 +87,8 @@ export function CondFormatDialog({ sheet, rules: initial, onSave, onClose }: Con
                   ))}
                 </select>
                 <select
-                  className="h-7 px-2 text-xs border border-border rounded bg-background outline-none"
+                  className="h-7 px-2 font-mono-ui text-xs rounded outline-none"
+                  style={{ border: "1.5px solid var(--border-strong)", background: "var(--background)" }}
                   value={rule.operator}
                   onChange={(e) => update(rule.id, { operator: e.target.value as CondOperator })}
                 >
@@ -92,23 +98,24 @@ export function CondFormatDialog({ sheet, rules: initial, onSave, onClose }: Con
                 </select>
                 {!opMeta?.noValue && (
                   <input
-                    className="h-7 px-2 text-xs border border-border rounded bg-background outline-none w-24"
+                    className="h-7 px-2 font-mono-ui text-xs rounded outline-none w-24"
+                    style={{ border: "1.5px solid var(--border-strong)", background: "var(--background)" }}
                     value={rule.value}
                     onChange={(e) => update(rule.id, { value: e.target.value })}
                     placeholder="value"
                   />
                 )}
-                <Button variant="ghost" size="icon" className="h-6 w-6 ml-auto" onClick={() => remove(rule.id)}>
+                <button className="btn-tactile btn-tactile-outline h-6 w-6 p-0 flex items-center justify-center ml-auto" onClick={() => remove(rule.id)}>
                   <Trash2 className="h-3 w-3" />
-                </Button>
+                </button>
               </div>
 
               {/* Row 2: format options */}
               <div className="flex items-center gap-3 flex-wrap">
-                <span className="text-xs text-muted-foreground shrink-0">Format:</span>
+                <span className="font-mono-ui text-[10px] text-muted-foreground shrink-0 uppercase tracking-widest">Format:</span>
                 {/* BG color */}
                 <div className="flex items-center gap-1">
-                  <span className="text-[10px] text-muted-foreground">Fill</span>
+                  <span className="font-mono-ui text-[10px] text-muted-foreground">Fill</span>
                   <div className="flex gap-0.5 flex-wrap">
                     {PRESET_COLORS.map((c) => (
                       <button
@@ -127,7 +134,7 @@ export function CondFormatDialog({ sheet, rules: initial, onSave, onClose }: Con
                 </div>
                 {/* Text color */}
                 <div className="flex items-center gap-1">
-                  <span className="text-[10px] text-muted-foreground">Text</span>
+                  <span className="font-mono-ui text-[10px] text-muted-foreground">Text</span>
                   <div className="flex gap-0.5 flex-wrap">
                     {["#ef4444","#22c55e","#3b82f6","#8b5cf6","#f97316","#000000","#ffffff"].map((c) => (
                       <button
@@ -158,13 +165,13 @@ export function CondFormatDialog({ sheet, rules: initial, onSave, onClose }: Con
           );
         })}
 
-        <Button variant="outline" size="sm" className="self-start h-7 text-xs gap-1" onClick={add}>
+        <button className="btn-tactile btn-tactile-teal gap-1 self-start" onClick={add}>
           <Plus className="h-3 w-3" /> Add rule
-        </Button>
+        </button>
 
-        <div className="flex justify-end gap-2 pt-1 border-t border-border">
-          <Button variant="outline" size="sm" onClick={onClose}>Cancel</Button>
-          <Button size="sm" onClick={() => { onSave(rules); onClose(); }}>Save Rules</Button>
+        <div className="flex justify-end gap-2 pt-2" style={{ borderTop: "1px solid var(--border-strong)" }}>
+          <button className="btn-tactile btn-tactile-outline" onClick={onClose}>Cancel</button>
+          <button className="btn-tactile btn-tactile-teal" onClick={() => { onSave(rules); onClose(); }}>Save Rules</button>
         </div>
       </div>
     </div>

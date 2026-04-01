@@ -1,0 +1,22 @@
+[package]
+name = "crowforge-installer"
+version = "0.4.4"
+edition = "2021"
+
+[lib]
+name = "installer_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde_json = "1"
+
+[profile.release]
+panic = "abort"
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true

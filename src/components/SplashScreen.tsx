@@ -32,8 +32,8 @@ export function SplashScreen({ failed }: { failed?: boolean }) {
 
   return (
     <div
-      className="flex h-screen w-full items-center justify-center riso-noise riso-noise-live"
-      style={{ background: "var(--background)" }}
+      className="flex items-center justify-center riso-noise riso-noise-live"
+      style={{ background: "var(--background)", width: 800, height: 600 }}
     >
       {/* Riso background blobs */}
       <div

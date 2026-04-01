@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { useReactFlow } from "@xyflow/react";
 import {
   Bot, Image, LayoutDashboard, Trash2, Grid3x3,
@@ -47,6 +47,18 @@ export function CanvasToolbar({
   const { getNodes, getEdges, setNodes, fitView, zoomIn, zoomOut, toObject } = useReactFlow();
   const importRef  = useRef<HTMLInputElement>(null);
   const [showHelp, setShowHelp] = useState(false);
+  const helpRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showHelp) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setShowHelp(false); };
+    const onClick = (e: MouseEvent) => {
+      if (helpRef.current && !helpRef.current.contains(e.target as Node)) setShowHelp(false);
+    };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("mousedown", onClick);
+    return () => { document.removeEventListener("keydown", onKey); document.removeEventListener("mousedown", onClick); };
+  }, [showHelp]);
 
   function handleAutoLayout() {
     const nodes = getNodes();
@@ -228,6 +240,7 @@ export function CanvasToolbar({
       {/* Shortcuts overlay */}
       {showHelp && (
         <div
+          ref={helpRef}
           className="absolute top-12 right-0 z-50 card-riso surface-noise riso-frame rounded-lg p-4 w-72 animate-ink-in"
           style={{ border: "1.5px solid var(--border-strong)", boxShadow: "4px 4px 0 var(--riso-teal)" }}
         >

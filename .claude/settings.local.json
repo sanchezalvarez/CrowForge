@@ -77,7 +77,8 @@
       "WebFetch(domain:schema.tauri.app)",
       "Bash(mkdir -p C:/unity/CrowForge/src-tauri/windows)",
       "Bash(mkdir -p C:/unity/CrowForge/installer/src)",
-      "Bash(mkdir -p C:/unity/CrowForge/installer/src-tauri/src)"
+      "Bash(mkdir -p C:/unity/CrowForge/installer/src-tauri/src)",
+      "Bash(npx tauri:*)"
     ]
   }
 }

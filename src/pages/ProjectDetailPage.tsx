@@ -406,7 +406,7 @@ export function ProjectDetailPage({ projectId, onBack, onNavigate }: ProjectDeta
 
       {/* Standup Dialog */}
       <Dialog open={standupOpen} onOpenChange={setStandupOpen}>
-        <DialogContent className="max-w-2xl surface-noise" style={{ border: "1.5px solid var(--border-strong)" }}>
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle className="font-display font-black flex items-center gap-2 tracking-tight">
               <Radio size={14} style={{ color: "var(--accent-teal)" }} /> Daily Standup
@@ -418,7 +418,7 @@ export function ProjectDetailPage({ projectId, onBack, onNavigate }: ProjectDeta
 
       {/* AI Suggest Tasks Dialog */}
       <Dialog open={suggestOpen} onOpenChange={(o) => { if (!o) { setSuggestOpen(false); setSuggestedTasks([]); setSuggestContext(""); } }}>
-        <DialogContent className="max-w-lg surface-noise" style={{ border: "1.5px solid var(--border-strong)" }}>
+        <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="font-display font-black flex items-center gap-2 tracking-tight">
               <Sparkles size={14} style={{ color: "var(--accent-violet)" }} /> AI Work Item Suggestions
@@ -489,7 +489,7 @@ export function ProjectDetailPage({ projectId, onBack, onNavigate }: ProjectDeta
 
       {/* Delete task confirmation */}
       <Dialog open={deleteConfirmId !== null} onOpenChange={(o) => { if (!o) setDeleteConfirmId(null); }}>
-        <DialogContent className="max-w-sm surface-noise" style={{ border: "1.5px solid var(--border-strong)" }}>
+        <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle className="font-display font-black tracking-tight">Delete Item</DialogTitle>
           </DialogHeader>

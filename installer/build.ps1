@@ -3,7 +3,7 @@
 # From main build.ps1: .\installer\build.ps1 -SkipMainBuild (main app already built)
 
 param(
-    [string]$Version = "0.4.4",
+    [string]$Version = "0.4.5",
     [switch]$SkipMainBuild
 )
 

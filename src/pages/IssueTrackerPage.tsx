@@ -248,15 +248,7 @@ export function IssueTrackerPage() {
 
       {/* ── Bug Report Dialog ── */}
       <Dialog open={dialogOpen} onOpenChange={(o) => { if (!o) { resetForm(); setDialogOpen(false); } }}>
-        <DialogContent
-          className="max-w-lg surface-noise riso-frame flex flex-col overflow-hidden"
-          style={{
-            background: "var(--background)",
-            border: "1.5px solid rgba(20,16,10,0.22)",
-            borderRadius: "6px",
-            boxShadow: "4px 4px 0 var(--riso-teal), 0 8px 32px rgba(20,16,10,0.12)",
-          }}
-        >
+        <DialogContent className="max-w-lg riso-frame flex flex-col overflow-hidden">
           <DialogHeader className="pb-1 shrink-0">
             <DialogTitle
               className="flex items-center gap-2 font-display font-black text-base tracking-tight"

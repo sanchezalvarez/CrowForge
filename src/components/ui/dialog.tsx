@@ -32,15 +32,9 @@ const DialogContent = React.forwardRef<
       <DialogPrimitive.Content
         ref={ref}
         className={cn(
-          "relative z-50 w-full max-w-md max-h-[85vh] rounded-lg border surface-noise duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
+          "relative z-50 w-full max-w-md max-h-[85vh] rounded-lg border border-[var(--border-strong)] bg-[var(--card)] p-6 shadow-[4px_4px_0_var(--riso-teal)] surface-noise duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
           className
         )}
-        style={{
-          background: "var(--card)",
-          borderColor: "var(--border-strong)",
-          boxShadow: "4px 4px 0 var(--riso-teal)",
-          padding: "1.5rem",
-        }}
         {...props}
       >
         {/* Riso color strip at top */}

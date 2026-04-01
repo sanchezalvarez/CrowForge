@@ -377,6 +377,7 @@ input, textarea, [contenteditable] {
 
 /* ── Riso cards ─────────────────────────────────────────────────────────── */
 .card-riso {
+  background-color: var(--card);
   background-image: var(--noise-subtle);
   background-repeat: repeat;
   position: relative;

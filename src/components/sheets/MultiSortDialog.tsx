@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { X, Plus, Trash2, ArrowUp, ArrowDown } from "lucide-react";
 import type { Sheet } from "../../lib/cellUtils";
 
@@ -18,6 +18,12 @@ export function MultiSortDialog({ sheet, onApply, onClose }: MultiSortDialogProp
     { col_index: 0, ascending: true },
   ]);
 
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [onClose]);
+
   const addLevel = () => {
     const used = new Set(levels.map((l) => l.col_index));
     const next = sheet.columns.findIndex((_, i) => !used.has(i));
@@ -31,10 +37,11 @@ export function MultiSortDialog({ sheet, onApply, onClose }: MultiSortDialogProp
     setLevels((ls) => ls.map((l, idx) => idx === i ? { ...l, ...patch } : l));
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
       <div
         className="card-riso card-riso-orange surface-noise riso-frame w-[420px] max-w-[95vw] p-5 flex flex-col gap-4 rounded-lg relative overflow-hidden animate-ink-in"
         style={{ border: "1.5px solid var(--border-strong)", boxShadow: "4px 4px 0 var(--riso-orange)" }}
+        onClick={(e) => e.stopPropagation()}
       >
         {/* Riso color strip */}
         <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, borderRadius: "6px 6px 0 0", background: "var(--riso-strip)", opacity: 0.75 }} />

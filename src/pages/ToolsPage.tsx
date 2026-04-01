@@ -622,18 +622,22 @@ function CurrencyWidget() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Convert amount in `base` → `target` using cached rates
-  function convert(target: string): string {
-    if (!cache) return "—";
+  // Convert amount in `base` → `target` — returns raw number or NaN
+  function convertRaw(target: string): number {
+    if (!cache) return NaN;
     const num = parseFloat(amount);
-    if (isNaN(num) || num < 0) return "—";
-    if (target === base) return num.toLocaleString(undefined, { maximumFractionDigits: 4 });
-    // rates are relative to cache.base
-    const toBase = cache.rates[base];   // base → cache.base
-    const toTarget = cache.rates[target]; // target → cache.base
-    if (!toBase || !toTarget) return "—";
-    const result = (num / toBase) * toTarget;
-    // format nicely
+    if (isNaN(num) || num < 0) return NaN;
+    if (target === base) return num;
+    const toBase = cache.rates[base];
+    const toTarget = cache.rates[target];
+    if (!toBase || !toTarget) return NaN;
+    return (num / toBase) * toTarget;
+  }
+
+  // Convert and format for display
+  function convert(target: string): string {
+    const result = convertRaw(target);
+    if (isNaN(result)) return "—";
     if (result >= 100) return result.toLocaleString(undefined, { maximumFractionDigits: 2 });
     if (result >= 1) return result.toLocaleString(undefined, { maximumFractionDigits: 4 });
     return result.toLocaleString(undefined, { maximumFractionDigits: 6 });
@@ -765,8 +769,8 @@ function CurrencyWidget() {
                   <button
                     key={code}
                     onClick={() => {
-                      const res = convert(code).replace(/[^0-9.]/g, "");
-                      if (res && res !== "—") { setAmount(res); setBase(code); }
+                      const raw = convertRaw(code);
+                      if (!isNaN(raw)) { setAmount(String(raw)); setBase(code); }
                     }}
                     className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-muted/60 transition-colors text-left border border-transparent hover:border-border/40"
                     title={`Switch to ${code}`}

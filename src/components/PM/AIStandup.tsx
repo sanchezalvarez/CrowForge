@@ -3,7 +3,6 @@ import { RefreshCw, AlertCircle } from "lucide-react";
 import axios from "axios";
 import ReactMarkdown from "react-markdown";
 import { useFetchSSE } from "../../hooks/useFetchSSE";
-import { Button } from "../ui/button";
 
 const API_BASE = "http://127.0.0.1:8000";
 
@@ -77,25 +76,24 @@ export function AIStandup({ projectId }: AIStandupProps) {
       {/* Controls row */}
       <div className="flex items-center gap-2">
         {lastGenerated && (
-          <span className="text-[10px] text-muted-foreground font-mono">
+          <span className="text-[10px] text-muted-foreground font-mono-ui">
             {isToday ? "Generated today" : `Last: ${lastGenerated.slice(0, 10)}`}
           </span>
         )}
         <div className="ml-auto flex items-center gap-1">
           {isGenerating ? (
-            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={handleStop}>
+            <button className="btn-tactile btn-tactile-outline h-7 text-xs" onClick={handleStop}>
               Stop
-            </Button>
+            </button>
           ) : (
-            <Button
-              size="sm"
-              className="h-7 text-xs gap-1"
+            <button
+              className="btn-tactile btn-tactile-teal h-7 text-xs gap-1"
               onClick={generate}
               disabled={modelReady === false}
             >
               <RefreshCw size={11} />
               {content ? "Regenerate" : "Generate"}
-            </Button>
+            </button>
           )}
         </div>
       </div>
@@ -110,15 +108,15 @@ export function AIStandup({ projectId }: AIStandupProps) {
 
       {/* Empty state */}
       {!content && !isGenerating && modelReady !== false && (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs text-muted-foreground font-mono-ui">
           Click "Generate" to create a daily standup summary from your project data.
         </p>
       )}
 
       {/* Content */}
       {content && (
-        <div className="rounded-md border border-border bg-muted/20 px-4 py-3 max-h-[60vh] overflow-y-auto">
-          <div className="prose prose-sm max-w-none text-foreground text-sm leading-relaxed">
+        <div className="rounded-md px-4 py-3 max-h-[60vh] overflow-y-auto" style={{ border: "1.5px solid var(--border-strong)", background: "var(--background-2)", boxShadow: "2px 2px 0 var(--riso-teal)" }}>
+          <div className="prose prose-sm max-w-none text-foreground text-sm leading-relaxed font-mono-ui">
             <ReactMarkdown>{content}</ReactMarkdown>
           </div>
           {isGenerating && (

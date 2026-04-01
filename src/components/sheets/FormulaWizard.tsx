@@ -32,6 +32,12 @@ export function FormulaWizard({ sheet, selection, onInsert, onClose }: FormulaWi
     inputRef.current?.focus();
   }, []);
 
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [onClose]);
+
   const currentCell = selection
     ? `${idxToCol(selection.c1)}${selection.r1 + 1}`
     : "";

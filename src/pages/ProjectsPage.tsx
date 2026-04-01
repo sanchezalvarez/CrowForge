@@ -144,7 +144,7 @@ export function ProjectsPage({ onNavigateToProject, onNavigate }: ProjectsPagePr
 
       {/* Standup Dialog */}
       <Dialog open={standupOpen} onOpenChange={setStandupOpen}>
-        <DialogContent className="max-w-2xl surface-noise" style={{ border: "1.5px solid var(--border-strong)" }}>
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle className="font-display font-black flex items-center gap-2 tracking-tight">
               <Radio size={14} style={{ color: "var(--accent-teal)" }} /> Daily Standup
@@ -156,7 +156,7 @@ export function ProjectsPage({ onNavigateToProject, onNavigate }: ProjectsPagePr
 
       {/* Create Project Dialog */}
       <Dialog open={createOpen} onOpenChange={(o) => !o && setCreateOpen(false)}>
-        <DialogContent className="max-w-md surface-noise" style={{ border: "1.5px solid var(--border-strong)" }}>
+        <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="font-display font-black tracking-tight">New Project</DialogTitle>
           </DialogHeader>
@@ -234,7 +234,7 @@ export function ProjectsPage({ onNavigateToProject, onNavigate }: ProjectsPagePr
 
       {/* Delete confirmation dialog */}
       <Dialog open={deleteConfirmId !== null} onOpenChange={(o) => { if (!o) setDeleteConfirmId(null); }}>
-        <DialogContent className="max-w-sm surface-noise" style={{ border: "1.5px solid var(--border-strong)" }}>
+        <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle className="font-display font-black tracking-tight">Delete Project</DialogTitle>
           </DialogHeader>

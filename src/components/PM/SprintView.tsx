@@ -243,7 +243,7 @@ export function SprintView({ project, sprints, tasks, members, onTaskClick, onSp
       </button>
 
       <Dialog open={createOpen} onOpenChange={(o) => !o && setCreateOpen(false)}>
-        <DialogContent className="max-w-md surface-noise" style={{ border: "1.5px solid var(--border-strong)" }}>
+        <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="font-display font-black tracking-tight">New Sprint</DialogTitle>
           </DialogHeader>

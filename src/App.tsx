@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, Component, Fragment, type ReactNode } from "react";
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
 import axios from "axios";
 import { APP_VERSION } from "./lib/constants";
 import {
@@ -232,6 +232,21 @@ export default function App() {
     checkModelStatus();
     const interval = setInterval(checkModelStatus, 15_000);
     return () => { cancelled = true; clearInterval(interval); };
+  }, [appStatus]);
+
+  // Show the small splash window immediately on mount
+  useEffect(() => {
+    getCurrentWindow().show();
+  }, []);
+
+  // When app is ready or onboarding, maximize the window
+  useEffect(() => {
+    if (appStatus === "ready" || appStatus === "onboarding") {
+      const win = getCurrentWindow();
+      win.setMinSize(new LogicalSize(800, 500)).then(() =>
+        win.maximize().then(() => win.show())
+      );
+    }
   }, [appStatus]);
 
   // Backend polling on startup

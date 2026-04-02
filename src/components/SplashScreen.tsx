@@ -31,126 +31,33 @@ export function SplashScreen({ failed }: { failed?: boolean }) {
   const dots = ["◆", "◆◆", "◆◆◆"];
 
   return (
-    <div
-      className="flex items-center justify-center riso-noise riso-noise-live"
-      style={{ background: "var(--background)", width: 800, height: 600 }}
-    >
-      {/* Riso background blobs */}
+    <>
+      {/* Main container */}
       <div
-        className="pointer-events-none select-none"
-        style={{ position: "fixed", inset: 0, zIndex: 0 }}
-      >
-        <div
-          className="animate-blob-drift"
-          style={{
-            position: "absolute",
-            width: 460,
-            height: 460,
-            borderRadius: "50%",
-            background: "var(--accent-teal)",
-            opacity: 0.09,
-            mixBlendMode: "multiply",
-            top: -150,
-            right: -150,
-          }}
-        />
-        <div
-          className="animate-blob-drift-b"
-          style={{
-            position: "absolute",
-            width: 380,
-            height: 380,
-            borderRadius: "50%",
-            background: "var(--accent-orange)",
-            opacity: 0.08,
-            mixBlendMode: "multiply",
-            bottom: -120,
-            left: -120,
-          }}
-        />
-        <div
-          className="animate-blob-drift-c"
-          style={{
-            position: "absolute",
-            width: 260,
-            height: 260,
-            borderRadius: "50%",
-            background: "var(--accent-violet)",
-            opacity: 0.06,
-            mixBlendMode: "multiply",
-            bottom: 80,
-            right: -40,
-          }}
-        />
-        {/* Registration crosshair — top-right */}
-        <svg
-          style={{ position: "absolute", top: 12, right: 12, width: 44, height: 44 }}
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          <line x1="4" y1="18" x2="26" y2="18" stroke="rgba(11,114,104,0.40)" strokeWidth="1.5" />
-          <line x1="15" y1="7" x2="15" y2="29" stroke="rgba(11,114,104,0.40)" strokeWidth="1.5" />
-          <circle cx="15" cy="18" r="5" stroke="rgba(11,114,104,0.28)" strokeWidth="1" fill="none" />
-        </svg>
-        {/* Registration crosshair — bottom-left */}
-        <svg
-          style={{ position: "absolute", bottom: 12, left: 12, width: 44, height: 44 }}
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          <line x1="4" y1="26" x2="26" y2="26" stroke="rgba(224,78,14,0.40)" strokeWidth="1.5" />
-          <line x1="15" y1="15" x2="15" y2="37" stroke="rgba(224,78,14,0.40)" strokeWidth="1.5" />
-          <circle cx="15" cy="26" r="5" stroke="rgba(224,78,14,0.28)" strokeWidth="1" fill="none" />
-        </svg>
-        {/* Halftone cluster — bottom-right corner */}
-        <svg
-          style={{ position: "absolute", right: 48, bottom: 56, width: 72, height: 72 }}
-          viewBox="0 0 72 72"
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          {(
-            [
-              [10, 10, 2.2],
-              [22, 8, 1.4],
-              [6, 24, 1.8],
-              [20, 22, 1.3],
-              [32, 14, 1.3],
-              [36, 28, 0.9],
-              [10, 36, 1.3],
-              [28, 34, 0.9],
-            ] as [number, number, number][]
-          ).map(([x, y, r], i) => (
-            <circle key={i} cx={x} cy={y} r={r} fill="rgba(224,78,14,0.25)" />
-          ))}
-        </svg>
-      </div>
-
-      {/* Main splash card */}
-      <div
-        className="card-riso riso-frame animate-ink-in flex flex-col items-center justify-center gap-6 rounded-xl border"
+        className="animate-ink-in flex flex-col items-center justify-center gap-5 riso-noise riso-noise-live"
         style={{
+          width: "100vw",
+          height: "100vh",
+          background: "var(--background)",
           position: "relative",
-          zIndex: 1,
-          width: "min(800px, 90vw)",
-          minHeight: "min(600px, 90vh)",
-          maxHeight: "90vh",
-          padding: "40px 36px",
-          background: "var(--card)",
-          borderColor: "var(--border-strong)",
-          boxShadow: "5px 5px 0 rgba(11,114,104,0.18), -2px -2px 0 rgba(224,78,14,0.10)",
+          overflow: "hidden",
         }}
       >
-        {/* Riso color strip at top */}
-        <div
-          style={{
-            position: "absolute",
-            top: 0,
-            left: 0,
-            right: 0,
-            height: 3,
-            borderRadius: "12px 12px 0 0",
-            background: "var(--riso-strip)",
-            opacity: 0.85,
-          }}
-        />
+        {/* Riso background blobs */}
+        <div className="pointer-events-none select-none" style={{ position: "absolute", inset: 0, zIndex: 0 }}>
+          <div
+            className="animate-blob-drift"
+            style={{ position: "absolute", width: 460, height: 460, borderRadius: "50%", background: "var(--accent-teal)", opacity: 0.09, mixBlendMode: "multiply", top: -150, right: -150 }}
+          />
+          <div
+            className="animate-blob-drift-b"
+            style={{ position: "absolute", width: 380, height: 380, borderRadius: "50%", background: "var(--accent-orange)", opacity: 0.08, mixBlendMode: "multiply", bottom: -120, left: -120 }}
+          />
+          <div
+            className="animate-blob-drift-c"
+            style={{ position: "absolute", width: 260, height: 260, borderRadius: "50%", background: "var(--accent-violet)", opacity: 0.06, mixBlendMode: "multiply", bottom: 80, right: -40 }}
+          />
+        </div>
 
         {/* Logo */}
         <div className="riso-stamp-press" style={{ flexShrink: 0 }}>
@@ -307,6 +214,6 @@ export function SplashScreen({ failed }: { failed?: boolean }) {
           </div>
         )}
       </div>
-    </div>
+    </>
   );
 }

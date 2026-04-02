@@ -1,5 +1,6 @@
 use tauri::{image::Image, Manager};
 use tauri_plugin_shell::{process::CommandChild, ShellExt};
+use tauri_plugin_window_state::StateFlags;
 use std::sync::Mutex;
 use std::net::TcpStream;
 
@@ -94,7 +95,9 @@ pub fn run() {
                 let _ = window.set_focus();
             }
         }))
-        .plugin(tauri_plugin_window_state::Builder::new().build())
+        .plugin(tauri_plugin_window_state::Builder::new()
+            .with_state_flags(StateFlags::empty())
+            .build())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_opener::init())

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import axios from "axios";
 import {
   Link2,
@@ -76,7 +77,7 @@ export function TaskRefs({ refs, onChange, onNavigate }: TaskRefsProps) {
     try {
       const endpoint = type === "document" ? "/documents" : type === "sheet" ? "/sheets" : "/canvas";
       const res = await axios.get(`${API_BASE}${endpoint}`);
-      const items: InternalItem[] = res.data.map((r: any) => ({
+      const items: InternalItem[] = res.data.map((r: { id: string; title?: string; name?: string }) => ({
         id: r.id,
         title: r.title ?? r.name ?? r.id,
       }));
@@ -98,9 +99,9 @@ export function TaskRefs({ refs, onChange, onNavigate }: TaskRefsProps) {
 
   const handleRefClick = (ref: PMRef) => {
     if (ref.type === "link" && ref.url) {
-      window.open(ref.url, "_blank", "noopener,noreferrer");
+      openUrl(ref.url);
     } else if (ref.type === "image" && ref.url) {
-      window.open(ref.url, "_blank", "noopener,noreferrer");
+      openUrl(ref.url);
     } else if (ref.type === "document" && ref.ref_id && onNavigate) {
       onNavigate("documents", ref.ref_id);
     } else if (ref.type === "sheet" && ref.ref_id && onNavigate) {

@@ -36,9 +36,9 @@ def get_resource_path(relative_path):
         return os.path.join(sys._MEIPASS, relative_path)
     return os.path.abspath(relative_path)
 
-from backend.models import PromptTemplate, BenchmarkRun, BenchmarkRequest, ChatSession, ChatMessage, ChatMessageRequest, Document, DocumentCreate, DocumentUpdate, DocumentAIRequest, Sheet, SheetCreate, SheetColumn, SheetAddColumn, SheetUpdateCell, SheetDeleteRow, SheetDeleteColumn, SheetAICellRequest, SheetAIBatchRequest
+from backend.models import PromptTemplate, BenchmarkRun, BenchmarkRequest, ChatSession, ChatMessage, ChatMessageRequest, Document, DocumentCreate, DocumentUpdate, DocumentAIRequest, Sheet, SheetCreate, SheetColumn, SheetAddColumn, SheetUpdateCell, SheetDeleteRow, SheetDeleteColumn
 from backend.storage import DatabaseManager, AppRepository, PromptTemplateRepository, BenchmarkRepository, ChatSessionRepository, ChatMessageRepository, DocumentRepository, SheetRepository, CanvasRepository
-from backend.ai_engine import MockAIEngine, HTTPAIEngine, LocalLLAMAEngine, GeminiAIEngine, AILogger
+from backend.ai_engine import MockAIEngine, HTTPAIEngine, LocalLLAMAEngine, GeminiAIEngine
 from backend.ai.engine_manager import AIEngineManager
 from backend.ai.plugin_loader import load_plugins, GlobalPluginRegistry
 
@@ -3291,20 +3291,20 @@ async def pm_create_project(body: dict):
 
 @app.patch("/pm/projects/{project_id}")
 async def pm_update_project(project_id: int, body: dict):
-    row = db.get_connection().execute("SELECT id FROM pm_projects WHERE id = ?", (project_id,)).fetchone()
-    if not row:
-        raise HTTPException(status_code=404, detail="Project not found")
-    fields = []
-    params = []
-    for key in ("name", "description", "color", "icon", "status", "code"):
-        if key in body:
-            fields.append(f"{key} = ?")
-            params.append(str(body[key]))
-    if not fields:
-        raise HTTPException(status_code=400, detail="No fields to update")
-    fields.append("updated_at = CURRENT_TIMESTAMP")
-    params.append(project_id)
     with db.get_connection() as conn:
+        row = conn.execute("SELECT id FROM pm_projects WHERE id = ?", (project_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Project not found")
+        fields = []
+        params = []
+        for key in ("name", "description", "color", "icon", "status", "code"):
+            if key in body:
+                fields.append(f"{key} = ?")
+                params.append(str(body[key]))
+        if not fields:
+            raise HTTPException(status_code=400, detail="No fields to update")
+        fields.append("updated_at = CURRENT_TIMESTAMP")
+        params.append(project_id)
         conn.execute(f"UPDATE pm_projects SET {', '.join(fields)} WHERE id = ?", params)
         conn.commit()
         updated = conn.execute("SELECT * FROM pm_projects WHERE id = ?", (project_id,)).fetchone()
@@ -3346,12 +3346,12 @@ async def pm_create_member(body: dict):
 async def pm_delete_member(member_id: int):
     if member_id == 1:
         raise HTTPException(status_code=400, detail="Cannot delete the default member")
-    active = db.get_connection().execute(
-        "SELECT COUNT(*) as c FROM pm_tasks WHERE assignee_id = ? AND status NOT IN ('resolved','closed','rejected')", (member_id,)
-    ).fetchone()
-    if active and active["c"] > 0:
-        raise HTTPException(status_code=400, detail="Member has active tasks assigned")
     with db.get_connection() as conn:
+        active = conn.execute(
+            "SELECT COUNT(*) as c FROM pm_tasks WHERE assignee_id = ? AND status NOT IN ('resolved','closed','rejected')", (member_id,)
+        ).fetchone()
+        if active and active["c"] > 0:
+            raise HTTPException(status_code=400, detail="Member has active tasks assigned")
         conn.execute("DELETE FROM pm_members WHERE id = ?", (member_id,))
         conn.commit()
     return {"ok": True}

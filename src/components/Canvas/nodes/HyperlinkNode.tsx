@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 import { Handle, Position, type NodeProps, useReactFlow, NodeResizer, useStore } from "@xyflow/react";
 import { ExternalLink, Link2, Pencil } from "lucide-react";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { cn } from "../../../lib/utils";
 import { getNodeShadow } from "./NodeToolbar";
 import { useCanvasExecution } from "../CanvasExecutionContext";
@@ -38,7 +39,7 @@ export function HyperlinkNode({ id, data, selected }: NodeProps) {
     if (!url.startsWith("http://") && !url.startsWith("https://")) {
       url = "https://" + url;
     }
-    window.open(url, "_blank", "noopener,noreferrer");
+    openUrl(url);
   }, [nodeData.url]);
 
   const isConnecting = useStore((s) => s.connection.inProgress);

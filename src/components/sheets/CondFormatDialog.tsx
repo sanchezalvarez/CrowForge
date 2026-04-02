@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { X, Plus, Trash2 } from "lucide-react";
 import type { Sheet, ConditionalRule, CondOperator } from "../../lib/cellUtils";
+import { useEscapeKey } from "../../hooks/useEscapeKey";
 
 const OPERATORS: { value: CondOperator; label: string; noValue?: boolean }[] = [
   { value: ">",          label: "greater than" },
@@ -41,11 +42,7 @@ interface CondFormatDialogProps {
 export function CondFormatDialog({ sheet, rules: initial, onSave, onClose }: CondFormatDialogProps) {
   const [rules, setRules] = useState<ConditionalRule[]>(initial);
 
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    document.addEventListener("keydown", handler);
-    return () => document.removeEventListener("keydown", handler);
-  }, [onClose]);
+  useEscapeKey(onClose);
 
   const add = () => setRules((rs) => [...rs, newRule(null)]);
   const remove = (id: string) => setRules((rs) => rs.filter((r) => r.id !== id));
@@ -57,7 +54,7 @@ export function CondFormatDialog({ sheet, rules: initial, onSave, onClose }: Con
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
       <div
-        className="card-riso card-riso-teal surface-noise riso-frame w-[540px] max-w-[96vw] p-5 flex flex-col gap-4 max-h-[90vh] overflow-auto rounded-lg relative"
+        className="card-riso card-riso-teal surface-noise riso-frame w-[540px] max-w-[96vw] p-5 flex flex-col gap-4 max-h-[90vh] overflow-auto rounded-lg relative animate-ink-in"
         style={{ border: "1.5px solid var(--border-strong)", boxShadow: "4px 4px 0 var(--riso-teal)" }}
         onClick={(e) => e.stopPropagation()}
       >

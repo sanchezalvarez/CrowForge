@@ -1,16 +1,6 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { ExternalLink } from "lucide-react";
-
-interface Article {
-  id: number;
-  title: string;
-  url: string;
-  feed_title: string;
-  summary?: string;
-  fetched_at: string;
-  published_at?: string;
-  image_url?: string | null;
-}
+import type { RssArticle } from "../../types/api";
 
 function timeAgo(str?: string | null): string {
   if (!str) return "";
@@ -34,7 +24,7 @@ function feedColor(title: string): string {
   return FEED_COLORS[Math.abs(hash) % FEED_COLORS.length];
 }
 
-export function NewsFeedCard({ article }: { article: Article }) {
+export function NewsFeedCard({ article }: { article: RssArticle }) {
   const color = feedColor(article.feed_title);
   const time = timeAgo(article.published_at || article.fetched_at);
 
@@ -47,6 +37,7 @@ export function NewsFeedCard({ article }: { article: Article }) {
         <img
           src={article.image_url}
           alt=""
+          loading="lazy"
           className="w-full h-36 object-cover"
           onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
         />

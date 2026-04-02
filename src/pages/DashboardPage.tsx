@@ -10,20 +10,12 @@ import { NewsDigest } from "../components/News/NewsDigest";
 import { NewsFeedCard } from "../components/News/NewsFeedCard";
 import { useRssDigest } from "../hooks/useRssDigest";
 import type { PMTask, PMMember } from "../types/pm";
+import type { DashboardData, NavigateCallback, RssArticle, RssFeed } from "../types/api";
+import { RisoBackground } from "../components/RisoBackground";
 
 const API_BASE = "http://127.0.0.1:8000";
 
-interface RecentDoc { id: string; title: string; updated_at?: string; created_at?: string; }
-interface RecentSheet { id: string; title: string; updated_at?: string; columns: number; rows: number; }
-interface RecentChat { id: number; title: string; mode: string; created_at?: string; }
-interface DashboardData {
-  recent_documents: RecentDoc[];
-  recent_sheets: RecentSheet[];
-  recent_chats: RecentChat[];
-  counts: { documents: number; sheets: number; chats: number };
-  ai_engine: string;
-}
-interface DashboardPageProps { onNavigate: (page: any, id?: string) => void; }
+interface DashboardPageProps { onNavigate: NavigateCallback; }
 
 function timeAgo(dateStr?: string): string {
   if (!dateStr) return "";
@@ -48,7 +40,7 @@ function greeting(): string {
 }
 
 // ── My Work section — quick overview of assigned tasks/bugs per member ────
-function MyWorkSection({ onNavigate }: { onNavigate: (page: any, id?: string) => void }) {
+function MyWorkSection({ onNavigate }: { onNavigate: NavigateCallback }) {
   const [members, setMembers] = useState<PMMember[]>([]);
   const [selectedMember, setSelectedMember] = useState<number>(1);
   const [tasks, setTasks] = useState<PMTask[]>([]);
@@ -293,25 +285,27 @@ function MyWorkSection({ onNavigate }: { onNavigate: (page: any, id?: string) =>
 function DigestSection() {
   const [aiAvailable, setAiAvailable] = useState(false);
   const { digest, isGenerating, isFetching, lastGenerated, articleCount, error, loadCached, fetchFeeds, generateDigest } = useRssDigest();
-  const [articles, setArticles] = useState<any[]>([]);
+  const [articles, setArticles] = useState<RssArticle[]>([]);
   const [feedCount, setFeedCount] = useState(1);
   const [showFeeds, setShowFeeds] = useState(false);
 
-  const loadArticles = () => {
-    const perFeed = Math.max(1, Math.floor(40 / Math.max(1, feedCount)));
+  const loadArticles = (count?: number) => {
+    const fc = count ?? feedCount;
+    const perFeed = Math.max(1, Math.floor(40 / Math.max(1, fc)));
     axios.get(`${API_BASE}/rss/articles?limit_per_feed=${perFeed}`).then(r => setArticles(r.data)).catch(() => {});
   };
 
   useEffect(() => {
     loadCached();
     axios.get(`${API_BASE}/rss/feeds`).then(r => {
-      const active = (r.data || []).filter((f: any) => f.is_active).length;
-      setFeedCount(Math.max(1, active));
-    }).catch(() => {});
+      const active = (r.data || []).filter((f: RssFeed) => f.is_active).length;
+      const fc = Math.max(1, active);
+      setFeedCount(fc);
+      loadArticles(fc);
+    }).catch(() => { loadArticles(1); });
     axios.get(`${API_BASE}/settings/ai`).then((r) => {
       setAiAvailable(r.data.enable_llm === true);
     }).catch(() => {});
-    loadArticles();
   }, []);
 
   const handleFetch = async () => {
@@ -459,77 +453,9 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
 
   return (
     <div className="flex-1 overflow-y-auto riso-noise riso-noise-live">
-      {/* Riso background layer — full-width, outside max-w constraint */}
-      <div className="pointer-events-none select-none" style={{ position: 'absolute', inset: 0, overflow: 'hidden', zIndex: 0 }}>
+      <RisoBackground />
 
-        {/* ── 1. Colour blobs ── */}
-        <div className="animate-blob-drift" style={{ position: 'absolute', width: 600, height: 600, borderRadius: '50%', background: 'var(--accent-teal)', opacity: 0.10, mixBlendMode: 'multiply', top: -200, right: -180 }} />
-        <div className="animate-blob-drift-b" style={{ position: 'absolute', width: 500, height: 500, borderRadius: '50%', background: 'var(--accent-orange)', opacity: 0.09, mixBlendMode: 'multiply', bottom: -160, left: -160 }} />
-        <div className="animate-blob-drift-c" style={{ position: 'absolute', width: 380, height: 380, borderRadius: '50%', background: 'var(--accent-violet)', opacity: 0.07, mixBlendMode: 'multiply', bottom: 80, right: -100 }} />
-        <div className="animate-blob-drift-d" style={{ position: 'absolute', width: 260, height: 260, borderRadius: '50%', background: 'var(--accent-teal)', opacity: 0.06, mixBlendMode: 'multiply', top: '35%', left: -100 }} />
-
-        {/* ── 2. Registration crosshairs ── */}
-        {/* Top-right — teal */}
-        <svg style={{ position: 'absolute', top: 8, right: 8, width: 48, height: 48 }} xmlns="http://www.w3.org/2000/svg">
-          <line x1="4" y1="20" x2="28" y2="20" stroke="rgba(11,114,104,0.45)" strokeWidth="1.5" />
-          <line x1="16" y1="8" x2="16" y2="32" stroke="rgba(11,114,104,0.45)" strokeWidth="1.5" />
-          <circle cx="16" cy="20" r="5" stroke="rgba(11,114,104,0.3)" strokeWidth="1" fill="none" />
-        </svg>
-        {/* Bottom-left — orange */}
-        <svg style={{ position: 'absolute', bottom: 8, left: 8, width: 48, height: 48 }} xmlns="http://www.w3.org/2000/svg">
-          <line x1="4" y1="28" x2="28" y2="28" stroke="rgba(224,78,14,0.45)" strokeWidth="1.5" />
-          <line x1="16" y1="16" x2="16" y2="40" stroke="rgba(224,78,14,0.45)" strokeWidth="1.5" />
-          <circle cx="16" cy="28" r="5" stroke="rgba(224,78,14,0.3)" strokeWidth="1" fill="none" />
-        </svg>
-        {/* Top-left — violet */}
-        <svg style={{ position: 'absolute', top: 8, left: 8, width: 48, height: 48 }} xmlns="http://www.w3.org/2000/svg">
-          <line x1="4" y1="20" x2="28" y2="20" stroke="rgba(92,58,156,0.35)" strokeWidth="1.5" />
-          <line x1="16" y1="8" x2="16" y2="32" stroke="rgba(92,58,156,0.35)" strokeWidth="1.5" />
-        </svg>
-        {/* Bottom-right — teal faint */}
-        <svg style={{ position: 'absolute', bottom: 8, right: 8, width: 48, height: 48 }} xmlns="http://www.w3.org/2000/svg">
-          <line x1="4" y1="28" x2="28" y2="28" stroke="rgba(11,114,104,0.25)" strokeWidth="1" />
-          <line x1="16" y1="16" x2="16" y2="40" stroke="rgba(11,114,104,0.25)" strokeWidth="1" />
-        </svg>
-
-        {/* ── 3. Halftone dot clusters ── */}
-        <svg style={{ position: 'absolute', right: 40, top: 120, width: 100, height: 100 }} viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-          {[[20,20,3.5],[38,14,2.5],[12,38,2],[30,35,3],[48,28,2],[55,42,1.5],[22,52,2],[40,50,1.5],[60,30,1],[15,60,1.5]].map(([x,y,r],i) =>
-            <circle key={i} cx={x} cy={y} r={r} fill="rgba(224,78,14,0.28)" />)}
-        </svg>
-        <svg style={{ position: 'absolute', left: 60, bottom: 120, width: 90, height: 90 }} viewBox="0 0 90 90" xmlns="http://www.w3.org/2000/svg">
-          {[[18,18,3],[34,12,2],[10,32,2.5],[28,30,2],[44,22,1.5],[50,36,2],[16,46,1.5],[36,44,1],[55,28,1],[12,58,1.5]].map(([x,y,r],i) =>
-            <circle key={i} cx={x} cy={y} r={r} fill="rgba(11,114,104,0.28)" />)}
-        </svg>
-        <svg style={{ position: 'absolute', left: 40, top: 50, width: 70, height: 70 }} viewBox="0 0 70 70" xmlns="http://www.w3.org/2000/svg">
-          {[[14,14,2.5],[26,8,1.5],[8,26,2],[22,24,1.5],[36,16,1],[38,30,1.5],[12,38,1],[28,36,1.5]].map(([x,y,r],i) =>
-            <circle key={i} cx={x} cy={y} r={r} fill="rgba(92,58,156,0.22)" />)}
-        </svg>
-
-
-        {/* ── 5. Ink splatter dots ── */}
-        <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} xmlns="http://www.w3.org/2000/svg">
-          <circle cx="18%" cy="12%" r="3" fill="rgba(224,78,14,0.20)" />
-          <circle cx="23%" cy="8%"  r="1.5" fill="rgba(224,78,14,0.14)" />
-          <circle cx="15%" cy="18%" r="2" fill="rgba(224,78,14,0.12)" />
-          <circle cx="72%" cy="55%" r="2.5" fill="rgba(11,114,104,0.18)" />
-          <circle cx="76%" cy="60%" r="1.5" fill="rgba(11,114,104,0.12)" />
-          <circle cx="68%" cy="62%" r="1" fill="rgba(11,114,104,0.15)" />
-          <circle cx="88%" cy="30%" r="2" fill="rgba(92,58,156,0.18)" />
-          <circle cx="92%" cy="35%" r="1.5" fill="rgba(92,58,156,0.12)" />
-          <circle cx="85%" cy="38%" r="1" fill="rgba(92,58,156,0.15)" />
-          <circle cx="40%" cy="85%" r="2.5" fill="rgba(224,78,14,0.16)" />
-          <circle cx="44%" cy="90%" r="1.5" fill="rgba(224,78,14,0.10)" />
-          <circle cx="36%" cy="88%" r="1" fill="rgba(11,114,104,0.14)" />
-          <circle cx="55%" cy="20%" r="2" fill="rgba(92,58,156,0.15)" />
-          <circle cx="60%" cy="15%" r="1" fill="rgba(92,58,156,0.10)" />
-          <circle cx="10%" cy="70%" r="2" fill="rgba(11,114,104,0.16)" />
-          <circle cx="6%"  cy="75%" r="1.5" fill="rgba(11,114,104,0.10)" />
-        </svg>
-
-      </div>
-
-      <div className="relative p-10 max-w-5xl mx-auto space-y-10">
+      <div className="relative p-10 max-w-7xl mx-auto space-y-10">
 
         {/* Header */}
         <header className="animate-ink-in" style={{ position: 'relative', zIndex: 1, animationDelay: '0ms' }}>

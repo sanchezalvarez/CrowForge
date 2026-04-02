@@ -52,7 +52,7 @@ export function ImageNode({ id, data, selected }: NodeProps) {
   }, [id, updateNodeData]);
 
   const shape = nodeData.shape ?? "rectangle";
-  const shapeStyle = getShapeStyle(shape, nodeData.color);
+  const shapeStyle: React.CSSProperties = getShapeStyle(shape, nodeData.color);
   const showBorder = shape === "rectangle" || shape === "circle";
 
   const isConnecting = useStore((s) => s.connection.inProgress);
@@ -99,7 +99,7 @@ export function ImageNode({ id, data, selected }: NodeProps) {
               src={nodeData.src}
               alt={nodeData.alt ?? ""}
               className="w-full flex-1 object-contain bg-muted/30 min-h-0"
-              style={shape !== "rectangle" ? { clipPath: (shapeStyle as any).clipPath, borderRadius: (shapeStyle as any).borderRadius } : {}}
+              style={shape !== "rectangle" ? { clipPath: shapeStyle.clipPath, borderRadius: shapeStyle.borderRadius } : {}}
               draggable={false}
             />
           ) : (

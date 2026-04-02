@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import axios from "axios";
 
 const API_BASE = "http://127.0.0.1:8000";
@@ -32,6 +32,12 @@ export function useRssDigest() {
   const [lastGenerated, setLastGenerated] = useState("");
   const [articleCount, setArticleCount] = useState(0);
   const [error, setError] = useState("");
+  const abortRef = useRef<AbortController | null>(null);
+
+  // Cancel any in-flight digest stream on unmount
+  useEffect(() => {
+    return () => { abortRef.current?.abort(); };
+  }, []);
 
   const loadCached = useCallback(async () => {
     try {
@@ -66,7 +72,11 @@ export function useRssDigest() {
       let accumulated = "";
       let sseBuffer = "";
 
-      fetch(`${API_BASE}/rss/digest`, { method: "POST" })
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+
+      fetch(`${API_BASE}/rss/digest`, { method: "POST", signal: controller.signal })
         .then((res) => {
           if (!res.ok || !res.body) {
             setError("Failed to connect to AI engine");

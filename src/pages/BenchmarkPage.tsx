@@ -13,39 +13,23 @@ import {
   TableHead,
   TableCell,
 } from "../components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "../components/ui/dialog";
 import { toast } from "../hooks/useToast";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import type { BenchmarkRun, EngineInfo, ModelInfo } from "../types/api";
+import { getErrorDetail } from "../lib/errorUtils";
+import { RisoBackground } from "../components/RisoBackground";
 
 const API_BASE = "http://127.0.0.1:8000";
 
 // Rough token estimate: ~4 chars per token for English text
 const estimateTokens = (text: string) => Math.ceil(text.length / 4);
-
-interface BenchmarkRun {
-  id: number;
-  input_text: string;
-  engine_name: string;
-  model_name: string | null;
-  temperature: number;
-  max_tokens: number;
-  latency_ms: number;
-  output_text: string;
-  error: string | null;
-  created_at: string;
-}
-
-interface EngineInfo {
-  name: string;
-  type: string;
-  active: boolean;
-}
-
-interface ModelInfo {
-  filename: string;
-  size_mb: number;
-  default_ctx: number;
-}
 
 export function BenchmarkPage() {
   const [inputText, setInputText] = useState(
@@ -68,6 +52,7 @@ export function BenchmarkPage() {
   const [selectedSessionKey, setSelectedSessionKey] = useState<string | null>(null);
   // Tracks IDs of runs from the current in-progress batch (for live highlighting)
   const [currentBatchIds, setCurrentBatchIds] = useState<Set<number>>(new Set());
+  const [deleteConfirmKey, setDeleteConfirmKey] = useState<string | null>(null);
   const abortRef = useRef(false);
   const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -239,12 +224,12 @@ export function BenchmarkPage() {
         // Prepend new runs so they appear at top
         setRuns((prev) => [...newRuns, ...prev]);
         completed++;
-      } catch (err: any) {
-        if (axios.isCancel(err) || err?.name === "CanceledError" || err?.code === "ERR_CANCELED") {
+      } catch (err: unknown) {
+        if (axios.isCancel(err)) {
           break; // cancelled by user — stop cleanly
         }
         failed++;
-        toast(`${job.label}: ${err?.response?.data?.detail || "Request failed"}`, "error");
+        toast(`${job.label}: ${getErrorDetail(err)}`, "error");
         completed++;
       }
     }
@@ -272,28 +257,7 @@ export function BenchmarkPage() {
 
   return (
     <div className="relative w-full h-full overflow-hidden riso-noise">
-      <div className="pointer-events-none select-none" style={{ position: 'absolute', inset: 0, zIndex: 0 }}>
-        <div className="animate-blob-drift" style={{ position: 'absolute', width: 600, height: 600, borderRadius: '50%', background: 'var(--accent-teal)', opacity: 0.10, mixBlendMode: 'multiply', top: -200, right: -180 }} />
-        <div className="animate-blob-drift-b" style={{ position: 'absolute', width: 500, height: 500, borderRadius: '50%', background: 'var(--accent-orange)', opacity: 0.09, mixBlendMode: 'multiply', bottom: -160, left: -160 }} />
-        <div className="animate-blob-drift-c" style={{ position: 'absolute', width: 380, height: 380, borderRadius: '50%', background: 'var(--accent-violet)', opacity: 0.07, mixBlendMode: 'multiply', bottom: 80, right: -100 }} />
-        <div className="animate-blob-drift-d" style={{ position: 'absolute', width: 260, height: 260, borderRadius: '50%', background: 'var(--accent-teal)', opacity: 0.06, mixBlendMode: 'multiply', top: '35%', left: -100 }} />
-        <svg style={{ position: 'absolute', top: 12, right: 12, width: 44, height: 44 }} xmlns="http://www.w3.org/2000/svg">
-          <line x1="4" y1="18" x2="26" y2="18" stroke="rgba(11,114,104,0.40)" strokeWidth="1.5" />
-          <line x1="15" y1="7" x2="15" y2="29" stroke="rgba(11,114,104,0.40)" strokeWidth="1.5" />
-          <circle cx="15" cy="18" r="5" stroke="rgba(11,114,104,0.28)" strokeWidth="1" fill="none" />
-        </svg>
-        <svg style={{ position: 'absolute', bottom: 12, left: 12, width: 44, height: 44 }} xmlns="http://www.w3.org/2000/svg">
-          <line x1="4" y1="26" x2="26" y2="26" stroke="rgba(224,78,14,0.40)" strokeWidth="1.5" />
-          <line x1="15" y1="15" x2="15" y2="37" stroke="rgba(224,78,14,0.40)" strokeWidth="1.5" />
-          <circle cx="15" cy="26" r="5" stroke="rgba(224,78,14,0.28)" strokeWidth="1" fill="none" />
-        </svg>
-        <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} xmlns="http://www.w3.org/2000/svg">
-          <circle cx="18%" cy="12%" r="3" fill="rgba(224,78,14,0.20)" />
-          <circle cx="72%" cy="55%" r="2.5" fill="rgba(11,114,104,0.18)" />
-          <circle cx="88%" cy="30%" r="2" fill="rgba(92,58,156,0.18)" />
-          <circle cx="10%" cy="70%" r="2" fill="rgba(11,114,104,0.16)" />
-        </svg>
-      </div>
+      <RisoBackground />
       <div className="h-full overflow-y-auto overflow-x-hidden p-10 space-y-6" style={{ position: 'relative', zIndex: 1 }}>
       <div className="animate-ink-in">
         <h1 className="font-display font-black tracking-tight" style={{ fontSize: 'clamp(1.4rem, 3vw, 2rem)', textShadow: '2px 2px 0 rgba(224,78,14,0.18), -1px -1px 0 rgba(11,114,104,0.12)' }}>Benchmark</h1>
@@ -563,19 +527,9 @@ export function BenchmarkPage() {
                               {s.runCount}
                             </span>
                             <button
-                              onClick={async (e) => {
+                              onClick={(e) => {
                                 e.stopPropagation();
-                                try {
-                                  await axios.delete(`${API_BASE}/benchmark/session`, { params: { input_text: s.key } });
-                                  setRuns((prev) => prev.filter((r) => r.input_text !== s.key));
-                                  if (selectedSessionKey === s.key) {
-                                    setSelectedSessionKey(null);
-                                    setExpandedId(null);
-                                  }
-                                  toast("Session deleted", "success");
-                                } catch {
-                                  toast("Failed to delete session", "error");
-                                }
+                                setDeleteConfirmKey(s.key);
                               }}
                               className="opacity-0 group-hover:opacity-100 p-0.5 rounded text-muted-foreground hover:text-destructive transition-opacity"
                               title="Delete session"
@@ -839,6 +793,35 @@ export function BenchmarkPage() {
         </div>
       </div>
       </div>
+
+      <Dialog open={deleteConfirmKey !== null} onOpenChange={(o) => { if (!o) setDeleteConfirmKey(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="font-display font-black tracking-tight">Delete Benchmark</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground font-mono-ui">
+            Are you sure? This action cannot be undone.
+          </p>
+          <div className="flex justify-end gap-2 pt-2">
+            <button className="btn-tactile btn-tactile-outline px-4 py-1.5 text-xs" onClick={() => setDeleteConfirmKey(null)}>Cancel</button>
+            <button className="btn-tactile px-4 py-1.5 text-xs" style={{ background: "var(--accent-orange)" }} onClick={async () => {
+              const key = deleteConfirmKey!;
+              setDeleteConfirmKey(null);
+              try {
+                await axios.delete(`${API_BASE}/benchmark/session`, { params: { input_text: key } });
+                setRuns((prev) => prev.filter((r) => r.input_text !== key));
+                if (selectedSessionKey === key) {
+                  setSelectedSessionKey(null);
+                  setExpandedId(null);
+                }
+                toast("Session deleted", "success");
+              } catch {
+                toast("Failed to delete session", "error");
+              }
+            }}>Delete</button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

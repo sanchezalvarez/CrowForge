@@ -4,6 +4,7 @@ import { resolveRange, resolveCellRef, idxToCol, type Sheet } from "../lib/cellU
 import { type SheetSnapshot, MAX_HISTORY } from "./useUndoRedo";
 import { toast } from "./useToast";
 import type { TuningParams } from "../components/AIControlPanel";
+import { getErrorDetail } from "../lib/errorUtils";
 
 const API_BASE = "http://127.0.0.1:8000";
 
@@ -77,9 +78,17 @@ export function useAiSheet({
     }).catch(() => { setActiveEngine("mock"); });
   }, []);
 
+  // Cleanup EventSource connections on unmount
+  useEffect(() => {
+    return () => {
+      if (aiFillRef.current) { aiFillRef.current.close(); aiFillRef.current = null; }
+      if (genRowsRef.current) { genRowsRef.current.close(); genRowsRef.current = null; }
+    };
+  }, []);
+
   useEffect(() => {
     axios.get(`${API_BASE}/ai/models`).then(res => {
-      const models = res.data.models.map((m: any) => ({ name: m.filename, id: m.filename }));
+      const models = res.data.models.map((m: { filename: string }) => ({ name: m.filename, id: m.filename }));
       setAvailableModels(models);
       if (models.length > 0) setAiOpModel(models[0].id);
     }).catch(() => { setAvailableModels([]); });
@@ -98,9 +107,8 @@ export function useAiSheet({
         max_tokens: tuningParams?.maxTokens,
       });
       setAiGenPreview(res.data);
-    } catch (err: any) {
-      const detail = err?.response?.data?.detail;
-      setAiGenError(detail || "Failed to generate schema");
+    } catch (err: unknown) {
+      setAiGenError(getErrorDetail(err));
     } finally {
       setAiGenLoading(false);
     }

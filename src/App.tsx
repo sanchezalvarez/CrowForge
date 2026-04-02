@@ -244,7 +244,7 @@ export default function App() {
     if (appStatus === "ready" || appStatus === "onboarding") {
       const win = getCurrentWindow();
       win.setMinSize(new LogicalSize(800, 500)).then(() =>
-        win.maximize().then(() => win.show())
+        win.maximize()
       );
     }
   }, [appStatus]);

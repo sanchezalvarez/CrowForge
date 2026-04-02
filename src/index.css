@@ -833,6 +833,12 @@ input[type="range"]:focus-visible::-webkit-slider-thumb {
   animation: riso-msg-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+/* ── Chat message virtualization ──────────────────────────────────────── */
+.chat-msg-virtual {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 120px;
+}
+
 /* ── Projects page — hide scrollbar completely ─────────────────────────── */
 .projects-scroll {
   scrollbar-width: none;

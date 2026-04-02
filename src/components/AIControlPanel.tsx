@@ -13,12 +13,14 @@ import {
   SelectValue,
 } from "./ui/select";
 import { toast } from "../hooks/useToast";
+import type { EngineInfo, LocalModel } from "../types/api";
+import { getErrorDetail } from "../lib/errorUtils";
 
 const API_BASE = "http://127.0.0.1:8000";
 
 /** Check if running inside Tauri (vs plain browser / Vite dev server) */
 function isTauri(): boolean {
-  return typeof window !== "undefined" && !!(window as any).__TAURI__;
+  return typeof window !== "undefined" && !!window.__TAURI__;
 }
 
 export interface TuningParams {
@@ -34,19 +36,6 @@ interface AIControlPanelProps {
   tuningParams: TuningParams;
   onTuningChange: (params: TuningParams) => void;
   modelStatus?: "loaded" | "not_loaded" | "unloaded" | "no_local";
-}
-
-interface EngineInfo {
-  name: string;
-  type: string;
-  active: boolean;
-}
-
-interface LocalModel {
-  filename: string;
-  path: string;
-  size_mb: number;
-  default_ctx: number;
 }
 
 /**
@@ -116,10 +105,10 @@ export function AIControlPanel({ showDebug, onShowDebugChange, tuningParams, onT
       try {
         const { invoke } = await import("@tauri-apps/api/core");
         await invoke("restart_backend");
-      } catch (err: any) {
+      } catch (err: unknown) {
         restartingRef.current = false;
         setBackendStatus("offline");
-        toast(`Restart failed: ${err}`, "error");
+        toast(`Restart failed: ${getErrorDetail(err)}`, "error");
         return;
       }
     } else {
@@ -138,8 +127,8 @@ export function AIControlPanel({ showDebug, onShowDebugChange, tuningParams, onT
         await invoke("kill_backend");
         setBackendStatus("offline");
         toast("Backend stopped", "success");
-      } catch (err: any) {
-        toast(`Kill failed: ${err}`, "error");
+      } catch (err: unknown) {
+        toast(`Kill failed: ${getErrorDetail(err)}`, "error");
       }
     } else {
       try {
@@ -163,10 +152,10 @@ export function AIControlPanel({ showDebug, onShowDebugChange, tuningParams, onT
         // Might fail if already running — try restart instead
         return invoke("restart_backend");
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       restartingRef.current = false;
       setBackendStatus("offline");
-      toast(`Start failed: ${err}`, "error");
+      toast(`Start failed: ${getErrorDetail(err)}`, "error");
       return;
     }
     pollUntilOnline(() => toast("Backend started", "success"));
@@ -235,9 +224,8 @@ export function AIControlPanel({ showDebug, onShowDebugChange, tuningParams, onT
       setActiveEngine(name);
       toast(`Switched to ${name} engine`, "success");
       await fetchEngines();
-    } catch (err: any) {
-      const msg = err?.response?.data?.detail || "Failed to switch engine";
-      toast(msg, "error");
+    } catch (err: unknown) {
+      toast(getErrorDetail(err), "error");
     } finally {
       setEngineSwitching(false);
     }
@@ -256,9 +244,8 @@ export function AIControlPanel({ showDebug, onShowDebugChange, tuningParams, onT
       });
       setActiveModel(model.filename);
       toast(`Loaded ${model.filename}`, "success");
-    } catch (err: any) {
-      const msg = err?.response?.data?.detail || "Failed to load model";
-      toast(msg, "error");
+    } catch (err: unknown) {
+      toast(getErrorDetail(err), "error");
     } finally {
       setModelSwitching(false);
     }

@@ -4,6 +4,7 @@ import { Table2, X, AlertCircle, Sparkles, Loader2, LayoutTemplate, FileSpreadsh
 import { Button } from "../components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "../components/ui/dialog";
 import { toast } from "../hooks/useToast";
+import { getErrorDetail } from "../lib/errorUtils";
 import { useDropImport, IMPORT_FORMAT_LABELS } from "../hooks/useDropImport";
 import { useUndoRedo } from "../hooks/useUndoRedo";
 import { useAiSheet } from "../hooks/useAiSheet";
@@ -317,9 +318,8 @@ export function SheetsPage({ tuningParams, initialSheetId }: SheetsPageProps) {
           value: currentValue,
         });
         updateSheet(res.data);
-      } catch (err: any) {
-        const detail = err?.response?.data?.detail;
-        setCellError(detail || "Invalid value");
+      } catch (err: unknown) {
+        setCellError(getErrorDetail(err));
         // Re-open edit on error so user can fix
         setEditingCell({ row, col });
         setEditValue(currentValue);

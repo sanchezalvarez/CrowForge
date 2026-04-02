@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS chat_messages (
     session_id INTEGER NOT NULL,
     role TEXT NOT NULL,
     content TEXT NOT NULL,
+    metadata TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE
 );
@@ -47,6 +48,8 @@ CREATE TABLE IF NOT EXISTS documents (
     id TEXT PRIMARY KEY,
     title TEXT NOT NULL DEFAULT 'Untitled',
     content_json TEXT NOT NULL DEFAULT '{}',
+    last_opened_at TEXT,
+    page_settings_json TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
@@ -61,6 +64,7 @@ CREATE TABLE IF NOT EXISTS sheets (
     sizes_json TEXT NOT NULL DEFAULT '{}',
     alignments_json TEXT NOT NULL DEFAULT '{}',
     formats_json TEXT NOT NULL DEFAULT '{}',
+    last_opened_at TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
@@ -135,6 +139,15 @@ CREATE TABLE IF NOT EXISTS pm_projects (
   status TEXT NOT NULL DEFAULT 'active',
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS pm_project_members (
+  project_id INTEGER NOT NULL,
+  member_id INTEGER NOT NULL,
+  role TEXT NOT NULL DEFAULT 'member',
+  PRIMARY KEY (project_id, member_id),
+  FOREIGN KEY (project_id) REFERENCES pm_projects(id) ON DELETE CASCADE,
+  FOREIGN KEY (member_id) REFERENCES pm_members(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS pm_sprints (
@@ -214,6 +227,15 @@ CREATE TABLE IF NOT EXISTS pm_activity (
 CREATE INDEX IF NOT EXISTS idx_sheets_updated    ON sheets(updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_documents_updated ON documents(updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_canvases_updated  ON rf_canvases(updated_at DESC);
+
+-- Chat messages — filtered/ordered by session_id + created_at
+CREATE INDEX IF NOT EXISTS idx_chat_messages_session ON chat_messages(session_id, created_at);
+
+-- RSS articles — filtered by feed_id for feed-specific queries
+CREATE INDEX IF NOT EXISTS idx_rss_articles_feed ON rss_articles(feed_id, published_at DESC);
+
+-- PM activity — filtered by project_id
+CREATE INDEX IF NOT EXISTS idx_pm_activity_project ON pm_activity(project_id, created_at DESC);
 
 INSERT OR IGNORE INTO pm_members (id, name, email, avatar_color, initials)
 VALUES (1, 'Agent Crowner', '', '#E04E0E', 'AC');

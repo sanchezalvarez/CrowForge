@@ -1,18 +1,15 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import axios from "axios";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
-import { oneDark, oneLight } from "react-syntax-highlighter/dist/esm/styles/prism";
 import {
-  PlusCircle, Send, Trash2, MessageSquare, Loader2, FileText,
-  Paperclip, X, Copy, Check, Info, Upload, Square, Pencil,
+  Send, MessageSquare, Loader2, FileText,
+  Paperclip, X, Check, Info, Upload, Square,
   Wrench, ChevronDown, ChevronRight, Link2,
 } from "lucide-react";
 import type { AgentEvent } from "../hooks/useFetchSSE";
 import { useChatStream } from "../contexts/ChatStreamContext";
 import { Textarea } from "../components/ui/textarea";
-import { ScrollArea } from "../components/ui/scroll-area";
 import { Card } from "../components/ui/card";
 import {
   Select,
@@ -23,8 +20,14 @@ import {
 } from "../components/ui/select";
 import { cn } from "../lib/utils";
 import { toast } from "../hooks/useToast";
+import { useIsDark } from "../hooks/useIsDark";
+import { useSidebarResize } from "../hooks/useSidebarResize";
+import { createMarkdownComponents } from "../lib/markdownComponents";
+import { SessionSidebar } from "../components/SessionSidebar";
+import { RisoBackground } from "../components/RisoBackground";
 import type { DocumentContext } from "../App";
 import type { TuningParams } from "../components/AIControlPanel";
+import type { ChatSession, ChatMessage, AttachedFile, TipTapNode } from "../types/api";
 import agentCrowner from "../assets/AgentCrowner_512.png";
 
 
@@ -63,74 +66,12 @@ const USER_AVATARS = [
   { emoji: "🦔", label: "Hedgehog" },
 ];
 
-interface ChatSession {
-  id: number;
-  title: string;
-  mode: string;
-  created_at: string;
-}
-
-interface ChatMessage {
-  id: number;
-  session_id: number;
-  role: string;
-  content: string;
-  created_at: string;
-}
-
-interface AttachedFile {
-  name: string;
-  text: string;
-}
-
 interface ChatPageProps {
   documentContext?: DocumentContext | null;
   onDisconnectDoc?: () => void;
   onConnectDoc?: (ctx: DocumentContext) => void;
   tuningParams?: TuningParams;
   initialSessionId?: string | null;
-}
-
-function useIsDark() {
-  const [dark, setDark] = useState(() =>
-    document.documentElement.classList.contains("dark")
-  );
-  useEffect(() => {
-    const obs = new MutationObserver(() => {
-      setDark(document.documentElement.classList.contains("dark"));
-    });
-    obs.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
-    return () => obs.disconnect();
-  }, []);
-  return dark;
-}
-
-function CodeBlock({ code, language, isDark }: { code: string; language: string; isDark: boolean }) {
-  const [copied, setCopied] = useState(false);
-  async function copy() {
-    await navigator.clipboard.writeText(code);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  }
-  return (
-    <div className="relative group my-2">
-      <button
-        onClick={copy}
-        className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity bg-muted/80 hover:bg-muted rounded p-1"
-        title="Copy code"
-      >
-        {copied ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
-      </button>
-      <SyntaxHighlighter
-        language={language || "text"}
-        style={isDark ? oneDark : oneLight}
-        customStyle={{ margin: 0, borderRadius: "0.375rem", fontSize: "0.8rem" }}
-        PreTag="div"
-      >
-        {code}
-      </SyntaxHighlighter>
-    </div>
-  );
 }
 
 /** Renders the agent's "thought process": thinking text, tool calls with start/finish/timing. */
@@ -250,10 +191,8 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
   const [showDocPicker, setShowDocPicker] = useState(false);
   const docPickerRef = useRef<HTMLDivElement>(null);
   const [sessionMenu, setSessionMenu] = useState<{ sessionId: number; x: number; y: number } | null>(null);
-  const [sidebarWidth, setSidebarWidth] = useState(220);
-  const sidebarResizing = useRef(false);
-  const sidebarResizeStart = useRef(0);
-  const sidebarWidthStart = useRef(220);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
+  const { sidebarWidth, onResizeStart } = useSidebarResize();
 
   const {
     streamingSessionId, streamingContent, isStreaming, isSending,
@@ -265,7 +204,6 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
-  const renameInputRef = useRef<HTMLInputElement>(null);
 
   const isDark = useIsDark();
   const avatarIndex = parseInt(localStorage.getItem("user_avatar_index") ?? "0", 10);
@@ -354,8 +292,10 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
   }, [handleStreamDone, handleStreamError]);
 
   useEffect(() => {
-    const el = messagesContainerRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
+    requestAnimationFrame(() => {
+      const el = messagesContainerRef.current;
+      if (el) el.scrollTop = el.scrollHeight;
+    });
   }, [messages, streamingContent]);
 
   useEffect(() => {
@@ -364,13 +304,6 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
       titleInputRef.current.select();
     }
   }, [editingTitle]);
-
-  useEffect(() => {
-    if (renamingSessionId !== null && renameInputRef.current) {
-      renameInputRef.current.focus();
-      renameInputRef.current.select();
-    }
-  }, [renamingSessionId]);
 
   // Close doc picker on outside click
   useEffect(() => {
@@ -383,30 +316,6 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
     document.addEventListener("mousedown", onClickOutside);
     return () => document.removeEventListener("mousedown", onClickOutside);
   }, [showDocPicker]);
-
-  // Close session context menu on outside click
-  useEffect(() => {
-    if (!sessionMenu) return;
-    const close = () => setSessionMenu(null);
-    document.addEventListener("mousedown", close);
-    return () => document.removeEventListener("mousedown", close);
-  }, [sessionMenu]);
-
-  // Sidebar resize via mouse drag
-  useEffect(() => {
-    const onMove = (e: MouseEvent) => {
-      if (!sidebarResizing.current) return;
-      const delta = e.clientX - sidebarResizeStart.current;
-      setSidebarWidth(Math.max(160, Math.min(400, sidebarWidthStart.current + delta)));
-    };
-    const onUp = () => { sidebarResizing.current = false; };
-    document.addEventListener("mousemove", onMove);
-    document.addEventListener("mouseup", onUp);
-    return () => {
-      document.removeEventListener("mousemove", onMove);
-      document.removeEventListener("mouseup", onUp);
-    };
-  }, []);
 
   async function loadSessions() {
     try {
@@ -611,122 +520,34 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
     if (file) handleFileSelect(file);
   }
 
-  const markdownComponents = {
-    code({ className, children, ...props }: React.HTMLAttributes<HTMLElement> & { inline?: boolean }) {
-      const match = /language-(\w+)/.exec(className || "");
-      const codeString = String(children).replace(/\n$/, "");
-      const isBlock = match || codeString.includes("\n");
-      if (isBlock) {
-        return (
-          <CodeBlock
-            code={codeString}
-            language={match ? match[1] : "text"}
-            isDark={isDark}
-          />
-        );
-      }
-      return (
-        <code className="bg-muted px-1 py-0.5 rounded text-[0.8em] font-mono" {...props}>
-          {children}
-        </code>
-      );
-    },
-  };
+  const markdownComponents = useMemo(() => createMarkdownComponents(isDark), [isDark]);
 
   return (
     <div className="flex h-full overflow-hidden">
-      {/* Sessions sidebar */}
-      <div className="shrink-0 border-r flex flex-col relative surface-noise" style={{ width: sidebarWidth, background: 'var(--background-2)' }}>
-        <div className="h-14 flex items-center px-3 border-b shrink-0">
-          <button className="btn-tactile btn-tactile-teal w-full justify-center" onClick={createSession}>
-            <PlusCircle className="h-3.5 w-3.5" />
-            New Chat
-          </button>
-        </div>
-        <div className="px-3 pt-3 pb-1">
-          <span className="riso-section-label">Sessions</span>
-        </div>
-        <ScrollArea className="flex-1">
-          <div className="px-2 pb-2 space-y-0.5">
-            {sessions.map((s, i) => (
-              <div
-                key={s.id}
-                className={cn(
-                  "group flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-sm cursor-pointer transition-colors animate-row-in border",
-                  activeSessionId === s.id
-                    ? "font-medium"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground border-transparent"
-                )}
-                style={{
-                  animationDelay: `${Math.min(i, 20) * 20}ms`,
-                  ...(activeSessionId === s.id ? {
-                    background: 'color-mix(in srgb, var(--accent-teal) 10%, transparent)',
-                    color: 'var(--accent-teal)',
-                    borderColor: 'color-mix(in srgb, var(--accent-teal) 20%, transparent)',
-                  } : {}),
-                }}
-                onClick={() => { if (renamingSessionId !== s.id) setActiveSessionId(s.id); }}
-                onDoubleClick={() => startRenameSession(s.id, s.title)}
-                onContextMenu={(e) => { e.preventDefault(); setSessionMenu({ sessionId: s.id, x: e.clientX, y: e.clientY }); }}
-              >
-                <MessageSquare className="h-3.5 w-3.5 shrink-0" />
-                {renamingSessionId === s.id ? (
-                  <input
-                    ref={renameInputRef}
-                    value={renameInput}
-                    onChange={(e) => setRenameInput(e.target.value)}
-                    onBlur={commitRename}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") commitRename();
-                      if (e.key === "Escape") setRenamingSessionId(null);
-                    }}
-                    onClick={(e) => e.stopPropagation()}
-                    className="flex-1 bg-transparent outline-none border-b border-primary text-xs min-w-0"
-                  />
-                ) : (
-                  <span className="flex-1 min-w-0 truncate font-mono-ui text-xs">{s.title}</span>
-                )}
-              </div>
-            ))}
-            {sessions.length === 0 && (
-              <p className="font-mono-ui text-[11px] text-muted-foreground text-center py-6 opacity-60">No chats yet.</p>
-            )}
-          </div>
-        </ScrollArea>
-        {/* Resize handle */}
-        <div
-          className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-primary/40 z-10 transition-colors"
-          onMouseDown={(e) => {
-            e.preventDefault();
-            sidebarResizing.current = true;
-            sidebarResizeStart.current = e.clientX;
-            sidebarWidthStart.current = sidebarWidth;
-          }}
-        />
-      </div>
-
-      {/* Session context menu */}
-      {sessionMenu && (
-        <div
-          className="fixed z-50 bg-card border border-border-strong rounded-md card-riso py-1 min-w-[150px] text-sm"
-          style={{ left: sessionMenu.x, top: sessionMenu.y }}
-          onMouseDown={(e) => e.stopPropagation()}
-        >
-          <button
-            className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2 font-mono-ui text-xs transition-colors"
-            onClick={() => { startRenameSession(sessionMenu.sessionId, sessions.find(s => s.id === sessionMenu.sessionId)?.title ?? ""); setSessionMenu(null); }}
-          >
-            <Pencil className="h-3.5 w-3.5 text-muted-foreground" /> Rename
-          </button>
-          <div className="border-t border-border my-1" />
-          <button
-            className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2 text-destructive font-mono-ui text-xs transition-colors"
-            onClick={() => { deleteSession(sessionMenu.sessionId); setSessionMenu(null); }}
-          >
-            <Trash2 className="h-3.5 w-3.5" /> Delete
-          </button>
-        </div>
-      )}
+      <SessionSidebar
+        accent="teal"
+        icon={MessageSquare}
+        newLabel="New Chat"
+        sessionsLabel="Sessions"
+        emptyLabel="No chats yet."
+        sessions={sessions}
+        activeSessionId={activeSessionId}
+        onSelect={setActiveSessionId}
+        onCreate={createSession}
+        sessionMenu={sessionMenu}
+        setSessionMenu={setSessionMenu}
+        onStartRename={startRenameSession}
+        renameId={renamingSessionId}
+        renameValue={renameInput}
+        onRenameChange={setRenameInput}
+        onRenameCommit={commitRename}
+        onRenameCancel={() => setRenamingSessionId(null)}
+        deleteConfirmId={deleteConfirmId}
+        setDeleteConfirmId={setDeleteConfirmId}
+        onDelete={deleteSession}
+        sidebarWidth={sidebarWidth}
+        onResizeStart={onResizeStart}
+      />
 
       {/* Main chat area */}
       <div
@@ -735,50 +556,7 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
-        {/* Riso background — vždy viditeľný za konverzáciou aj welcome screenom */}
-        <div className="pointer-events-none" style={{ position: 'absolute', inset: 0, zIndex: 0 }}>
-          <div className="animate-blob-drift" style={{ position: 'absolute', width: 600, height: 600, borderRadius: '50%', background: 'var(--accent-teal)', opacity: 0.10, mixBlendMode: 'multiply', top: -200, right: -180 }} />
-          <div className="animate-blob-drift-b" style={{ position: 'absolute', width: 500, height: 500, borderRadius: '50%', background: 'var(--accent-orange)', opacity: 0.09, mixBlendMode: 'multiply', bottom: -160, left: -160 }} />
-          <div className="animate-blob-drift-c" style={{ position: 'absolute', width: 380, height: 380, borderRadius: '50%', background: 'var(--accent-violet)', opacity: 0.07, mixBlendMode: 'multiply', bottom: 80, right: -100 }} />
-          <div className="animate-blob-drift-d" style={{ position: 'absolute', width: 260, height: 260, borderRadius: '50%', background: 'var(--accent-teal)', opacity: 0.06, mixBlendMode: 'multiply', top: '35%', left: -100 }} />
-          <svg style={{ position: 'absolute', top: 12, right: 12, width: 44, height: 44 }} xmlns="http://www.w3.org/2000/svg">
-            <line x1="4" y1="18" x2="26" y2="18" stroke="rgba(11,114,104,0.40)" strokeWidth="1.5" />
-            <line x1="15" y1="7" x2="15" y2="29" stroke="rgba(11,114,104,0.40)" strokeWidth="1.5" />
-            <circle cx="15" cy="18" r="5" stroke="rgba(11,114,104,0.28)" strokeWidth="1" fill="none" />
-          </svg>
-          <svg style={{ position: 'absolute', bottom: 12, left: 12, width: 44, height: 44 }} xmlns="http://www.w3.org/2000/svg">
-            <line x1="4" y1="26" x2="26" y2="26" stroke="rgba(224,78,14,0.40)" strokeWidth="1.5" />
-            <line x1="15" y1="15" x2="15" y2="37" stroke="rgba(224,78,14,0.40)" strokeWidth="1.5" />
-            <circle cx="15" cy="26" r="5" stroke="rgba(224,78,14,0.28)" strokeWidth="1" fill="none" />
-          </svg>
-          <svg style={{ position: 'absolute', right: 40, top: 120, width: 100, height: 100 }} viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-            {[[20,20,3.5],[38,14,2.5],[12,38,2],[30,35,3],[48,28,2],[55,42,1.5],[22,52,2],[40,50,1.5],[60,30,1],[15,60,1.5]].map(([x,y,r],i) => <circle key={i} cx={x} cy={y} r={r} fill="rgba(224,78,14,0.28)" />)}
-          </svg>
-          <svg style={{ position: 'absolute', left: 60, bottom: 120, width: 90, height: 90 }} viewBox="0 0 90 90" xmlns="http://www.w3.org/2000/svg">
-            {[[18,18,3],[34,12,2],[10,32,2.5],[28,30,2],[44,22,1.5],[50,36,2],[16,46,1.5],[36,44,1],[55,28,1],[12,58,1.5]].map(([x,y,r],i) => <circle key={i} cx={x} cy={y} r={r} fill="rgba(11,114,104,0.28)" />)}
-          </svg>
-          <svg style={{ position: 'absolute', left: 40, top: 50, width: 70, height: 70 }} viewBox="0 0 70 70" xmlns="http://www.w3.org/2000/svg">
-            {[[14,14,2.5],[26,8,1.5],[8,26,2],[22,24,1.5],[36,16,1],[38,30,1.5],[12,38,1],[28,36,1.5]].map(([x,y,r],i) => <circle key={i} cx={x} cy={y} r={r} fill="rgba(92,58,156,0.22)" />)}
-          </svg>
-          <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} xmlns="http://www.w3.org/2000/svg">
-            <circle cx="18%" cy="12%" r="3" fill="rgba(224,78,14,0.20)" />
-            <circle cx="23%" cy="8%"  r="1.5" fill="rgba(224,78,14,0.14)" />
-            <circle cx="15%" cy="18%" r="2" fill="rgba(224,78,14,0.12)" />
-            <circle cx="72%" cy="55%" r="2.5" fill="rgba(11,114,104,0.18)" />
-            <circle cx="76%" cy="60%" r="1.5" fill="rgba(11,114,104,0.12)" />
-            <circle cx="68%" cy="62%" r="1" fill="rgba(11,114,104,0.15)" />
-            <circle cx="88%" cy="30%" r="2" fill="rgba(92,58,156,0.18)" />
-            <circle cx="92%" cy="35%" r="1.5" fill="rgba(92,58,156,0.12)" />
-            <circle cx="85%" cy="38%" r="1" fill="rgba(92,58,156,0.15)" />
-            <circle cx="40%" cy="85%" r="2.5" fill="rgba(224,78,14,0.16)" />
-            <circle cx="44%" cy="90%" r="1.5" fill="rgba(224,78,14,0.10)" />
-            <circle cx="36%" cy="88%" r="1" fill="rgba(11,114,104,0.14)" />
-            <circle cx="55%" cy="20%" r="2" fill="rgba(92,58,156,0.15)" />
-            <circle cx="60%" cy="15%" r="1" fill="rgba(92,58,156,0.10)" />
-            <circle cx="10%" cy="70%" r="2" fill="rgba(11,114,104,0.16)" />
-            <circle cx="6%"  cy="75%" r="1.5" fill="rgba(11,114,104,0.10)" />
-          </svg>
-        </div>
+        <RisoBackground variant="chat" />
         {isDragging && (
           <div className="absolute inset-0 z-50 flex items-center justify-center bg-primary/10 border-2 border-dashed border-primary rounded-lg pointer-events-none">
             <div className="flex flex-col items-center gap-2 text-primary">
@@ -876,7 +654,7 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
                               onClick={async () => {
                                 try {
                                   const res = await axios.get(`${API_BASE}/documents/${doc.id}`);
-                                  const extractText = (node: any): string => {
+                                  const extractText = (node: TipTapNode): string => {
                                     if (!node) return "";
                                     if (node.type === "text") return node.text || "";
                                     if (node.content) return node.content.map(extractText).join(node.type === "paragraph" ? "\n" : "");
@@ -944,7 +722,7 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
                   <div
                     key={msg.id}
                     className={cn(
-                      "flex gap-2.5 animate-msg-in",
+                      "flex gap-2.5 animate-msg-in chat-msg-virtual",
                       msg.role === "user" ? "flex-row-reverse" : "flex-row"
                     )}
                   >
@@ -1125,6 +903,7 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
           </div>
         )}
       </div>
+
     </div>
   );
 }

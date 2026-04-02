@@ -12,6 +12,7 @@ import {
 } from "@xyflow/react";
 import axios from "axios";
 import { hasCycle } from "../utils/autoLayout";
+import { getErrorDetail } from "../../../lib/errorUtils";
 
 const API_BASE           = "http://127.0.0.1:8000";
 const DEFAULT_CANVAS_ID  = "default";
@@ -26,8 +27,8 @@ async function loadOrCreate(canvasId: string): Promise<{ nodes: Node[]; edges: E
   try {
     const res = await axios.get(`${API_BASE}/canvas/${canvasId}`);
     return res.data as { nodes: Node[]; edges: Edge[] };
-  } catch (err: any) {
-    if (err?.response?.status === 404) {
+  } catch (err: unknown) {
+    if ((err as { response?: { status?: number } })?.response?.status === 404) {
       await axios.post(`${API_BASE}/canvas/${canvasId}`, { nodes: [], edges: [] });
       return { nodes: [], edges: [] };
     }
@@ -227,9 +228,9 @@ export function useCanvasStore(canvasId?: string) {
           }
           if (doneSignal) break;
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         hadError = true;
-        updateNodeData(nodeId, { error: err.message ?? "Unknown error" });
+        updateNodeData(nodeId, { error: getErrorDetail(err) });
       } finally {
         nodeOutputsRef.current[nodeId] = fullOutput;
         markDone(nodeId);

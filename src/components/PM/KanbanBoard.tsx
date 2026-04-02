@@ -55,12 +55,15 @@ export function KanbanBoard({ tasks, members, onTaskClick, onStatusChange, onReo
     [tasks, shownTypes]
   );
 
-  const grouped = COLUMNS.reduce(
-    (acc, s) => ({
-      ...acc,
-      [s]: filteredTasks.filter((t) => t.status === s).sort((a, b) => a.position - b.position),
-    }),
-    {} as Record<PMTaskStatus, PMTask[]>
+  const grouped = useMemo(
+    () => COLUMNS.reduce(
+      (acc, s) => ({
+        ...acc,
+        [s]: filteredTasks.filter((t) => t.status === s).sort((a, b) => a.position - b.position),
+      }),
+      {} as Record<PMTaskStatus, PMTask[]>
+    ),
+    [filteredTasks]
   );
 
   const toggleType = (type: PMItemType) => {

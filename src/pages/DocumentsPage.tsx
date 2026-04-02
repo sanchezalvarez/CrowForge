@@ -9,6 +9,12 @@ import {
   PlusCircle, FileText, Trash2, Copy, Pencil,
 } from "lucide-react";
 import { ScrollArea } from "../components/ui/scroll-area";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "../components/ui/dialog";
 import { cn } from "../lib/utils";
 import { toast } from "../hooks/useToast";
 import { DocumentEditor } from "../editor";
@@ -28,6 +34,7 @@ export function DocumentsPage({ onContextChange, tuningParams, initialDocId }: D
   const [activeDocId, setActiveDocId] = useState<string | null>(initialDocId ?? null);
   const [activeEngine, setActiveEngine] = useState<string>("mock");
   const [docMenu, setDocMenu] = useState<{ docId: string; x: number; y: number } | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [renamingDoc, setRenamingDoc] = useState<string | null>(null);
   const [renameDocValue, setRenameDocValue] = useState("");
   const renameDocRef = useRef<HTMLInputElement>(null);
@@ -194,7 +201,7 @@ export function DocumentsPage({ onContextChange, tuningParams, initialDocId }: D
           </button>
           <div className="border-t border-border my-1" />
           <button className="w-full px-3 py-1.5 text-left hover:bg-muted flex items-center gap-2 text-destructive"
-            onClick={() => { deleteDocument(docMenu.docId); setDocMenu(null); }}>
+            onClick={() => { setDeleteConfirmId(docMenu.docId); setDocMenu(null); }}>
             <Trash2 className="h-3.5 w-3.5" /> Delete
           </button>
         </div>
@@ -244,6 +251,21 @@ export function DocumentsPage({ onContextChange, tuningParams, initialDocId }: D
           <span className="riso-stamp" style={{ color: 'var(--accent-orange)', position: 'relative', zIndex: 1 }}>Documents</span>
         </div>
       )}
+
+      <Dialog open={deleteConfirmId !== null} onOpenChange={(o) => { if (!o) setDeleteConfirmId(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="font-display font-black tracking-tight">Delete Document</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground font-mono-ui">
+            Are you sure? This action cannot be undone.
+          </p>
+          <div className="flex justify-end gap-2 pt-2">
+            <button className="btn-tactile btn-tactile-outline px-4 py-1.5 text-xs" onClick={() => setDeleteConfirmId(null)}>Cancel</button>
+            <button className="btn-tactile px-4 py-1.5 text-xs" style={{ background: "var(--accent-orange)" }} onClick={() => { deleteDocument(deleteConfirmId!); setDeleteConfirmId(null); }}>Delete</button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

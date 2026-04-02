@@ -28,6 +28,16 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 Write-Host "      Backend bundled -> dist/crowforge-backend.exe" -ForegroundColor Green
+# Verify llama_cpp native DLLs were bundled
+$tocFile = "build\crowforge-backend\Analysis-00.toc"
+if (Test-Path $tocFile) {
+    $tocContent = Get-Content $tocFile -Raw
+    if ($tocContent -notmatch "llama\.dll") {
+        Write-Host "WARNING: llama_cpp native DLLs may not be bundled! Check spec file." -ForegroundColor Yellow
+    } else {
+        Write-Host "      llama_cpp native DLLs verified in bundle." -ForegroundColor Green
+    }
+}
 
 # ── Step 2: Copy sidecar binary ──────────────────────────────────────────────
 Write-Host "[2/5] Copying sidecar binary to src-tauri/bin/..." -ForegroundColor Yellow

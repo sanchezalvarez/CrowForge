@@ -20,5 +20,5 @@ sentence-transformers>=3.0.0
 faiss-cpu>=1.8.0
 pypdf>=5.0.0
 
-# Optional: local GGUF inference (requires C++ build tools or pre-built wheel)
-# llama-cpp-python>=0.3.0
+# Local GGUF inference (requires C++ build tools or pre-built wheel)
+llama-cpp-python>=0.3.0

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import axios from "axios";
-import { APP_VERSION } from "../lib/constants";
+import { APP_VERSION, API_BASE} from "../lib/constants";
 import { Download, CheckCircle2, Loader2, X, AlertCircle, Trash2, ExternalLink, Cpu, HardDrive, Monitor, MemoryStick, Rss, Plus, ToggleLeft, ToggleRight, Check, Newspaper } from "lucide-react";
 import { toast } from "../hooks/useToast";
 import { useWorkflowConfig, invalidateWorkflowCache } from "../hooks/useWorkflowConfig";
@@ -9,8 +9,6 @@ import { useRssFeeds, RssFeed } from "../hooks/useRssFeeds";
 import type { EngineType, AIConfig, GalleryModel, SystemSpecs, DownloadState } from "../types/api";
 import { getErrorDetail } from "../lib/errorUtils";
 import { RisoBackground } from "../components/RisoBackground";
-
-const API_BASE = "http://127.0.0.1:8000";
 
 const USER_AVATARS = [
   { emoji: "🐱", label: "Cat" },

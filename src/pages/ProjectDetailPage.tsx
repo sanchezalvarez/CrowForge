@@ -21,8 +21,8 @@ import {
   DialogFooter,
 } from "../components/ui/dialog";
 import { toast } from "../hooks/useToast";
+import { API_BASE } from "../lib/constants";
 
-const API_BASE = "http://127.0.0.1:8000";
 const LS_VIEW_KEY = (id: number) => `pm_view_${id}`;
 const LS_DISMISSED_KEY = () => `pm_deadline_dismissed_${new Date().toISOString().slice(0, 10)}`;
 

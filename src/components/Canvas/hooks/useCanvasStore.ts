@@ -13,8 +13,8 @@ import {
 import axios from "axios";
 import { hasCycle } from "../utils/autoLayout";
 import { getErrorDetail } from "../../../lib/errorUtils";
+import { API_BASE } from "../../../lib/constants";
 
-const API_BASE           = "http://127.0.0.1:8000";
 const DEFAULT_CANVAS_ID  = "default";
 const SAVE_DEBOUNCE_MS   = 800;
 const HISTORY_THROTTLE_MS = 500;

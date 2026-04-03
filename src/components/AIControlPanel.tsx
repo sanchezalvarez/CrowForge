@@ -15,8 +15,7 @@ import {
 import { toast } from "../hooks/useToast";
 import type { EngineInfo, LocalModel } from "../types/api";
 import { getErrorDetail } from "../lib/errorUtils";
-
-const API_BASE = "http://127.0.0.1:8000";
+import { API_BASE } from "../lib/constants";
 
 /** Check if running inside Tauri (vs plain browser / Vite dev server) */
 function isTauri(): boolean {

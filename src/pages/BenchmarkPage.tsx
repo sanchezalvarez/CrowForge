@@ -25,8 +25,7 @@ import remarkGfm from "remark-gfm";
 import type { BenchmarkRun, EngineInfo, ModelInfo } from "../types/api";
 import { getErrorDetail } from "../lib/errorUtils";
 import { RisoBackground } from "../components/RisoBackground";
-
-const API_BASE = "http://127.0.0.1:8000";
+import { API_BASE } from "../lib/constants";
 
 // Rough token estimate: ~4 chars per token for English text
 const estimateTokens = (text: string) => Math.ceil(text.length / 4);

@@ -32,6 +32,7 @@ import { useEditorSetup, type EditorDocument, type DocumentContext } from "./hoo
 import { htmlToFragment, parseHtmlToBlocks, type OutlineItem, type SuggestionBlock } from "./utils/editorUtils";
 import { EditorToolbar } from "./components/EditorToolbar";
 import type { TuningParams } from "../components/AIControlPanel";
+import { API_BASE } from "../lib/constants";
 
 const AI_ACTIONS = [
   { key: "rewrite", label: "Rewrite", icon: RefreshCw },
@@ -39,8 +40,6 @@ const AI_ACTIONS = [
   { key: "expand", label: "Expand", icon: Maximize2 },
   { key: "fix_grammar", label: "Fix grammar", icon: SpellCheck },
 ] as const;
-
-const API_BASE = "http://127.0.0.1:8000";
 
 export interface DocumentEditorProps {
   activeDoc: EditorDocument;

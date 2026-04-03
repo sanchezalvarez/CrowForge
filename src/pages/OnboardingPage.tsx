@@ -1,11 +1,9 @@
 import { useState } from "react";
 import axios from "axios";
 import { AlertCircle } from "lucide-react";
-import { APP_VERSION } from "../lib/constants";
+import { APP_VERSION, API_BASE} from "../lib/constants";
 import crowforgeIco from "../assets/crowforge_ico.png";
 import { cn } from "../lib/utils";
-
-const API_BASE = "http://127.0.0.1:8000";
 
 type EngineType = "mock" | "http" | "local";
 

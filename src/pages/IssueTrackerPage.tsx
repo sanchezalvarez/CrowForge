@@ -16,6 +16,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "../components/ui/dialog";
+import { API_BASE } from "../lib/constants";
 import {
   Select,
   SelectContent,
@@ -23,8 +24,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../components/ui/select";
-
-const API_BASE = "http://127.0.0.1:8000";
 
 export function IssueTrackerPage() {
   const { issues, loading, update, bulkUpdate, bulkDelete, create, load } = useIssues();

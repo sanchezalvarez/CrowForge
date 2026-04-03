@@ -19,8 +19,7 @@ import {
 } from "../ui/select";
 import { Textarea } from "../ui/textarea";
 import { toast } from "../../hooks/useToast";
-
-const API_BASE = "http://127.0.0.1:8000";
+import { API_BASE } from "../../lib/constants";
 
 // Valid parent types for each item type
 const VALID_PARENT_TYPES: Record<PMItemType, PMItemType[]> = {

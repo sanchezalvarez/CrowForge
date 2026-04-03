@@ -15,8 +15,7 @@ import {
 } from "lucide-react";
 import { PMRef, PMRefType } from "../../types/pm";
 import { Button } from "../ui/button";
-
-const API_BASE = "http://127.0.0.1:8000";
+import { API_BASE } from "../../lib/constants";
 
 const REF_ICONS: Record<PMRefType, typeof Link2> = {
   link:     Link2,

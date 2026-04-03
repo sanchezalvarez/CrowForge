@@ -17,33 +17,11 @@ export function TaskCard({ task, members, onClick, dragHandleProps, compact, foo
   const memberMap = Object.fromEntries(members.map((m) => [m.id, m]));
   const assignee = task.assignee_id ? memberMap[task.assignee_id] : null;
 
-  const shadowBase = compact ? "1px 1px 0 var(--riso-teal)" : "2px 2px 0 var(--riso-teal)";
-  const shadowHover = compact ? "2px 2px 0 var(--riso-teal)" : "3px 3px 0 var(--riso-teal)";
-
   return (
     <div
-      className={`group relative bg-card surface-noise border rounded-md cursor-pointer transition-all duration-100 ${compact ? "p-2.5" : "p-3.5"}`}
-      style={{
-        borderColor: "rgba(20,16,10,0.18)",
-        boxShadow: shadowBase,
-      }}
+      className={`task-card-riso group relative bg-card surface-noise border rounded-md cursor-pointer transition-all duration-100 ${compact ? "task-card-compact p-2.5" : "p-3.5"}`}
+      style={{ borderColor: "rgba(20,16,10,0.18)" }}
       onClick={onClick}
-      onMouseEnter={(e) => {
-        (e.currentTarget as HTMLElement).style.transform = "translate(-1px,-1px)";
-        (e.currentTarget as HTMLElement).style.boxShadow = shadowHover;
-      }}
-      onMouseLeave={(e) => {
-        (e.currentTarget as HTMLElement).style.transform = "";
-        (e.currentTarget as HTMLElement).style.boxShadow = shadowBase;
-      }}
-      onMouseDown={(e) => {
-        (e.currentTarget as HTMLElement).style.transform = "translate(1px,1px)";
-        (e.currentTarget as HTMLElement).style.boxShadow = "0px 0px 0 var(--riso-teal)";
-      }}
-      onMouseUp={(e) => {
-        (e.currentTarget as HTMLElement).style.transform = "translate(-1px,-1px)";
-        (e.currentTarget as HTMLElement).style.boxShadow = shadowHover;
-      }}
     >
       {/* Assignee in top-right corner for compact mode */}
       {compact && (

@@ -12,8 +12,7 @@ import { useRssDigest } from "../hooks/useRssDigest";
 import type { PMTask, PMMember } from "../types/pm";
 import type { DashboardData, NavigateCallback, RssArticle, RssFeed } from "../types/api";
 import { RisoBackground } from "../components/RisoBackground";
-
-const API_BASE = "http://127.0.0.1:8000";
+import { API_BASE } from "../lib/constants";
 
 interface DashboardPageProps { onNavigate: NavigateCallback; }
 

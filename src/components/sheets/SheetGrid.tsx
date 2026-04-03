@@ -4,6 +4,7 @@ import axios from "axios";
 import { Table2, Plus, Filter, Trash2, AlertCircle } from "lucide-react";
 import { Button } from "../ui/button";
 import { cn } from "../../lib/utils";
+import { API_BASE } from "../../lib/constants";
 import {
   type Sheet, type CellFormat, type RefGroup,
   DEFAULT_COL_WIDTH, DEFAULT_ROW_HEIGHT, MIN_COL_WIDTH,
@@ -11,8 +12,6 @@ import {
   parseFormulaRefGroups, resolveRange, resolveCellRef, idxToCol,
   ctrlArrowMove, matchCondRule,
 } from "../../lib/cellUtils";
-
-const API_BASE = "http://127.0.0.1:8000";
 
 type SelectionRect = { r1: number; c1: number; r2: number; c2: number };
 type AnchorPoint = { row: number; col: number };

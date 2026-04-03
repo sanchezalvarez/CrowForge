@@ -20,8 +20,7 @@ import { toast } from "../hooks/useToast";
 import { DocumentEditor } from "../editor";
 import type { EditorDocument, DocumentContext } from "../editor";
 import type { TuningParams } from "../components/AIControlPanel";
-
-const API_BASE = "http://127.0.0.1:8000";
+import { API_BASE } from "../lib/constants";
 
 interface DocumentsPageProps {
   onContextChange?: (ctx: DocumentContext | null) => void;

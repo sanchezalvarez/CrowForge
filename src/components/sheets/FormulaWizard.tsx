@@ -4,8 +4,7 @@ import axios from "axios";
 import type { Sheet } from "../../lib/cellUtils";
 import { useEscapeKey } from "../../hooks/useEscapeKey";
 import { idxToCol } from "../../lib/cellUtils";
-
-const API_BASE = "http://127.0.0.1:8000";
+import { API_BASE } from "../../lib/constants";
 
 const EXAMPLES = [
   "sum of column B where column A > 100",

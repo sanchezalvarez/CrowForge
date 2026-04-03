@@ -4,8 +4,7 @@ import { ReactFlowProvider } from "@xyflow/react";
 import { CanvasView }    from "../components/Canvas/CanvasView";
 import { CanvasSidebar } from "../components/Canvas/CanvasSidebar";
 import type { NavigateCallback } from "../types/api";
-
-const API_BASE = "http://127.0.0.1:8000";
+import { API_BASE } from "../lib/constants";
 
 async function ensureDefaultCanvas(): Promise<string> {
   try {

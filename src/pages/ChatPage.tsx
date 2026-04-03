@@ -29,9 +29,9 @@ import type { DocumentContext } from "../App";
 import type { TuningParams } from "../components/AIControlPanel";
 import type { ChatSession, ChatMessage, AttachedFile, TipTapNode } from "../types/api";
 import agentCrowner from "../assets/AgentCrowner_512.png";
+import { API_BASE } from "../lib/constants";
 
 
-const API_BASE = "http://127.0.0.1:8000";
 const CTX_SENTINEL = "\n\n[/CONTEXT]\n\n";
 
 const MODE_LABELS: Record<string, string> = {

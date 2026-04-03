@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, Component, Fragment, type ReactNode } from "react";
 import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
 import axios from "axios";
-import { APP_VERSION, API_BASE} from "./lib/constants";
+import { APP_VERSION } from "./lib/constants";
+import { getAPIBase, LOCAL_API_BASE, syncAxiosDefaults } from "./lib/api";
 import {
   Gauge,
   MessageSquare,
@@ -35,10 +36,12 @@ import { ProjectDetailPage } from "./pages/ProjectDetailPage";
 import { IssueTrackerPage } from "./pages/IssueTrackerPage";
 import { SplashScreen } from "./components/SplashScreen";
 import { OnboardingPage } from "./pages/OnboardingPage";
+import { SetupPage } from "./pages/SetupPage";
 import { Toaster } from "./components/ui/toaster";
 import { AIControlPanel, TuningParams } from "./components/AIControlPanel";
 import { ChatStreamProvider } from "./contexts/ChatStreamContext";
 import { Home } from "lucide-react";
+
 
 class PageErrorBoundary extends Component<{ children: ReactNode; page: string }, { error: Error | null }> {
   constructor(props: { children: ReactNode; page: string }) {
@@ -70,7 +73,7 @@ class PageErrorBoundary extends Component<{ children: ReactNode; page: string },
   }
 }
 
-type AppStatus = "loading" | "onboarding" | "ready" | "failed";
+type AppStatus = "loading" | "onboarding" | "setup" | "ready" | "failed";
 type AppPage = "home" | "chat" | "agent" | "documents" | "sheets" | "tools" | "benchmark" | "settings" | "canvas" | "help" | "projects" | "project_detail" | "issues";
 
 export interface DocumentContext {
@@ -126,7 +129,7 @@ export default function App() {
   useEffect(() => {
     function handleHide() {
       // Best-effort: tell backend to exit when the window closes
-      navigator.sendBeacon("http://127.0.0.1:8000/shutdown");
+      navigator.sendBeacon(`${LOCAL_API_BASE}/shutdown`);
     }
     window.addEventListener("pagehide", handleHide);
     return () => window.removeEventListener("pagehide", handleHide);
@@ -160,7 +163,7 @@ export default function App() {
   // Load tuning from backend on startup (backend DB is the source of truth)
   useEffect(() => {
     if (appStatus !== "ready") return;
-    axios.get(`${API_BASE}/ai/tuning`).then((r) => {
+    axios.get(`${getAPIBase()}/ai/tuning`).then((r) => {
       tuningLoadedFromBackend.current = true;
       setTuningParams(r.data);
     }).catch(() => {});
@@ -175,7 +178,7 @@ export default function App() {
     // Debounce backend save to avoid hammering during slider drags
     if (tuningDebounceRef.current) clearTimeout(tuningDebounceRef.current);
     tuningDebounceRef.current = setTimeout(() => {
-      axios.post(`${API_BASE}/ai/tuning`, tuningParams).catch(() => {});
+      axios.post(`${getAPIBase()}/ai/tuning`, tuningParams).catch(() => {});
     }, 500);
     return () => {
       if (tuningDebounceRef.current) clearTimeout(tuningDebounceRef.current);
@@ -210,7 +213,7 @@ export default function App() {
     async function checkModelStatus() {
       if (cancelled) return;
       try {
-        const res = await axios.get(`${API_BASE}/ai/model/status`);
+        const res = await axios.get(`${getAPIBase()}/ai/model/status`);
         const { loaded, is_local_engine } = res.data;
         if (!is_local_engine) {
           setModelStatus("no_local");
@@ -237,9 +240,9 @@ export default function App() {
     getCurrentWindow().show();
   }, []);
 
-  // When app is ready or onboarding, maximize the window
+  // When app is ready, onboarding, or setup, maximize the window
   useEffect(() => {
-    if (appStatus === "ready" || appStatus === "onboarding") {
+    if (appStatus === "ready" || appStatus === "onboarding" || appStatus === "setup") {
       const win = getCurrentWindow();
       win.setMinSize(new LogicalSize(800, 500)).then(() =>
         win.maximize()
@@ -247,7 +250,11 @@ export default function App() {
     }
   }, [appStatus]);
 
-  // Backend polling on startup
+  // Deployment mode state (for topbar indicator)
+  const [deploymentMode, setDeploymentMode] = useState<string>("local");
+  const [hostClientCount, setHostClientCount] = useState(0);
+
+  // Backend polling on startup — always use LOCAL_API_BASE (Tauri sidecar starts locally)
   useEffect(() => {
     let cancelled = false;
     const MAX_ATTEMPTS = 60;
@@ -256,9 +263,29 @@ export default function App() {
     async function poll(attempt: number) {
       if (cancelled) return;
       try {
-        const res = await axios.get(`${API_BASE}/state`, { timeout: 2000 });
+        // Check state first
+        const res = await axios.get(`${LOCAL_API_BASE}/state`, { timeout: 2000 });
         if (cancelled) return;
         const onboarded = res.data.onboarding_completed === true;
+
+        // Sync deployment settings to localStorage
+        try {
+          const depRes = await axios.get(`${LOCAL_API_BASE}/settings/deployment`, { timeout: 2000 });
+          const dep = depRes.data;
+          localStorage.setItem('crowforge_deployment_mode', dep.mode || 'local');
+          localStorage.setItem('crowforge_server_url', dep.server_url || '');
+          localStorage.setItem('crowforge_server_api_key', dep.server_api_key || '');
+          localStorage.setItem('crowforge_host_port', dep.host_port || '8000');
+          localStorage.setItem('crowforge_host_api_key', dep.host_api_key || '');
+          setDeploymentMode(dep.mode || 'local');
+          syncAxiosDefaults();
+
+          if (!dep.setup_completed) {
+            setAppStatus("setup");
+            return;
+          }
+        } catch { /* deployment endpoint may not exist on older backend */ }
+
         setAppStatus(onboarded ? "ready" : "onboarding");
       } catch {
         if (attempt >= MAX_ATTEMPTS) {
@@ -272,6 +299,21 @@ export default function App() {
     poll(0);
     return () => { cancelled = true; };
   }, []);
+
+  // Poll host client count when in host mode
+  useEffect(() => {
+    if (appStatus !== "ready" || deploymentMode !== "host") return;
+    let cancelled = false;
+    const check = async () => {
+      try {
+        const res = await axios.get(`${LOCAL_API_BASE}/settings/deployment/clients`);
+        if (!cancelled) setHostClientCount(res.data.count || 0);
+      } catch {}
+    };
+    check();
+    const interval = setInterval(check, 15_000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [appStatus, deploymentMode]);
 
   const navItems: { page: AppPage; label: string; icon: typeof MessageSquare }[] = [
     { page: "home", label: "Home", icon: Home },
@@ -293,6 +335,7 @@ export default function App() {
 
   if (appStatus === "loading") return <SplashScreen />;
   if (appStatus === "failed") return <SplashScreen failed />;
+  if (appStatus === "setup") return <SetupPage onComplete={() => setAppStatus("onboarding")} />;
   if (appStatus === "onboarding") return <OnboardingPage onComplete={() => setAppStatus("ready")} />;
 
   return (
@@ -307,6 +350,25 @@ export default function App() {
         <span data-tauri-drag-region className="font-mono-ui uppercase pointer-events-none" style={{ fontSize: 10, letterSpacing: '0.16em', color: 'var(--topbar-muted)' }}>
           CrowForge
         </span>
+        <div className="flex items-center gap-2 h-full">
+          {/* Deployment mode pill */}
+          {deploymentMode !== "local" && (
+            <button
+              onClick={() => setCurrentPage("settings")}
+              className="font-mono-ui uppercase px-2 py-0.5 rounded-full transition-colors"
+              style={{
+                fontSize: 9,
+                letterSpacing: '0.08em',
+                background: deploymentMode === "connect" ? 'rgba(11,114,104,0.25)' : 'rgba(224,78,14,0.25)',
+                color: deploymentMode === "connect" ? 'var(--accent-teal)' : 'var(--accent-orange)',
+                border: `1px solid ${deploymentMode === "connect" ? 'rgba(11,114,104,0.4)' : 'rgba(224,78,14,0.4)'}`,
+              }}
+              title={deploymentMode === "connect" ? "Connected to remote server" : "Hosting for team"}
+            >
+              {deploymentMode === "connect" ? "Connected" : `Hosting · ${hostClientCount}`}
+            </button>
+          )}
+        </div>
         <div className="flex h-full">
           <button
             onClick={() => getCurrentWindow().minimize()}

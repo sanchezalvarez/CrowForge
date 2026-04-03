@@ -19,7 +19,7 @@ import {
 } from "../ui/select";
 import { Textarea } from "../ui/textarea";
 import { toast } from "../../hooks/useToast";
-import { API_BASE } from "../../lib/constants";
+import { getAPIBase } from "../../lib/api";
 
 // Valid parent types for each item type
 const VALID_PARENT_TYPES: Record<PMItemType, PMItemType[]> = {
@@ -137,7 +137,7 @@ function DescriptionField({ value, onChange, onBlur }: { value: string; onChange
       try {
         const formData = new FormData();
         formData.append("file", imageFiles[i]);
-        const res = await axios.post(`${API_BASE}/pm/files/upload`, formData, {
+        const res = await axios.post(`${getAPIBase()}/pm/files/upload`, formData, {
           headers: { "Content-Type": "multipart/form-data" },
         });
         const url: string = res.data.url;
@@ -285,7 +285,7 @@ export function TaskDetailPanel({ task, open, onClose, onUpdate, onDelete, membe
 
   const loadActivity = async (taskId: number) => {
     try {
-      const res = await axios.get(`${API_BASE}/pm/activity`, {
+      const res = await axios.get(`${getAPIBase()}/pm/activity`, {
         params: { project_id: task?.project_id, limit: 20 },
       });
       setActivity(res.data.filter((a: PMActivity) => a.task_id === taskId));
@@ -294,7 +294,7 @@ export function TaskDetailPanel({ task, open, onClose, onUpdate, onDelete, membe
 
   const loadParent = async (parentId: number) => {
     try {
-      const res = await axios.get(`${API_BASE}/pm/tasks/${parentId}`);
+      const res = await axios.get(`${getAPIBase()}/pm/tasks/${parentId}`);
       setParentTask(res.data);
     } catch {}
   };

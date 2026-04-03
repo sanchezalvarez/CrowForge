@@ -21,7 +21,7 @@ import {
   DialogFooter,
 } from "../components/ui/dialog";
 import { toast } from "../hooks/useToast";
-import { API_BASE } from "../lib/constants";
+import { getAPIBase } from "../lib/api";
 
 const LS_VIEW_KEY = (id: number) => `pm_view_${id}`;
 const LS_DISMISSED_KEY = () => `pm_deadline_dismissed_${new Date().toISOString().slice(0, 10)}`;
@@ -57,7 +57,7 @@ export function ProjectDetailPage({ projectId, onBack, onNavigate }: ProjectDeta
 
   const loadProject = useCallback(async () => {
     try {
-      const res = await axios.get(`${API_BASE}/pm/projects`);
+      const res = await axios.get(`${getAPIBase()}/pm/projects`);
       const found = res.data.find((p: PMProject) => p.id === projectId);
       if (found) setProject(found);
     } catch {}
@@ -65,7 +65,7 @@ export function ProjectDetailPage({ projectId, onBack, onNavigate }: ProjectDeta
 
   const loadMembers = useCallback(async () => {
     try {
-      const res = await axios.get(`${API_BASE}/pm/members`);
+      const res = await axios.get(`${getAPIBase()}/pm/members`);
       setMembers(res.data);
     } catch {}
   }, []);
@@ -150,7 +150,7 @@ export function ProjectDetailPage({ projectId, onBack, onNavigate }: ProjectDeta
   const handleSuggestTasks = async () => {
     setSuggestLoading(true);
     try {
-      const res = await axios.post(`${API_BASE}/pm/ai/suggest-tasks`, {
+      const res = await axios.post(`${getAPIBase()}/pm/ai/suggest-tasks`, {
         project_id: projectId,
         context: suggestContext,
       });

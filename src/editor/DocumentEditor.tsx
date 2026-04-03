@@ -32,7 +32,7 @@ import { useEditorSetup, type EditorDocument, type DocumentContext } from "./hoo
 import { htmlToFragment, parseHtmlToBlocks, type OutlineItem, type SuggestionBlock } from "./utils/editorUtils";
 import { EditorToolbar } from "./components/EditorToolbar";
 import type { TuningParams } from "../components/AIControlPanel";
-import { API_BASE } from "../lib/constants";
+import { getAPIBase } from "../lib/api";
 
 const AI_ACTIONS = [
   { key: "rewrite", label: "Rewrite", icon: RefreshCw },
@@ -180,7 +180,7 @@ export function DocumentEditor({
     setAiBlocks([]);
     setAiError(null);
     try {
-      const res = await axios.post(`${API_BASE}/documents/ai`, {
+      const res = await axios.post(`${getAPIBase()}/documents/ai`, {
         action_type: actionType,
         selected_text: selection.text,
         temperature: tuningParams?.temperature,
@@ -357,7 +357,7 @@ export function DocumentEditor({
         editor.commands.setContent(parsed.content);
       }
       const contentJson = editor.getJSON();
-      const res = await axios.post(`${API_BASE}/documents`, { title: parsed.title, content_json: contentJson });
+      const res = await axios.post(`${getAPIBase()}/documents`, { title: parsed.title, content_json: contentJson });
       const doc: EditorDocument = res.data;
       const docWithContent = { ...doc, content_json: contentJson };
       onDocumentCreated(docWithContent);

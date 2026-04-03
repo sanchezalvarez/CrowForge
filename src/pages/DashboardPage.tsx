@@ -12,7 +12,8 @@ import { useRssDigest } from "../hooks/useRssDigest";
 import type { PMTask, PMMember } from "../types/pm";
 import type { DashboardData, NavigateCallback, RssArticle, RssFeed } from "../types/api";
 import { RisoBackground } from "../components/RisoBackground";
-import { API_BASE } from "../lib/constants";
+import { getAPIBase } from "../lib/api";
+
 
 interface DashboardPageProps { onNavigate: NavigateCallback; }
 
@@ -46,7 +47,7 @@ function MyWorkSection({ onNavigate }: { onNavigate: NavigateCallback }) {
   const [loadingTasks, setLoadingTasks] = useState(false);
 
   useEffect(() => {
-    axios.get(`${API_BASE}/pm/members`).then((r) => {
+    axios.get(`${getAPIBase()}/pm/members`).then((r) => {
       setMembers(r.data);
       if (r.data.length > 0) setSelectedMember(r.data[0].id);
     }).catch(() => {});
@@ -55,7 +56,7 @@ function MyWorkSection({ onNavigate }: { onNavigate: NavigateCallback }) {
   const loadTasks = useCallback(async (memberId: number) => {
     setLoadingTasks(true);
     try {
-      const res = await axios.get(`${API_BASE}/pm/tasks`, { params: { assignee_id: memberId } });
+      const res = await axios.get(`${getAPIBase()}/pm/tasks`, { params: { assignee_id: memberId } });
       setTasks(res.data);
     } catch {
       setTasks([]);
@@ -291,18 +292,18 @@ function DigestSection() {
   const loadArticles = (count?: number) => {
     const fc = count ?? feedCount;
     const perFeed = Math.max(1, Math.floor(40 / Math.max(1, fc)));
-    axios.get(`${API_BASE}/rss/articles?limit_per_feed=${perFeed}`).then(r => setArticles(r.data)).catch(() => {});
+    axios.get(`${getAPIBase()}/rss/articles?limit_per_feed=${perFeed}`).then(r => setArticles(r.data)).catch(() => {});
   };
 
   useEffect(() => {
     loadCached();
-    axios.get(`${API_BASE}/rss/feeds`).then(r => {
+    axios.get(`${getAPIBase()}/rss/feeds`).then(r => {
       const active = (r.data || []).filter((f: RssFeed) => f.is_active).length;
       const fc = Math.max(1, active);
       setFeedCount(fc);
       loadArticles(fc);
     }).catch(() => { loadArticles(1); });
-    axios.get(`${API_BASE}/settings/ai`).then((r) => {
+    axios.get(`${getAPIBase()}/settings/ai`).then((r) => {
       setAiAvailable(r.data.enable_llm === true);
     }).catch(() => {});
   }, []);
@@ -383,7 +384,7 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
 
   useEffect(() => {
     let cancelled = false;
-    axios.get(`${API_BASE}/dashboard`)
+    axios.get(`${getAPIBase()}/dashboard`)
       .then(res => { if (!cancelled) setData(res.data); })
       .catch(() => {})
       .finally(() => { if (!cancelled) setLoading(false); });
@@ -411,21 +412,21 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
       title: "New Chat", desc: "Ask AI anything",
       icon: MessageSquare, color: "text-[var(--accent-teal)]", bg: "bg-[var(--accent-teal)]/10", ring: "ring-[var(--accent-teal)]/20",
       onClick: async () => {
-        try { const r = await axios.post(`${API_BASE}/chat/session`); onNavigate("chat", String(r.data.id)); } catch { /**/ }
+        try { const r = await axios.post(`${getAPIBase()}/chat/session`); onNavigate("chat", String(r.data.id)); } catch { /**/ }
       },
     },
     {
       title: "New Document", desc: "Write with AI",
       icon: FileText, color: "text-[var(--accent-violet)]", bg: "bg-[var(--accent-violet)]/10", ring: "ring-[var(--accent-violet)]/20",
       onClick: async () => {
-        try { const r = await axios.post(`${API_BASE}/documents`, { title: "Untitled Document" }); onNavigate("documents", r.data.id); } catch { /**/ }
+        try { const r = await axios.post(`${getAPIBase()}/documents`, { title: "Untitled Document" }); onNavigate("documents", r.data.id); } catch { /**/ }
       },
     },
     {
       title: "New Sheet", desc: "Data & formulas",
       icon: Table2, color: "text-[var(--accent-teal)]", bg: "bg-[var(--accent-teal)]/10", ring: "ring-[var(--accent-teal)]/20",
       onClick: async () => {
-        try { const r = await axios.post(`${API_BASE}/sheets`, { title: "Untitled Sheet", columns: [{ name: "Column 1", type: "text" }] }); onNavigate("sheets", r.data.id); } catch { /**/ }
+        try { const r = await axios.post(`${getAPIBase()}/sheets`, { title: "Untitled Sheet", columns: [{ name: "Column 1", type: "text" }] }); onNavigate("sheets", r.data.id); } catch { /**/ }
       },
     },
     {
@@ -451,7 +452,7 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto riso-noise riso-noise-live">
+    <div className="flex-1 min-h-0 h-full overflow-y-auto riso-noise riso-noise-live" style={{ position: 'relative' }}>
       <RisoBackground />
 
       <div className="relative p-10 max-w-7xl mx-auto space-y-10">

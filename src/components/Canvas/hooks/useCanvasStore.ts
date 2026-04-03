@@ -13,8 +13,7 @@ import {
 import axios from "axios";
 import { hasCycle } from "../utils/autoLayout";
 import { getErrorDetail } from "../../../lib/errorUtils";
-import { API_BASE } from "../../../lib/constants";
-
+import { getAPIBase } from "../../../lib/api";
 const DEFAULT_CANVAS_ID  = "default";
 const SAVE_DEBOUNCE_MS   = 800;
 const HISTORY_THROTTLE_MS = 500;
@@ -25,11 +24,11 @@ type Snapshot = { nodes: Node[]; edges: Edge[] };
 
 async function loadOrCreate(canvasId: string): Promise<{ nodes: Node[]; edges: Edge[] }> {
   try {
-    const res = await axios.get(`${API_BASE}/canvas/${canvasId}`);
+    const res = await axios.get(`${getAPIBase()}/canvas/${canvasId}`);
     return res.data as { nodes: Node[]; edges: Edge[] };
   } catch (err: unknown) {
     if ((err as { response?: { status?: number } })?.response?.status === 404) {
-      await axios.post(`${API_BASE}/canvas/${canvasId}`, { nodes: [], edges: [] });
+      await axios.post(`${getAPIBase()}/canvas/${canvasId}`, { nodes: [], edges: [] });
       return { nodes: [], edges: [] };
     }
     throw err;
@@ -98,7 +97,7 @@ export function useCanvasStore(canvasId?: string) {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
       axios
-        .post(`${API_BASE}/canvas/${activeCanvasId}`, {
+        .post(`${getAPIBase()}/canvas/${activeCanvasId}`, {
           nodes: nodesRef.current,
           edges: edgesRef.current,
         })
@@ -118,7 +117,7 @@ export function useCanvasStore(canvasId?: string) {
     setTimeout(() => {
       isUndoingRef.current = false;
       axios
-        .post(`${API_BASE}/canvas/${activeCanvasId}`, {
+        .post(`${getAPIBase()}/canvas/${activeCanvasId}`, {
           nodes: snapshot.nodes,
           edges: snapshot.edges,
         })
@@ -193,7 +192,7 @@ export function useCanvasStore(canvasId?: string) {
       let hadError   = false;
 
       try {
-        const res = await fetch(`${API_BASE}/canvas/run`, {
+        const res = await fetch(`${getAPIBase()}/canvas/run`, {
           method:  "POST",
           headers: { "Content-Type": "application/json" },
           body:    JSON.stringify({

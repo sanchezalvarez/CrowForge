@@ -4,7 +4,7 @@ import { Button } from "../ui/button";
 import { useFetchSSE } from "../../hooks/useFetchSSE";
 import type { Sheet } from "../../lib/cellUtils";
 import { idxToCol } from "../../lib/cellUtils";
-import { API_BASE } from "../../lib/constants";
+import { getAPIBase } from "../../lib/api";
 
 interface Message {
   role: "user" | "assistant";
@@ -102,7 +102,7 @@ export function SheetChatPanel({ sheet, selection, onClose }: SheetChatPanelProp
     const history = messages.map((m) => ({ role: m.role, content: m.content }));
 
     start(
-      `${API_BASE}/ai/ask/stream`,
+      `${getAPIBase()}/ai/ask/stream`,
       {
         message: text,
         context,

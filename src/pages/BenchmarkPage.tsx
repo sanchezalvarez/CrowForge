@@ -25,7 +25,8 @@ import remarkGfm from "remark-gfm";
 import type { BenchmarkRun, EngineInfo, ModelInfo } from "../types/api";
 import { getErrorDetail } from "../lib/errorUtils";
 import { RisoBackground } from "../components/RisoBackground";
-import { API_BASE } from "../lib/constants";
+import { getAPIBase } from "../lib/api";
+
 
 // Rough token estimate: ~4 chars per token for English text
 const estimateTokens = (text: string) => Math.ceil(text.length / 4);
@@ -58,7 +59,7 @@ export function BenchmarkPage() {
   // Fetch engines, models, and history on mount
   useEffect(() => {
     axios
-      .get<EngineInfo[]>(`${API_BASE}/ai/engines`)
+      .get<EngineInfo[]>(`${getAPIBase()}/ai/engines`)
       .then((res) => {
         setEngines(res.data);
         setSelectedEngines(new Set(res.data.map((e) => e.name)));
@@ -67,7 +68,7 @@ export function BenchmarkPage() {
 
     axios
       .get<{ models: ModelInfo[]; active_model: string | null }>(
-        `${API_BASE}/ai/models`
+        `${getAPIBase()}/ai/models`
       )
       .then((res) => {
         setModels(res.data.models);
@@ -82,7 +83,7 @@ export function BenchmarkPage() {
 
   const fetchRuns = () => {
     axios
-      .get<{ runs: BenchmarkRun[] }>(`${API_BASE}/benchmark/runs?limit=50`)
+      .get<{ runs: BenchmarkRun[] }>(`${getAPIBase()}/benchmark/runs?limit=50`)
       .then((res) => {
         setRuns(
           (res.data.runs || []).map((r) => ({
@@ -204,7 +205,7 @@ export function BenchmarkPage() {
 
       try {
         const res = await axios.post<{ runs: BenchmarkRun[] }>(
-          `${API_BASE}/benchmark/run`,
+          `${getAPIBase()}/benchmark/run`,
           {
             input_text: inputText.trim(),
             engines: job.engines,
@@ -807,7 +808,7 @@ export function BenchmarkPage() {
               const key = deleteConfirmKey!;
               setDeleteConfirmKey(null);
               try {
-                await axios.delete(`${API_BASE}/benchmark/session`, { params: { input_text: key } });
+                await axios.delete(`${getAPIBase()}/benchmark/session`, { params: { input_text: key } });
                 setRuns((prev) => prev.filter((r) => r.input_text !== key));
                 if (selectedSessionKey === key) {
                   setSelectedSessionKey(null);

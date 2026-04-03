@@ -3,7 +3,7 @@ import axios from "axios";
 import { PlusCircle, Trash2, Loader2, Pencil, Copy, Workflow } from "lucide-react";
 import { ScrollArea } from "../ui/scroll-area";
 import { cn } from "../../lib/utils";
-import { API_BASE } from "../../lib/constants";
+import { getAPIBase } from "../../lib/api";
 
 interface CanvasItem {
   id:         string;
@@ -26,7 +26,7 @@ export function CanvasSidebar({ activeId, onSelect }: CanvasSidebarProps) {
 
   const load = useCallback(async () => {
     try {
-      const res = await axios.get<CanvasItem[]>(`${API_BASE}/canvas`);
+      const res = await axios.get<CanvasItem[]>(`${getAPIBase()}/canvas`);
       setCanvases(res.data);
     } catch {
       setCanvases([]);
@@ -54,7 +54,7 @@ export function CanvasSidebar({ activeId, onSelect }: CanvasSidebarProps) {
 
   const handleCreate = useCallback(async () => {
     try {
-      const res = await axios.post<CanvasItem>(`${API_BASE}/canvas`, { name: "Untitled Canvas" });
+      const res = await axios.post<CanvasItem>(`${getAPIBase()}/canvas`, { name: "Untitled Canvas" });
       setCanvases((prev) => [...prev, res.data]);
       onSelect(res.data.id);
     } catch (err) {
@@ -64,7 +64,7 @@ export function CanvasSidebar({ activeId, onSelect }: CanvasSidebarProps) {
 
   const handleDelete = useCallback(async (id: string) => {
     try {
-      await axios.delete(`${API_BASE}/canvas/${id}`);
+      await axios.delete(`${getAPIBase()}/canvas/${id}`);
       setCanvases((prev) => {
         const remaining = prev.filter((c) => c.id !== id);
         if (activeId === id && remaining.length > 0) onSelect(remaining[0].id);
@@ -78,7 +78,7 @@ export function CanvasSidebar({ activeId, onSelect }: CanvasSidebarProps) {
 
   const handleDuplicate = useCallback(async (id: string) => {
     try {
-      const res = await axios.post<CanvasItem>(`${API_BASE}/canvas/${id}/duplicate`);
+      const res = await axios.post<CanvasItem>(`${getAPIBase()}/canvas/${id}/duplicate`);
       setCanvases((prev) => [...prev, res.data]);
       onSelect(res.data.id);
     } catch (err) {
@@ -97,7 +97,7 @@ export function CanvasSidebar({ activeId, onSelect }: CanvasSidebarProps) {
       return;
     }
     try {
-      await axios.patch(`${API_BASE}/canvas/${renamingId}/name`, { name: renameValue.trim() });
+      await axios.patch(`${getAPIBase()}/canvas/${renamingId}/name`, { name: renameValue.trim() });
       setCanvases((prev) =>
         prev.map((c) => c.id === renamingId ? { ...c, name: renameValue.trim() } : c),
       );

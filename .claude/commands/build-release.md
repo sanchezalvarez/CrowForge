@@ -32,6 +32,15 @@ Ak sa verzia mení, aktualizuj ju pomocou Edit tool v týchto súboroch (všetky
 8. **`installer/src-tauri/tauri.conf.json`** — pole `"version": "X.Y.Z"`
 9. **`installer/src/index.html`** — text `vX.Y.Z · Local AI Workspace`
 10. **`installer/build.ps1`** — default parameter `$Version = "X.Y.Z"`
+11. **`backend/app.py`** — riadok `"version": "X.Y.Z"` v `/health` endpointe
+12. **`CLAUDE.md`** — text `Current version: **X.Y.Z**` v Build & Release sekcii
+
+### Krok 3.5 — Verifikácia verzií (pre-build check)
+Po nastavení verzií spusti grep cez Bash aby si overil že stará verzia sa nikde nenachádza:
+```
+grep -rn "STARA_VERZIA" package.json src-tauri/Cargo.toml src-tauri/tauri.conf.json src/lib/constants.ts backend/app.py CLAUDE.md build.ps1 installer/package.json installer/src-tauri/Cargo.toml installer/src-tauri/tauri.conf.json installer/src/index.html installer/build.ps1
+```
+Ak sa nájdu výskyty starej verzie, oprav ich pred buildom.
 
 ### Krok 4 — Spusti build
 Spusti pomocou Bash tool:
@@ -56,3 +65,9 @@ Po úspešnom builde vypiš:
 - Zoznam `.exe` súborov z oboch priečinkov (použiť Glob alebo Bash `ls`)
 
 Ak build zlyhá, zobraz posledných 50 riadkov chybového výstupu a navrhni riešenie.
+
+### Krok 6 — Post-build verifikácia
+Po úspešnom builde spusti:
+1. `npx tsc --noEmit` — TypeScript check (0 chýb = OK)
+2. `grep '"version"' backend/app.py` — over že backend health endpoint má správnu verziu
+3. Over že `dist/CrowForge-Install.exe` existuje a má rozumnú veľkosť (>50 MB)

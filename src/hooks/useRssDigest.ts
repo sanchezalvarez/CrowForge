@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import axios from "axios";
-import { API_BASE } from "../lib/constants";
+import { getAPIBase } from "../lib/api";
 
 export interface DigestState {
   digest: string;
@@ -40,7 +40,7 @@ export function useRssDigest() {
 
   const loadCached = useCallback(async () => {
     try {
-      const res = await axios.get(`${API_BASE}/rss/digest/cached`);
+      const res = await axios.get(`${getAPIBase()}/rss/digest/cached`);
       if (res.data.digest) setDigest(res.data.digest);
       if (res.data.last_generated) setLastGenerated(res.data.last_generated);
       if (res.data.article_count) setArticleCount(res.data.article_count);
@@ -53,7 +53,7 @@ export function useRssDigest() {
     setIsFetching(true);
     setError("");
     try {
-      await axios.post(`${API_BASE}/rss/fetch`);
+      await axios.post(`${getAPIBase()}/rss/fetch`);
     } catch {
       // continue even if fetch partially fails
     } finally {
@@ -75,7 +75,7 @@ export function useRssDigest() {
       const controller = new AbortController();
       abortRef.current = controller;
 
-      fetch(`${API_BASE}/rss/digest`, { method: "POST", signal: controller.signal })
+      fetch(`${getAPIBase()}/rss/digest`, { method: "POST", signal: controller.signal })
         .then((res) => {
           if (!res.ok || !res.body) {
             setError("Failed to connect to AI engine");

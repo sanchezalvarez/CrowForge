@@ -5,6 +5,7 @@ import json
 import re
 import shutil
 import uuid
+import logging
 import httpx
 from contextlib import asynccontextmanager
 from typing import List, Optional
@@ -14,6 +15,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sse_starlette.sse import EventSourceResponse
 from dotenv import load_dotenv
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+logger = logging.getLogger("crowforge")
 
 def get_app_data_dir() -> str:
     """Return a user-writable data directory for CrowForge (created if absent)."""
@@ -153,10 +161,13 @@ async def lifespan(app: FastAPI):
 
     # Start background tasks
     idle_task = asyncio.create_task(_idle_unload_watcher())
-    parent_task = asyncio.create_task(_parent_watchdog())
+    # Only run parent watchdog when launched as Tauri sidecar (not Docker/standalone)
+    _is_sidecar = not os.environ.get("CROWFORGE_DEPLOYMENT_MODE") or hasattr(sys, '_MEIPASS')
+    parent_task = asyncio.create_task(_parent_watchdog()) if _is_sidecar else None
     yield
     idle_task.cancel()
-    parent_task.cancel()
+    if parent_task:
+        parent_task.cancel()
 
 
 async def _parent_watchdog():
@@ -192,6 +203,66 @@ async def _idle_unload_watcher():
 
 app = FastAPI(lifespan=lifespan)
 
+# ── API Key Middleware (for host/connect modes) ─────────────────────────────
+import socket
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import JSONResponse
+from collections import defaultdict
+from time import time as _time_now
+
+# Track connected client IPs (host mode)
+_recent_client_ips: dict[str, float] = {}  # ip -> last_seen timestamp
+
+_CORS_HEADERS = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "*",
+    "Access-Control-Allow-Headers": "*",
+}
+
+class APIKeyMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        # Let CORS preflight through — return CORS headers directly
+        if request.method == "OPTIONS":
+            return JSONResponse(content={}, headers=_CORS_HEADERS)
+
+        # Track client IPs in host mode
+        mode = _get_deployment_setting("deployment_mode", "local")
+        if mode == "host" and request.client:
+            client_ip = request.client.host
+            if client_ip and client_ip != "127.0.0.1":
+                _recent_client_ips[client_ip] = _time_now()
+
+        # Skip auth for local/connect mode, public endpoints, and localhost requests
+        # In connect mode this backend is just a local sidecar, not a server
+        # In host mode, localhost (Tauri frontend) is always trusted
+        public_paths = {"/health", "/docs", "/openapi.json", "/state", "/settings/deployment", "/shutdown"}
+        client_ip = request.client.host if request.client else ""
+        is_localhost = client_ip in ("127.0.0.1", "::1", "localhost")
+        if mode in ("local", "connect") or request.url.path in public_paths or is_localhost:
+            response = await call_next(request)
+            # Add CORS headers to all responses for cross-origin compatibility
+            for k, v in _CORS_HEADERS.items():
+                response.headers[k] = v
+            return response
+
+        expected_key = _get_deployment_setting("host_api_key", "")
+        if not expected_key:
+            response = await call_next(request)
+            for k, v in _CORS_HEADERS.items():
+                response.headers[k] = v
+            return response
+
+        provided_key = request.headers.get("X-API-Key", "") or request.query_params.get("api_key", "")
+        if provided_key != expected_key:
+            return JSONResponse(status_code=401, content={"detail": "Invalid API key"}, headers=_CORS_HEADERS)
+
+        response = await call_next(request)
+        for k, v in _CORS_HEADERS.items():
+            response.headers[k] = v
+        return response
+
+app.add_middleware(APIKeyMiddleware)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -199,11 +270,44 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+def _get_deployment_setting(key: str, default: str = "") -> str:
+    """Read a setting — env var (CROWFORGE_ prefix) takes priority over DB."""
+    env_key = "CROWFORGE_" + key.upper()
+    env_val = os.environ.get(env_key)
+    if env_val is not None:
+        return env_val
+    try:
+        db_path = os.environ.get("CROWFORGE_DB_PATH") or os.path.join(get_app_data_dir(), "crowforge.db")
+        import sqlite3 as _sqlite3
+        conn = _sqlite3.connect(db_path, timeout=5)
+        conn.row_factory = _sqlite3.Row
+        row = conn.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
+        conn.close()
+        return row["value"] if row else default
+    except Exception:
+        return default
+
+
+def get_local_ip() -> str:
+    """Get the machine's LAN IP address."""
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        return "127.0.0.1"
+
+
 PM_FILES_DIR = os.path.join(get_app_data_dir(), "pm_files")
 os.makedirs(PM_FILES_DIR, exist_ok=True)
 app.mount("/pm_files", StaticFiles(directory=PM_FILES_DIR), name="pm_files")
 
-db = DatabaseManager(os.path.join(get_app_data_dir(), "crowforge.db"))
+_db_path = os.environ.get("CROWFORGE_DB_PATH") or os.path.join(get_app_data_dir(), "crowforge.db")
+os.makedirs(os.path.dirname(os.path.abspath(_db_path)), exist_ok=True)
+db = DatabaseManager(_db_path)
 db.initialize_schema(get_resource_path("backend/schema.sql"))
 
 app_repo = AppRepository(db)
@@ -399,6 +503,107 @@ async def get_state():
     return {
         "onboarding_completed": app_repo.get_setting("onboarding_completed") == "true"
     }
+
+
+# ── Health Check ────────────────────────────────────────────────────────────
+
+_startup_mode: str = "local"  # set once at startup, used to detect config drift
+
+@app.get("/health")
+async def health():
+    current_mode = app_repo.get_setting("deployment_mode") or "local"
+    return {
+        "status": "ok",
+        "version": "0.5.2",
+        "mode": current_mode,
+        "needs_restart": current_mode != _startup_mode,
+    }
+
+
+# ── Deployment Settings ────────────────────────────────────────────────────
+
+_DEPLOYMENT_KEYS = [
+    "deployment_mode", "server_url", "server_api_key",
+    "server_nickname", "host_port", "host_api_key", "setup_completed",
+]
+
+@app.get("/settings/deployment")
+async def get_deployment_settings():
+    result = {}
+    for key in _DEPLOYMENT_KEYS:
+        val = app_repo.get_setting(key)
+        if key == "setup_completed":
+            result[key] = val == "true"
+        else:
+            result[key.replace("deployment_", "")] = val or ("local" if key == "deployment_mode" else "")
+    # Flatten: deployment_mode -> mode
+    result["mode"] = result.pop("mode", "local")
+    result["local_ip"] = get_local_ip()
+    return result
+
+
+@app.patch("/settings/deployment")
+async def update_deployment_settings(data: dict):
+    field_map = {
+        "mode": "deployment_mode",
+        "server_url": "server_url",
+        "server_api_key": "server_api_key",
+        "server_nickname": "server_nickname",
+        "host_port": "host_port",
+        "host_api_key": "host_api_key",
+        "setup_completed": "setup_completed",
+    }
+    for field, db_key in field_map.items():
+        if field in data:
+            val = data[field]
+            if field == "setup_completed":
+                app_repo.set_setting(db_key, "true" if val else "false")
+            else:
+                app_repo.set_setting(db_key, str(val))
+    return await get_deployment_settings()
+
+
+@app.post("/settings/deployment/test-connection")
+async def test_deployment_connection(data: dict):
+    url = (data.get("url") or "").rstrip("/")
+    api_key = data.get("api_key", "")
+    if not url:
+        return {"success": False, "error": "URL is required"}
+    try:
+        async with httpx.AsyncClient(timeout=5) as client:
+            headers = {}
+            if api_key:
+                headers["X-API-Key"] = api_key
+            response = await client.get(f"{url}/health", headers=headers)
+            if response.status_code == 200:
+                rdata = response.json()
+                return {"success": True, "version": rdata.get("version", "unknown"),
+                        "mode": rdata.get("mode", "unknown")}
+            else:
+                return {"success": False, "error": f"Server returned {response.status_code}"}
+    except httpx.ConnectError:
+        return {"success": False, "error": "Cannot reach server — check URL"}
+    except httpx.TimeoutException:
+        return {"success": False, "error": "Connection timed out"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@app.post("/settings/deployment/restart")
+async def restart_backend():
+    """Deployment settings are read live from DB by middleware on each request,
+    so no actual process restart is needed. This endpoint exists for frontend
+    compatibility — it simply confirms settings are active."""
+    return {"status": "ok"}
+
+
+@app.get("/settings/deployment/clients")
+async def get_connected_clients():
+    """Return recently seen client IPs (host mode)."""
+    cutoff = _time_now() - 300  # last 5 minutes
+    active = {ip: ts for ip, ts in _recent_client_ips.items() if ts > cutoff}
+    return {"count": len(active), "ips": list(active.keys())}
+
 
 @app.get("/dashboard")
 async def get_dashboard_data():
@@ -3983,6 +4188,27 @@ Respond ONLY with JSON array of task IDs in suggested order with brief reason:
 
 if __name__ == "__main__":
     import uvicorn
-    # Free port 8000 if occupied by a stale backend process (e.g. after PC restart)
-    _free_port_if_occupied(8000)
-    uvicorn.run(app, host="127.0.0.1", port=8000, timeout_keep_alive=5, loop="asyncio")
+
+    # Configure log level from env
+    log_level = os.environ.get("CROWFORGE_LOG_LEVEL", "INFO").upper()
+    logging.getLogger().setLevel(getattr(logging, log_level, logging.INFO))
+
+    mode = _get_deployment_setting("deployment_mode", "local")
+    _startup_mode = mode  # track for needs_restart detection
+    host = "0.0.0.0" if mode == "host" else "127.0.0.1"
+    port = int(_get_deployment_setting("host_port", "8000") or "8000")
+
+    # Free port if occupied by a stale backend process (e.g. after PC restart)
+    _free_port_if_occupied(port)
+
+    logger.info(f"Starting CrowForge backend")
+    logger.info(f"Mode: {mode} | Host: {host} | Port: {port}")
+    logger.info(f"DB: {_db_path}")
+    if mode == "host":
+        api_key = _get_deployment_setting("host_api_key", "")
+        if not api_key:
+            logger.warning("HOST MODE: No API key set! Server is unprotected.")
+        else:
+            logger.info("API key protection: enabled")
+
+    uvicorn.run(app, host=host, port=port, timeout_keep_alive=5, loop="asyncio")

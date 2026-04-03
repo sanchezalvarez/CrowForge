@@ -5,7 +5,7 @@ import { type SheetSnapshot, MAX_HISTORY } from "./useUndoRedo";
 import { toast } from "./useToast";
 import type { TuningParams } from "../components/AIControlPanel";
 import { getErrorDetail } from "../lib/errorUtils";
-import { API_BASE } from "../lib/constants";
+import { getAPIBase, apiUrlWithAuth } from "../lib/api";
 
 export function useAiSheet({
   activeSheet,
@@ -71,7 +71,7 @@ export function useAiSheet({
   const [activeEngine, setActiveEngine] = useState<string>("mock");
 
   useEffect(() => {
-    axios.get(`${API_BASE}/ai/engines`).then(res => {
+    axios.get(`${getAPIBase()}/ai/engines`).then(res => {
       const active = (res.data as { name: string; active: boolean }[]).find(e => e.active);
       if (active) setActiveEngine(active.name);
     }).catch(() => { setActiveEngine("mock"); });
@@ -86,7 +86,7 @@ export function useAiSheet({
   }, []);
 
   useEffect(() => {
-    axios.get(`${API_BASE}/ai/models`).then(res => {
+    axios.get(`${getAPIBase()}/ai/models`).then(res => {
       const models = res.data.models.map((m: { filename: string }) => ({ name: m.filename, id: m.filename }));
       setAvailableModels(models);
       if (models.length > 0) setAiOpModel(models[0].id);
@@ -100,7 +100,7 @@ export function useAiSheet({
     setAiGenError(null);
     setAiGenPreview(null);
     try {
-      const res = await axios.post(`${API_BASE}/sheets/ai-schema`, {
+      const res = await axios.post(`${getAPIBase()}/sheets/ai-schema`, {
         prompt: aiGenPrompt.trim(),
         temperature: tuningParams?.temperature,
         max_tokens: tuningParams?.maxTokens,
@@ -116,7 +116,7 @@ export function useAiSheet({
   async function confirmAiGenCreate() {
     if (!aiGenPreview) return;
     try {
-      const res = await axios.post(`${API_BASE}/sheets`, {
+      const res = await axios.post(`${getAPIBase()}/sheets`, {
         title: aiGenPreview.title,
         columns: aiGenPreview.columns,
         rows: [],
@@ -165,7 +165,7 @@ export function useAiSheet({
     const params = new URLSearchParams({ col_index: String(colIndex), instruction });
     if (tuningParams?.temperature !== undefined) params.set("temperature", String(tuningParams.temperature));
     if (tuningParams?.maxTokens !== undefined) params.set("max_tokens", String(tuningParams.maxTokens));
-    const es = new EventSource(`${API_BASE}/sheets/${activeSheet.id}/ai-fill?${params}`);
+    const es = new EventSource(apiUrlWithAuth(`/sheets/${activeSheet.id}/ai-fill?${params}`));
     aiFillRef.current = es;
     const fillSheetId = activeSheet.id;
     let filledCount = 0;
@@ -328,7 +328,7 @@ export function useAiSheet({
     if (aiOpModel) params.set("model", aiOpModel);
     if (tuningParams?.maxTokens) params.set("max_tokens", String(tuningParams.maxTokens));
     const opSheetId = activeSheet.id;
-    const es = new EventSource(`${API_BASE}/sheets/${opSheetId}/ai-op?${params}`);
+    const es = new EventSource(apiUrlWithAuth(`/sheets/${opSheetId}/ai-op?${params}`));
     aiFillRef.current = es;
     let opCompleted = false;
 
@@ -389,7 +389,7 @@ export function useAiSheet({
     setGenRowsError(null);
 
     const params = new URLSearchParams({ instruction, count: String(genRowsCount) });
-    const es = new EventSource(`${API_BASE}/sheets/${activeSheet.id}/ai-rows?${params}`);
+    const es = new EventSource(apiUrlWithAuth(`/sheets/${activeSheet.id}/ai-rows?${params}`));
     genRowsRef.current = es;
     const sheetId = activeSheet.id;
     let completed = false;
@@ -405,7 +405,7 @@ export function useAiSheet({
     es.onmessage = (e) => {
       if (e.data === "[DONE]") {
         finishGenRows();
-        axios.get(`${API_BASE}/sheets/${sheetId}`).then((res) => {
+        axios.get(`${getAPIBase()}/sheets/${sheetId}`).then((res) => {
           setSheets((prev) => prev.map((s) => (s.id === sheetId ? res.data : s)));
         }).catch(() => {});
         setTimeout(() => setGenRowsOpen(false), 600);
@@ -443,7 +443,7 @@ export function useAiSheet({
     }
     setGenRowsRunning(false);
     if (sheetId) {
-      axios.get(`${API_BASE}/sheets/${sheetId}`).then((res) => {
+      axios.get(`${getAPIBase()}/sheets/${sheetId}`).then((res) => {
         setSheets((prev) => prev.map((s) => (s.id === sheetId ? res.data : s)));
       }).catch(() => {});
     }

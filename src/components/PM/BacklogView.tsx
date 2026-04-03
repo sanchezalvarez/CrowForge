@@ -8,7 +8,6 @@ import { StatusBadge } from "./StatusBadge";
 import { MemberAvatar } from "./MemberAvatar";
 import { toast } from "../../hooks/useToast";
 import { Button } from "../ui/button";
-import { API_BASE } from "../../lib/constants";
 import {
   Select,
   SelectContent,
@@ -16,6 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../ui/select";
+import { getAPIBase } from "../../lib/api";
 
 // ── Column definitions ──────────────────────────────────────────────────────
 
@@ -149,7 +149,7 @@ export function BacklogView({
   const handleCtxDuplicate = useCallback(async (task: PMTask) => {
     setCtxMenu(null);
     try {
-      await axios.post(`${API_BASE}/pm/tasks`, {
+      await axios.post(`${getAPIBase()}/pm/tasks`, {
         project_id: task.project_id,
         parent_id: task.parent_id,
         title: `${task.title} (copy)`,

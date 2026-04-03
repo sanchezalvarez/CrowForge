@@ -9,7 +9,7 @@ import {
 } from "../ui/dialog";
 import { idxToCol } from "../../lib/cellUtils";
 import type { Sheet, SheetSizes } from "../../lib/cellUtils";
-import { API_BASE } from "../../lib/constants";
+import { getAPIBase } from "../../lib/api";
 
 export interface SheetContextMenusProps {
   // Sheet context menu
@@ -411,7 +411,7 @@ export function SheetContextMenus({
                 const sizes = activeSheet!.sizes ?? {};
                 const updated: SheetSizes = { ...sizes, colWidths: sizes.colWidths ?? {}, rowHeights: next };
                 setSheets(prev => prev.map(s => s.id === activeSheetId ? { ...s, sizes: updated } : s));
-                axios.put(`${API_BASE}/sheets/${activeSheetId}/sizes`, updated).catch(() => {});
+                axios.put(`${getAPIBase()}/sheets/${activeSheetId}/sizes`, updated).catch(() => {});
                 setRowMenu(null);
               }}
             >

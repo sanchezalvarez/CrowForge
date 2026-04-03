@@ -1,0 +1,24 @@
+# CrowForge Server — lightweight dependencies (no local LLM inference)
+fastapi>=0.115.0
+uvicorn>=0.30.0
+httpx>=0.27.0
+python-dotenv>=1.0.0
+sse-starlette>=2.0.0
+pydantic>=2.8.0
+openpyxl>=3.1.0
+python-docx>=1.1.0
+pdfplumber>=0.11.0
+pypdfium2>=4.0.0
+pillow>=10.0.0
+numpy>=1.26.0
+psutil>=5.9.0
+anyio>=4.0.0
+python-multipart>=0.0.9
+duckduckgo-search>=6.0.0
+beautifulsoup4>=4.12.0
+requests>=2.31.0
+pypdf>=5.0.0
+
+# Optional: RAG support (uncomment if needed)
+# sentence-transformers>=3.0.0
+# faiss-cpu>=1.8.0

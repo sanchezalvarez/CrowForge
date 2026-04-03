@@ -1,11 +1,36 @@
 import { useState } from "react";
 import axios from "axios";
 import { AlertCircle } from "lucide-react";
-import { APP_VERSION, API_BASE} from "../lib/constants";
+import { APP_VERSION } from "../lib/constants";
 import crowforgeIco from "../assets/crowforge_ico.png";
 import { cn } from "../lib/utils";
+import { getAPIBase } from "../lib/api";
 
 type EngineType = "mock" | "http" | "local";
+
+const risoInputStyle: React.CSSProperties = {
+  width: "100%",
+  borderRadius: 6,
+  border: "1.5px solid var(--border-strong)",
+  background: "var(--input)",
+  padding: "8px 12px",
+  fontSize: 12,
+  fontFamily: "IBM Plex Mono, monospace",
+  color: "var(--foreground)",
+  outline: "none",
+  boxSizing: "border-box" as const,
+  boxShadow: "2px 2px 0 rgba(20,16,10,0.08)",
+  transition: "border-color 0.15s ease, box-shadow 0.15s ease",
+};
+
+function risoInputFocus(e: React.FocusEvent<HTMLInputElement>) {
+  e.currentTarget.style.borderColor = "var(--accent-teal)";
+  e.currentTarget.style.boxShadow = "3px 3px 0 rgba(11,114,104,0.22)";
+}
+function risoInputBlur(e: React.FocusEvent<HTMLInputElement>) {
+  e.currentTarget.style.borderColor = "var(--border-strong)";
+  e.currentTarget.style.boxShadow = "2px 2px 0 rgba(20,16,10,0.08)";
+}
 
 interface Props {
   onComplete: () => void;
@@ -26,7 +51,7 @@ export function OnboardingPage({ onComplete }: Props) {
     setSaving(true);
     setError(null);
     try {
-      await axios.post(`${API_BASE}/settings/ai`, {
+      await axios.post(`${getAPIBase()}/settings/ai`, {
         enable_llm: engine !== "mock",
         engine,
         base_url: baseUrl,
@@ -34,7 +59,7 @@ export function OnboardingPage({ onComplete }: Props) {
         model,
         models_dir: modelsDir,
       });
-      await axios.post(`${API_BASE}/state`, { onboarding_completed: true });
+      await axios.post(`${getAPIBase()}/state`, { onboarding_completed: true });
       setStep(3);
     } catch (e) {
       console.error(e);
@@ -423,7 +448,8 @@ export function OnboardingPage({ onComplete }: Props) {
 
             {/* HTTP fields */}
             {engine === "http" && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div className="surface-noise" style={{ borderRadius: 8, border: "1.5px solid var(--border-strong)", padding: "16px", background: "var(--card)", boxShadow: "2px 2px 0 rgba(20,16,10,0.06)", display: "flex", flexDirection: "column", gap: 12 }}>
+                <div className="riso-section-label" style={{ marginBottom: 0 }}>API Connection</div>
                 <div>
                   <label
                     className="font-mono-ui"
@@ -443,28 +469,9 @@ export function OnboardingPage({ onComplete }: Props) {
                     value={baseUrl}
                     onChange={(e) => setBaseUrl(e.target.value)}
                     className="surface-noise"
-                    style={{
-                      width: "100%",
-                      borderRadius: 6,
-                      border: "1.5px solid var(--border-strong)",
-                      background: "var(--input)",
-                      padding: "8px 12px",
-                      fontSize: 12,
-                      fontFamily: "IBM Plex Mono, monospace",
-                      color: "var(--foreground)",
-                      outline: "none",
-                      boxSizing: "border-box",
-                      boxShadow: "2px 2px 0 rgba(20,16,10,0.08)",
-                      transition: "border-color 0.15s ease, box-shadow 0.15s ease",
-                    }}
-                    onFocus={(e) => {
-                      e.currentTarget.style.borderColor = "var(--accent-teal)";
-                      e.currentTarget.style.boxShadow = "3px 3px 0 rgba(11,114,104,0.22)";
-                    }}
-                    onBlur={(e) => {
-                      e.currentTarget.style.borderColor = "var(--border-strong)";
-                      e.currentTarget.style.boxShadow = "2px 2px 0 rgba(20,16,10,0.08)";
-                    }}
+                    style={risoInputStyle}
+                    onFocus={risoInputFocus}
+                    onBlur={risoInputBlur}
                   />
                 </div>
                 <div>
@@ -487,28 +494,9 @@ export function OnboardingPage({ onComplete }: Props) {
                     value={apiKey}
                     onChange={(e) => setApiKey(e.target.value)}
                     className="surface-noise"
-                    style={{
-                      width: "100%",
-                      borderRadius: 6,
-                      border: "1.5px solid var(--border-strong)",
-                      background: "var(--input)",
-                      padding: "8px 12px",
-                      fontSize: 12,
-                      fontFamily: "IBM Plex Mono, monospace",
-                      color: "var(--foreground)",
-                      outline: "none",
-                      boxSizing: "border-box",
-                      boxShadow: "2px 2px 0 rgba(20,16,10,0.08)",
-                      transition: "border-color 0.15s ease, box-shadow 0.15s ease",
-                    }}
-                    onFocus={(e) => {
-                      e.currentTarget.style.borderColor = "var(--accent-teal)";
-                      e.currentTarget.style.boxShadow = "3px 3px 0 rgba(11,114,104,0.22)";
-                    }}
-                    onBlur={(e) => {
-                      e.currentTarget.style.borderColor = "var(--border-strong)";
-                      e.currentTarget.style.boxShadow = "2px 2px 0 rgba(20,16,10,0.08)";
-                    }}
+                    style={risoInputStyle}
+                    onFocus={risoInputFocus}
+                    onBlur={risoInputBlur}
                   />
                 </div>
                 <div>
@@ -530,28 +518,9 @@ export function OnboardingPage({ onComplete }: Props) {
                     value={model}
                     onChange={(e) => setModel(e.target.value)}
                     className="surface-noise"
-                    style={{
-                      width: "100%",
-                      borderRadius: 6,
-                      border: "1.5px solid var(--border-strong)",
-                      background: "var(--input)",
-                      padding: "8px 12px",
-                      fontSize: 12,
-                      fontFamily: "IBM Plex Mono, monospace",
-                      color: "var(--foreground)",
-                      outline: "none",
-                      boxSizing: "border-box",
-                      boxShadow: "2px 2px 0 rgba(20,16,10,0.08)",
-                      transition: "border-color 0.15s ease, box-shadow 0.15s ease",
-                    }}
-                    onFocus={(e) => {
-                      e.currentTarget.style.borderColor = "var(--accent-teal)";
-                      e.currentTarget.style.boxShadow = "3px 3px 0 rgba(11,114,104,0.22)";
-                    }}
-                    onBlur={(e) => {
-                      e.currentTarget.style.borderColor = "var(--border-strong)";
-                      e.currentTarget.style.boxShadow = "2px 2px 0 rgba(20,16,10,0.08)";
-                    }}
+                    style={risoInputStyle}
+                    onFocus={risoInputFocus}
+                    onBlur={risoInputBlur}
                   />
                 </div>
               </div>
@@ -559,48 +528,32 @@ export function OnboardingPage({ onComplete }: Props) {
 
             {/* Local GGUF field */}
             {engine === "local" && (
-              <div>
-                <label
-                  className="font-mono-ui"
-                  style={{
-                    display: "block",
-                    fontSize: 10,
-                    fontWeight: 600,
-                    letterSpacing: "0.10em",
-                    textTransform: "uppercase",
-                    color: "var(--muted-foreground)",
-                    marginBottom: 5,
-                  }}
-                >
-                  Models Directory
-                </label>
-                <input
-                  value={modelsDir}
-                  onChange={(e) => setModelsDir(e.target.value)}
-                  className="surface-noise"
-                  style={{
-                    width: "100%",
-                    borderRadius: 6,
-                    border: "1.5px solid var(--border-strong)",
-                    background: "var(--input)",
-                    padding: "8px 12px",
-                    fontSize: 12,
-                    fontFamily: "IBM Plex Mono, monospace",
-                    color: "var(--foreground)",
-                    outline: "none",
-                    boxSizing: "border-box",
-                    boxShadow: "2px 2px 0 rgba(20,16,10,0.08)",
-                    transition: "border-color 0.15s ease, box-shadow 0.15s ease",
-                  }}
-                  onFocus={(e) => {
-                    e.currentTarget.style.borderColor = "var(--accent-teal)";
-                    e.currentTarget.style.boxShadow = "3px 3px 0 rgba(11,114,104,0.22)";
-                  }}
-                  onBlur={(e) => {
-                    e.currentTarget.style.borderColor = "var(--border-strong)";
-                    e.currentTarget.style.boxShadow = "2px 2px 0 rgba(20,16,10,0.08)";
-                  }}
-                />
+              <div className="surface-noise" style={{ borderRadius: 8, border: "1.5px solid var(--border-strong)", padding: "16px", background: "var(--card)", boxShadow: "2px 2px 0 rgba(20,16,10,0.06)", display: "flex", flexDirection: "column", gap: 12 }}>
+                <div className="riso-section-label" style={{ marginBottom: 0 }}>Local Model</div>
+                <div>
+                  <label
+                    className="font-mono-ui"
+                    style={{
+                      display: "block",
+                      fontSize: 10,
+                      fontWeight: 600,
+                      letterSpacing: "0.10em",
+                      textTransform: "uppercase",
+                      color: "var(--muted-foreground)",
+                      marginBottom: 5,
+                    }}
+                  >
+                    Models Directory
+                  </label>
+                  <input
+                    value={modelsDir}
+                    onChange={(e) => setModelsDir(e.target.value)}
+                    className="surface-noise"
+                    style={risoInputStyle}
+                    onFocus={risoInputFocus}
+                    onBlur={risoInputBlur}
+                  />
+                </div>
               </div>
             )}
 
@@ -639,7 +592,7 @@ export function OnboardingPage({ onComplete }: Props) {
                 onClick={() => {
                   setError(null);
                   setSkipped(true);
-                  axios.post(`${API_BASE}/state`, { onboarding_completed: true }).catch(() => {});
+                  axios.post(`${getAPIBase()}/state`, { onboarding_completed: true }).catch(() => {});
                   setStep(3);
                 }}
                 className="btn-tactile btn-tactile-outline w-full justify-center"

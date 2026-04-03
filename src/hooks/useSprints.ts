@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from "react";
 import axios from "axios";
 import { PMSprint } from "../types/pm";
 import { toast } from "./useToast";
-import { API_BASE } from "../lib/constants";
+import { getAPIBase } from "../lib/api";
 
 export function useSprints(projectId: number | null) {
   const [sprints, setSprints] = useState<PMSprint[]>([]);
@@ -12,7 +12,7 @@ export function useSprints(projectId: number | null) {
     if (!projectId) return;
     setLoading(true);
     try {
-      const res = await axios.get(`${API_BASE}/pm/sprints`, { params: { project_id: projectId } });
+      const res = await axios.get(`${getAPIBase()}/pm/sprints`, { params: { project_id: projectId } });
       setSprints(res.data);
     } catch {
       toast("Failed to load sprints", "error");
@@ -29,7 +29,7 @@ export function useSprints(projectId: number | null) {
     end_date?: string;
   }) => {
     try {
-      const res = await axios.post(`${API_BASE}/pm/sprints`, data);
+      const res = await axios.post(`${getAPIBase()}/pm/sprints`, data);
       setSprints((prev) => [...prev, res.data]);
       return res.data as PMSprint;
     } catch {
@@ -40,7 +40,7 @@ export function useSprints(projectId: number | null) {
 
   const update = async (id: number, data: Partial<PMSprint>) => {
     try {
-      const res = await axios.patch(`${API_BASE}/pm/sprints/${id}`, data);
+      const res = await axios.patch(`${getAPIBase()}/pm/sprints/${id}`, data);
       setSprints((prev) => prev.map((s) => (s.id === id ? res.data : s)));
       return res.data as PMSprint;
     } catch (err: unknown) {
@@ -52,7 +52,7 @@ export function useSprints(projectId: number | null) {
 
   const completeSprint = async (id: number): Promise<{ completed: number; moved_to_backlog: number } | null> => {
     try {
-      const res = await axios.post(`${API_BASE}/pm/sprints/${id}/complete`);
+      const res = await axios.post(`${getAPIBase()}/pm/sprints/${id}/complete`);
       await load();
       return res.data;
     } catch {

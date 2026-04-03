@@ -1,0 +1,24 @@
+[Unit]
+Description=CrowForge Backend Server
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=crowforge
+Group=crowforge
+WorkingDirectory=/opt/crowforge
+ExecStart=/opt/crowforge/venv/bin/python start-server.py
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+# Environment
+Environment=CROWFORGE_DEPLOYMENT_MODE=host
+Environment=CROWFORGE_HOST_PORT=8000
+Environment=CROWFORGE_DB_PATH=/opt/crowforge/data/crowforge.db
+EnvironmentFile=-/opt/crowforge/.env
+
+[Install]
+WantedBy=multi-user.target

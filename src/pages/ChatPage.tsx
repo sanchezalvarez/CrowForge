@@ -19,6 +19,7 @@ import {
   SelectValue,
 } from "../components/ui/select";
 import { cn } from "../lib/utils";
+import { getAPIBase } from "../lib/api";
 import { toast } from "../hooks/useToast";
 import { useIsDark } from "../hooks/useIsDark";
 import { useSidebarResize } from "../hooks/useSidebarResize";
@@ -29,8 +30,6 @@ import type { DocumentContext } from "../App";
 import type { TuningParams } from "../components/AIControlPanel";
 import type { ChatSession, ChatMessage, AttachedFile, TipTapNode } from "../types/api";
 import agentCrowner from "../assets/AgentCrowner_512.png";
-import { API_BASE } from "../lib/constants";
-
 
 const CTX_SENTINEL = "\n\n[/CONTEXT]\n\n";
 
@@ -239,7 +238,7 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
   }, []);
 
   useEffect(() => {
-    axios.get(`${API_BASE}/documents`).then(r => {
+    axios.get(`${getAPIBase()}/documents`).then(r => {
       const docs = Array.isArray(r.data) ? r.data : r.data.documents ?? [];
       setDocList(docs);
     }).catch(() => { setDocList([]); });
@@ -319,14 +318,14 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
 
   async function loadSessions() {
     try {
-      const res = await axios.get(`${API_BASE}/chat/sessions`);
+      const res = await axios.get(`${getAPIBase()}/chat/sessions`);
       setSessions((res.data as ChatSession[]).filter(s => s.mode !== "agent"));
     } catch { /* backend may be offline */ }
   }
 
   async function loadMessages(sessionId: number) {
     try {
-      const res = await axios.get(`${API_BASE}/chat/session/${sessionId}`);
+      const res = await axios.get(`${getAPIBase()}/chat/session/${sessionId}`);
       setMessages(res.data.messages);
       if (res.data.session?.mode) setActiveMode(res.data.session.mode);
     } catch { setMessages([]); }
@@ -334,7 +333,7 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
 
   async function createSession() {
     try {
-      const res = await axios.post(`${API_BASE}/chat/session`, { mode: "general" });
+      const res = await axios.post(`${getAPIBase()}/chat/session`, { mode: "general" });
       const session: ChatSession = res.data;
       setSessions((prev) => [session, ...prev]);
       setActiveSessionId(session.id);
@@ -346,7 +345,7 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
 
   async function deleteSession(id: number) {
     try {
-      await axios.delete(`${API_BASE}/chat/session/${id}`);
+      await axios.delete(`${getAPIBase()}/chat/session/${id}`);
       setSessions((prev) => prev.filter((s) => s.id !== id));
       if (activeSessionId === id) { setActiveSessionId(null); setMessages([]); }
     } catch {
@@ -358,7 +357,7 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
     if (!activeSessionId) return;
     setActiveMode(mode);
     try {
-      const res = await axios.put(`${API_BASE}/chat/session/${activeSessionId}/mode`, { mode });
+      const res = await axios.put(`${getAPIBase()}/chat/session/${activeSessionId}/mode`, { mode });
       setSessions((prev) =>
         prev.map((s) => (s.id === activeSessionId ? { ...s, mode: res.data.mode } : s))
       );
@@ -371,7 +370,7 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
     const t = title.trim();
     if (!t) return;
     try {
-      await axios.put(`${API_BASE}/chat/session/${sessionId}/title`, { title: t });
+      await axios.put(`${getAPIBase()}/chat/session/${sessionId}/title`, { title: t });
       setSessions((prev) =>
         prev.map((s) => (s.id === sessionId ? { ...s, title: t } : s))
       );
@@ -407,7 +406,7 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
     try {
       const form = new FormData();
       form.append("file", file);
-      const res = await axios.post(`${API_BASE}/chat/upload`, form);
+      const res = await axios.post(`${getAPIBase()}/chat/upload`, form);
       setAttachedFile({ name: res.data.filename, text: res.data.text });
     } catch {
       toast("Failed to upload file.", "error");
@@ -653,7 +652,7 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
                               onMouseLeave={(e) => { if (!isActive) (e.currentTarget as HTMLElement).style.background = ""; }}
                               onClick={async () => {
                                 try {
-                                  const res = await axios.get(`${API_BASE}/documents/${doc.id}`);
+                                  const res = await axios.get(`${getAPIBase()}/documents/${doc.id}`);
                                   const extractText = (node: TipTapNode): string => {
                                     if (!node) return "";
                                     if (node.type === "text") return node.text || "";

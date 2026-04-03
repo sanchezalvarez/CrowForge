@@ -5,7 +5,6 @@ import { Button } from "../components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "../components/ui/dialog";
 import { toast } from "../hooks/useToast";
 import { getErrorDetail } from "../lib/errorUtils";
-import { API_BASE } from "../lib/constants";
 import { useDropImport, IMPORT_FORMAT_LABELS } from "../hooks/useDropImport";
 import { useUndoRedo } from "../hooks/useUndoRedo";
 import { useAiSheet } from "../hooks/useAiSheet";
@@ -37,6 +36,8 @@ import { FormulaWizard } from "../components/sheets/FormulaWizard";
 import type { TuningParams } from "../components/AIControlPanel";
 import { SheetSidebar } from "../components/sheets/SheetSidebar";
 import type { ConditionalRule } from "../lib/cellUtils";
+import { getAPIBase } from "../lib/api";
+
 
 interface SheetsPageProps {
   tuningParams?: TuningParams;
@@ -186,7 +187,7 @@ export function SheetsPage({ tuningParams, initialSheetId }: SheetsPageProps) {
       setRowHeights({ ...rowHeightsRef.current });
       if (activeSheet) {
         const sizes = { colWidths: colWidthsRef.current, rowHeights: rowHeightsRef.current };
-        axios.put(`${API_BASE}/sheets/${activeSheet.id}/sizes`, sizes).catch(() => {});
+        axios.put(`${getAPIBase()}/sheets/${activeSheet.id}/sizes`, sizes).catch(() => {});
       }
       setResizing(null);
     };
@@ -255,7 +256,7 @@ export function SheetsPage({ tuningParams, initialSheetId }: SheetsPageProps) {
         const { row, col } = editingCell;
         const original = prevSheet.rows[row]?.[col] ?? "";
         if (editValue !== original) {
-          axios.put(`${API_BASE}/sheets/${prevSheet.id}/cell`, {
+          axios.put(`${getAPIBase()}/sheets/${prevSheet.id}/cell`, {
             row_index: row, col_index: col, value: editValue,
           }).catch(() => {});
         }
@@ -311,7 +312,7 @@ export function SheetsPage({ tuningParams, initialSheetId }: SheetsPageProps) {
       setEditingCell(null);
       setCellError(null);
       try {
-        const res = await axios.put(`${API_BASE}/sheets/${activeSheet.id}/cell`, {
+        const res = await axios.put(`${getAPIBase()}/sheets/${activeSheet.id}/cell`, {
           row_index: row,
           col_index: col,
           value: currentValue,
@@ -440,7 +441,7 @@ export function SheetsPage({ tuningParams, initialSheetId }: SheetsPageProps) {
     const startRow = selection.r1;
     const startCol = selection.c1;
     try {
-      const res = await axios.put(`${API_BASE}/sheets/${activeSheet.id}/paste`, {
+      const res = await axios.put(`${getAPIBase()}/sheets/${activeSheet.id}/paste`, {
         start_row: startRow,
         start_col: startCol,
         data: copyValues.current,
@@ -475,13 +476,13 @@ export function SheetsPage({ tuningParams, initialSheetId }: SheetsPageProps) {
     }
     setColWidths(newWidths);
     const sizes = { ...activeSheet.sizes, colWidths: newWidths, rowHeights };
-    axios.put(`${API_BASE}/sheets/${activeSheet.id}/sizes`, sizes).catch(() => {});
+    axios.put(`${getAPIBase()}/sheets/${activeSheet.id}/sizes`, sizes).catch(() => {});
   }, [activeSheet, rowHeights]);
 
   const toggleFreezeCol = useCallback(() => {
     if (!activeSheet) return;
     const sizes = { ...activeSheet.sizes, freezeFirstCol: !activeSheet.sizes?.freezeFirstCol };
-    axios.put(`${API_BASE}/sheets/${activeSheet.id}/sizes`, sizes)
+    axios.put(`${getAPIBase()}/sheets/${activeSheet.id}/sizes`, sizes)
       .then((res) => updateSheet(res.data))
       .catch(() => {});
   }, [activeSheet]);
@@ -489,7 +490,7 @@ export function SheetsPage({ tuningParams, initialSheetId }: SheetsPageProps) {
   const toggleFreezeRow = useCallback(() => {
     if (!activeSheet) return;
     const sizes = { ...activeSheet.sizes, freezeFirstRow: !activeSheet.sizes?.freezeFirstRow };
-    axios.put(`${API_BASE}/sheets/${activeSheet.id}/sizes`, sizes)
+    axios.put(`${getAPIBase()}/sheets/${activeSheet.id}/sizes`, sizes)
       .then((res) => updateSheet(res.data))
       .catch(() => {});
   }, [activeSheet]);
@@ -531,7 +532,7 @@ export function SheetsPage({ tuningParams, initialSheetId }: SheetsPageProps) {
       }
       const startRow = fillDown ? or2 + 1 : fr1;
       try {
-        const res = await axios.put(`${API_BASE}/sheets/${activeSheet.id}/paste`, {
+        const res = await axios.put(`${getAPIBase()}/sheets/${activeSheet.id}/paste`, {
           start_row: startRow,
           start_col: oc1,
           data,
@@ -561,7 +562,7 @@ export function SheetsPage({ tuningParams, initialSheetId }: SheetsPageProps) {
         else data[ri - or1] = dataRow;
       }
       try {
-        const res = await axios.put(`${API_BASE}/sheets/${activeSheet.id}/paste`, {
+        const res = await axios.put(`${getAPIBase()}/sheets/${activeSheet.id}/paste`, {
           start_row: or1,
           start_col: oc2 + 1,
           data,
@@ -577,7 +578,7 @@ export function SheetsPage({ tuningParams, initialSheetId }: SheetsPageProps) {
     if (!selection || !activeSheet) return;
     copySelection();
     try {
-      const res = await axios.put(`${API_BASE}/sheets/${activeSheet.id}/clear-range`, {
+      const res = await axios.put(`${getAPIBase()}/sheets/${activeSheet.id}/clear-range`, {
         r1: selection.r1, c1: selection.c1, r2: selection.r2, c2: selection.c2,
       });
       updateSheet(res.data);
@@ -604,7 +605,7 @@ export function SheetsPage({ tuningParams, initialSheetId }: SheetsPageProps) {
         payload.source_row = copyOrigin.current.r1;
         payload.source_col = copyOrigin.current.c1;
       }
-      const res = await axios.put(`${API_BASE}/sheets/${activeSheet.id}/paste`, payload);
+      const res = await axios.put(`${getAPIBase()}/sheets/${activeSheet.id}/paste`, payload);
       updateSheet(res.data);
       // Update selection to cover pasted area
       setSelection({
@@ -619,7 +620,7 @@ export function SheetsPage({ tuningParams, initialSheetId }: SheetsPageProps) {
   const clearSelectedCells = useCallback(async () => {
     if (!selection || !activeSheet) return;
     try {
-      const res = await axios.put(`${API_BASE}/sheets/${activeSheet.id}/clear-range`, {
+      const res = await axios.put(`${getAPIBase()}/sheets/${activeSheet.id}/clear-range`, {
         r1: selection.r1, c1: selection.c1, r2: selection.r2, c2: selection.c2,
       });
       updateSheet(res.data);
@@ -637,7 +638,7 @@ export function SheetsPage({ tuningParams, initialSheetId }: SheetsPageProps) {
     }
     const data = Array.from({ length: r2 - r1 + 1 }, () => [...firstRow]);
     try {
-      const res = await axios.put(`${API_BASE}/sheets/${activeSheet.id}/paste`, {
+      const res = await axios.put(`${getAPIBase()}/sheets/${activeSheet.id}/paste`, {
         start_row: r1, start_col: c1, data, source_row: r1, source_col: c1,
       });
       updateSheet(res.data);
@@ -655,7 +656,7 @@ export function SheetsPage({ tuningParams, initialSheetId }: SheetsPageProps) {
       data.push(Array.from({ length: c2 - c1 + 1 }, () => firstVal));
     }
     try {
-      const res = await axios.put(`${API_BASE}/sheets/${activeSheet.id}/paste`, {
+      const res = await axios.put(`${getAPIBase()}/sheets/${activeSheet.id}/paste`, {
         start_row: r1, start_col: c1, data, source_row: r1, source_col: c1,
       });
       updateSheet(res.data);
@@ -666,7 +667,7 @@ export function SheetsPage({ tuningParams, initialSheetId }: SheetsPageProps) {
   const saveSizes = useCallback(async (newHiddenRows: number[], newHiddenCols: number[]) => {
     if (!activeSheet) return;
     try {
-      const res = await axios.put(`${API_BASE}/sheets/${activeSheet.id}/sizes`, {
+      const res = await axios.put(`${getAPIBase()}/sheets/${activeSheet.id}/sizes`, {
         colWidths, rowHeights, hiddenRows: newHiddenRows, hiddenCols: newHiddenCols,
       });
       updateSheet(res.data);
@@ -708,7 +709,7 @@ export function SheetsPage({ tuningParams, initialSheetId }: SheetsPageProps) {
   const applyMultiSort = useCallback(async (levels: SortLevel[]) => {
     if (!activeSheet) return;
     try {
-      const res = await axios.put(`${API_BASE}/sheets/${activeSheet.id}/columns/sort-multi`, { levels });
+      const res = await axios.put(`${getAPIBase()}/sheets/${activeSheet.id}/columns/sort-multi`, { levels });
       updateSheet(res.data);
     } catch { toast("Sort failed.", "error"); }
   }, [activeSheet]);
@@ -728,7 +729,7 @@ export function SheetsPage({ tuningParams, initialSheetId }: SheetsPageProps) {
     if (!activeSheet) return;
     const sizes = { ...activeSheet.sizes, condRules: rules };
     try {
-      const res = await axios.put(`${API_BASE}/sheets/${activeSheet.id}/sizes`, sizes);
+      const res = await axios.put(`${getAPIBase()}/sheets/${activeSheet.id}/sizes`, sizes);
       updateSheet(res.data);
     } catch { toast("Failed to save rules.", "error"); }
   }, [activeSheet]);
@@ -795,7 +796,7 @@ export function SheetsPage({ tuningParams, initialSheetId }: SheetsPageProps) {
     const source = formula ?? (activeSheet.rows[r]?.[c] ?? "");
     const newVal = source.replaceAll(findQuery, replaceQuery);
     try {
-      const res = await axios.put(`${API_BASE}/sheets/${activeSheet.id}/cell`, {
+      const res = await axios.put(`${getAPIBase()}/sheets/${activeSheet.id}/cell`, {
         row_index: r, col_index: c, value: newVal,
       });
       updateSheet(res.data);
@@ -813,7 +814,7 @@ export function SheetsPage({ tuningParams, initialSheetId }: SheetsPageProps) {
       const newVal = source.replaceAll(findQuery, replaceQuery);
       if (newVal !== source) {
         try {
-          const res = await axios.put(`${API_BASE}/sheets/${updatedSheet.id}/cell`, {
+          const res = await axios.put(`${getAPIBase()}/sheets/${updatedSheet.id}/cell`, {
             row_index: r, col_index: c, value: newVal,
           });
           updatedSheet = res.data;
@@ -833,7 +834,7 @@ export function SheetsPage({ tuningParams, initialSheetId }: SheetsPageProps) {
   async function rowInsertAbove(ri: number) {
     if (!activeSheet) return;
     try {
-      const res = await axios.post(`${API_BASE}/sheets/${activeSheet.id}/rows/insert`, { row_index: ri });
+      const res = await axios.post(`${getAPIBase()}/sheets/${activeSheet.id}/rows/insert`, { row_index: ri });
       updateSheet(res.data);
     } catch { toast("Failed to insert row.", "error"); }
     setRowMenu(null);
@@ -841,7 +842,7 @@ export function SheetsPage({ tuningParams, initialSheetId }: SheetsPageProps) {
   async function rowInsertBelow(ri: number) {
     if (!activeSheet) return;
     try {
-      const res = await axios.post(`${API_BASE}/sheets/${activeSheet.id}/rows/insert`, { row_index: ri + 1 });
+      const res = await axios.post(`${getAPIBase()}/sheets/${activeSheet.id}/rows/insert`, { row_index: ri + 1 });
       updateSheet(res.data);
     } catch { toast("Failed to insert row.", "error"); }
     setRowMenu(null);
@@ -849,7 +850,7 @@ export function SheetsPage({ tuningParams, initialSheetId }: SheetsPageProps) {
   async function rowDuplicate(ri: number) {
     if (!activeSheet) return;
     try {
-      const res = await axios.post(`${API_BASE}/sheets/${activeSheet.id}/rows/duplicate`, { row_index: ri });
+      const res = await axios.post(`${getAPIBase()}/sheets/${activeSheet.id}/rows/duplicate`, { row_index: ri });
       updateSheet(res.data);
     } catch { toast("Failed to duplicate row.", "error"); }
     setRowMenu(null);
@@ -892,7 +893,7 @@ export function SheetsPage({ tuningParams, initialSheetId }: SheetsPageProps) {
     setCellMenu(null);
     setFormulaExplanation({ row, col, text: "", loading: true });
     try {
-      const res = await axios.post(`${API_BASE}/sheets/${activeSheet.id}/explain-formula`, {
+      const res = await axios.post(`${getAPIBase()}/sheets/${activeSheet.id}/explain-formula`, {
         row_index: row, col_index: col,
         temperature: tuningParams?.temperature,
         max_tokens: tuningParams?.maxTokens,
@@ -916,7 +917,7 @@ export function SheetsPage({ tuningParams, initialSheetId }: SheetsPageProps) {
       return;
     }
     try {
-      const res = await axios.put(`${API_BASE}/sheets/${activeSheet.id}/columns/rename`, {
+      const res = await axios.put(`${getAPIBase()}/sheets/${activeSheet.id}/columns/rename`, {
         col_index: renamingCol, name: renameValue.trim(),
       });
       updateSheet(res.data);
@@ -926,7 +927,7 @@ export function SheetsPage({ tuningParams, initialSheetId }: SheetsPageProps) {
   async function colMoveLeft(ci: number) {
     if (!activeSheet || ci <= 0) return;
     try {
-      const res = await axios.put(`${API_BASE}/sheets/${activeSheet.id}/columns/move`, {
+      const res = await axios.put(`${getAPIBase()}/sheets/${activeSheet.id}/columns/move`, {
         from_index: ci, to_index: ci - 1,
       });
       updateSheet(res.data);
@@ -936,7 +937,7 @@ export function SheetsPage({ tuningParams, initialSheetId }: SheetsPageProps) {
   async function colMoveRight(ci: number) {
     if (!activeSheet || ci >= activeSheet.columns.length - 1) return;
     try {
-      const res = await axios.put(`${API_BASE}/sheets/${activeSheet.id}/columns/move`, {
+      const res = await axios.put(`${getAPIBase()}/sheets/${activeSheet.id}/columns/move`, {
         from_index: ci, to_index: ci + 1,
       });
       updateSheet(res.data);
@@ -947,7 +948,7 @@ export function SheetsPage({ tuningParams, initialSheetId }: SheetsPageProps) {
     if (!activeSheet) return;
     const name = idxToCol(activeSheet.columns.length);
     try {
-      const res = await axios.post(`${API_BASE}/sheets/${activeSheet.id}/columns/insert`, {
+      const res = await axios.post(`${getAPIBase()}/sheets/${activeSheet.id}/columns/insert`, {
         col_index: ci, name, type: "text",
       });
       updateSheet(res.data);
@@ -965,7 +966,7 @@ export function SheetsPage({ tuningParams, initialSheetId }: SheetsPageProps) {
   async function colSort(ci: number, ascending: boolean) {
     if (!activeSheet) return;
     try {
-      const res = await axios.put(`${API_BASE}/sheets/${activeSheet.id}/columns/sort`, {
+      const res = await axios.put(`${getAPIBase()}/sheets/${activeSheet.id}/columns/sort`, {
         col_index: ci, ascending,
       });
       updateSheet(res.data);
@@ -1119,7 +1120,7 @@ export function SheetsPage({ tuningParams, initialSheetId }: SheetsPageProps) {
 
   async function loadSheets() {
     try {
-      const res = await axios.get(`${API_BASE}/sheets`);
+      const res = await axios.get(`${getAPIBase()}/sheets`);
       const loaded: Sheet[] = res.data;
       setSheets(loaded);
       // Auto-select the most recently opened sheet
@@ -1134,7 +1135,7 @@ export function SheetsPage({ tuningParams, initialSheetId }: SheetsPageProps) {
   async function createFromTemplate(template: SheetTemplate) {
     setTemplatePickerOpen(false);
     try {
-      const res = await axios.post(`${API_BASE}/sheets`, {
+      const res = await axios.post(`${getAPIBase()}/sheets`, {
         title: template.title,
         columns: template.columns,
         rows: template.rows,
@@ -1150,7 +1151,7 @@ export function SheetsPage({ tuningParams, initialSheetId }: SheetsPageProps) {
 
   async function deleteSheet(id: string) {
     try {
-      await axios.delete(`${API_BASE}/sheets/${id}`);
+      await axios.delete(`${getAPIBase()}/sheets/${id}`);
       setSheets((prev) => prev.filter((s) => s.id !== id));
       if (activeSheetId === id) {
         setActiveSheetId(null);
@@ -1162,7 +1163,7 @@ export function SheetsPage({ tuningParams, initialSheetId }: SheetsPageProps) {
 
   async function duplicateSheet(id: string) {
     try {
-      const res = await axios.post(`${API_BASE}/sheets/${id}/duplicate`);
+      const res = await axios.post(`${getAPIBase()}/sheets/${id}/duplicate`);
       const sheet: Sheet = res.data;
       setSheets((prev) => [sheet, ...prev]);
       setActiveSheetId(sheet.id);
@@ -1188,7 +1189,7 @@ export function SheetsPage({ tuningParams, initialSheetId }: SheetsPageProps) {
 
   async function updateTitle(id: string, title: string) {
     try {
-      const res = await axios.put(`${API_BASE}/sheets/${id}/title`, { title });
+      const res = await axios.put(`${getAPIBase()}/sheets/${id}/title`, { title });
       setSheets((prev) => prev.map((s) => (s.id === id ? res.data : s)));
     } catch {
       // ignore
@@ -1197,7 +1198,7 @@ export function SheetsPage({ tuningParams, initialSheetId }: SheetsPageProps) {
 
   async function addColumn(id: string, name: string, type: string) {
     try {
-      const res = await axios.post(`${API_BASE}/sheets/${id}/columns`, { name, type });
+      const res = await axios.post(`${getAPIBase()}/sheets/${id}/columns`, { name, type });
       updateSheet(res.data);
     } catch { /* ignore */ }
   }
@@ -1205,7 +1206,7 @@ export function SheetsPage({ tuningParams, initialSheetId }: SheetsPageProps) {
 
   async function addRow(id: string) {
     try {
-      const res = await axios.post(`${API_BASE}/sheets/${id}/rows`);
+      const res = await axios.post(`${getAPIBase()}/sheets/${id}/rows`);
       updateSheet(res.data);
     } catch { /* ignore */ }
   }
@@ -1220,10 +1221,10 @@ export function SheetsPage({ tuningParams, initialSheetId }: SheetsPageProps) {
     setPendingDelete(null);
     try {
       if (type === "row") {
-        const res = await axios.delete(`${API_BASE}/sheets/${sheetId}/rows`, { data: { row_index: index } });
+        const res = await axios.delete(`${getAPIBase()}/sheets/${sheetId}/rows`, { data: { row_index: index } });
         updateSheet(res.data);
       } else {
-        const res = await axios.delete(`${API_BASE}/sheets/${sheetId}/columns`, { data: { col_index: index } });
+        const res = await axios.delete(`${getAPIBase()}/sheets/${sheetId}/columns`, { data: { col_index: index } });
         updateSheet(res.data);
       }
     } catch {
@@ -1269,7 +1270,7 @@ export function SheetsPage({ tuningParams, initialSheetId }: SheetsPageProps) {
       }
     }
     try {
-      const res = await axios.put(`${API_BASE}/sheets/${activeSheet.id}/alignments`, { alignments: newAlignments });
+      const res = await axios.put(`${getAPIBase()}/sheets/${activeSheet.id}/alignments`, { alignments: newAlignments });
       updateSheet(res.data);
     } catch { /* ignore */ }
   }
@@ -1304,7 +1305,7 @@ export function SheetsPage({ tuningParams, initialSheetId }: SheetsPageProps) {
       }
     }
     try {
-      const res = await axios.put(`${API_BASE}/sheets/${activeSheet.id}/formats`, { formats: newFormats });
+      const res = await axios.put(`${getAPIBase()}/sheets/${activeSheet.id}/formats`, { formats: newFormats });
       updateSheet(res.data);
     } catch { /* ignore */ }
   }
@@ -1377,9 +1378,9 @@ export function SheetsPage({ tuningParams, initialSheetId }: SheetsPageProps) {
     setImporting(true);
     try {
       const parsed = await parseSheetImport(file);
-      const created = await axios.post(`${API_BASE}/sheets`, { title: parsed.title, columns: [], rows: [] });
+      const created = await axios.post(`${getAPIBase()}/sheets`, { title: parsed.title, columns: [], rows: [] });
       const sheetId: string = created.data.id;
-      const populated = await axios.put(`${API_BASE}/sheets/${sheetId}/data`, {
+      const populated = await axios.put(`${getAPIBase()}/sheets/${sheetId}/data`, {
         columns: parsed.columns,
         rows: parsed.rows,
         formulas: parsed.formulas,

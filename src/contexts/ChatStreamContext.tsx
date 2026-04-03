@@ -2,7 +2,7 @@ import { createContext, useContext, useRef, useState, useCallback } from "react"
 import type { ReactNode } from "react";
 import { useFetchSSE } from "../hooks/useFetchSSE";
 import type { AgentEvent } from "../hooks/useFetchSSE";
-import { API_BASE } from "../lib/constants";
+import { getAPIBase } from "../lib/api";
 
 export interface AgentScope {
   sheet_ids?: string[];
@@ -57,8 +57,8 @@ export function ChatStreamProvider({ children }: { children: ReactNode }) {
       setStreamingSessionId(params.sessionId);
 
       const endpoint = params.isAgent
-        ? `${API_BASE}/chat/session/${params.sessionId}/agent/stream`
-        : `${API_BASE}/chat/session/${params.sessionId}/message/stream`;
+        ? `${getAPIBase()}/chat/session/${params.sessionId}/agent/stream`
+        : `${getAPIBase()}/chat/session/${params.sessionId}/message/stream`;
 
       startSSE(
         endpoint,

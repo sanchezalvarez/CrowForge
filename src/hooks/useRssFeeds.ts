@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
 import axios from "axios";
-import { API_BASE } from "../lib/constants";
+import { getAPIBase } from "../lib/api";
 
 export interface RssFeed {
   id: number;
@@ -20,7 +20,7 @@ export function useRssFeeds() {
   const loadFeeds = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await axios.get(`${API_BASE}/rss/feeds`);
+      const res = await axios.get(`${getAPIBase()}/rss/feeds`);
       setFeeds(res.data);
     } catch {
       // silent
@@ -30,18 +30,18 @@ export function useRssFeeds() {
   }, []);
 
   const addFeed = useCallback(async (url: string, title = "") => {
-    const res = await axios.post(`${API_BASE}/rss/feeds`, { url, title });
+    const res = await axios.post(`${getAPIBase()}/rss/feeds`, { url, title });
     await loadFeeds();
     return res.data;
   }, [loadFeeds]);
 
   const deleteFeed = useCallback(async (id: number) => {
-    await axios.delete(`${API_BASE}/rss/feeds/${id}`);
+    await axios.delete(`${getAPIBase()}/rss/feeds/${id}`);
     setFeeds((f) => f.filter((x) => x.id !== id));
   }, []);
 
   const toggleFeed = useCallback(async (id: number, is_active: boolean) => {
-    await axios.patch(`${API_BASE}/rss/feeds/${id}`, { is_active });
+    await axios.patch(`${getAPIBase()}/rss/feeds/${id}`, { is_active });
     setFeeds((f) => f.map((x) => x.id === id ? { ...x, is_active: is_active ? 1 : 0 } : x));
   }, []);
 

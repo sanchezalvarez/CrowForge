@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { APP_VERSION } from "../lib/constants";
-import { Download, CheckCircle2, Loader2, X, AlertCircle, Trash2, ExternalLink, Cpu, HardDrive, Monitor, MemoryStick, Rss, Plus, ToggleLeft, ToggleRight, Check, Newspaper } from "lucide-react";
+import { Download, CheckCircle2, Loader2, X, AlertCircle, Trash2, ExternalLink, Cpu, HardDrive, Monitor, MemoryStick, Rss, Plus, ToggleLeft, ToggleRight, Check, Newspaper, Globe, Server, Copy, RefreshCw } from "lucide-react";
 import { toast } from "../hooks/useToast";
 import { useWorkflowConfig, invalidateWorkflowCache } from "../hooks/useWorkflowConfig";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -9,8 +9,8 @@ import { useRssFeeds, RssFeed } from "../hooks/useRssFeeds";
 import type { EngineType, AIConfig, GalleryModel, SystemSpecs, DownloadState } from "../types/api";
 import { getErrorDetail } from "../lib/errorUtils";
 import { RisoBackground } from "../components/RisoBackground";
+import { getAPIBase, LOCAL_API_BASE, syncAxiosDefaults } from "../lib/api";
 
-const API_BASE = "http://127.0.0.1:8000";
 
 const USER_AVATARS = [
   { emoji: "🐱", label: "Cat" },
@@ -227,7 +227,7 @@ const GALLERY_MODELS: GalleryModel[] = [
 
 const ALL_TAGS = ["all", "agent", "chat", "translate", "multilingual", "coding", "reasoning", "math", "fast", "general"];
 
-type Section = "ai" | "preferences" | "pm" | "news" | "about";
+type Section = "ai" | "connection" | "preferences" | "pm" | "news" | "about";
 
 interface CuratedFeed {
   url: string;
@@ -551,6 +551,98 @@ export function SettingsPage({ theme, setTheme }: SettingsPageProps) {
   const [confirmDelete, setConfirmDelete] = useState<"chat" | "documents" | "sheets" | "canvases" | "projects" | "issues" | "all" | null>(null);
   const [deleting, setDeleting] = useState(false);
 
+  // Deployment / Connection state
+  type DeployMode = "local" | "connect" | "host";
+  const [depMode, setDepMode] = useState<DeployMode>("local");
+  const [depServerUrl, setDepServerUrl] = useState("");
+  const [depServerKey, setDepServerKey] = useState("");
+  const [depHostPort, setDepHostPort] = useState("8000");
+  const [depHostKey, setDepHostKey] = useState("");
+  const [depLocalIp, setDepLocalIp] = useState("");
+  const [depTestStatus, setDepTestStatus] = useState<"idle" | "testing" | "success" | "error">("idle");
+  const [depTestResult, setDepTestResult] = useState<{ version?: string; error?: string }>({});
+  const [depSaving, setDepSaving] = useState(false);
+  const [depCopied, setDepCopied] = useState(false);
+  const [depClientCount, setDepClientCount] = useState(0);
+  const depRestarting = false; // no restart needed — settings read live from DB
+  const [depConfirmRestart, setDepConfirmRestart] = useState(false);
+
+  // Load deployment settings
+  useEffect(() => {
+    if (section !== "connection") return;
+    axios.get(`${LOCAL_API_BASE}/settings/deployment`).then(r => {
+      const d = r.data;
+      setDepMode(d.mode || "local");
+      setDepServerUrl(d.server_url || "");
+      setDepServerKey(d.server_api_key || "");
+      setDepHostPort(d.host_port || "8000");
+      setDepHostKey(d.host_api_key || "");
+      setDepLocalIp(d.local_ip || "127.0.0.1");
+    }).catch(() => {});
+    // Get client count if host mode
+    axios.get(`${LOCAL_API_BASE}/settings/deployment/clients`).then(r => {
+      setDepClientCount(r.data.count || 0);
+    }).catch(() => {});
+  }, [section]);
+
+  const depTestConnection = async () => {
+    setDepTestStatus("testing");
+    try {
+      const res = await axios.post(`${LOCAL_API_BASE}/settings/deployment/test-connection`, { url: depServerUrl, api_key: depServerKey });
+      if (res.data.success) {
+        setDepTestStatus("success");
+        setDepTestResult({ version: res.data.version });
+      } else {
+        setDepTestStatus("error");
+        setDepTestResult({ error: res.data.error });
+      }
+    } catch {
+      setDepTestStatus("error");
+      setDepTestResult({ error: "Request failed" });
+    }
+  };
+
+  const depSave = async (_confirm = false) => {
+    setDepSaving(true);
+    try {
+      await axios.patch(`${LOCAL_API_BASE}/settings/deployment`, {
+        mode: depMode, server_url: depServerUrl, server_api_key: depServerKey,
+        host_port: depHostPort, host_api_key: depHostKey,
+      });
+      localStorage.setItem("crowforge_deployment_mode", depMode);
+      if (depMode === "connect") {
+        localStorage.setItem("crowforge_server_url", depServerUrl);
+        localStorage.setItem("crowforge_server_api_key", depServerKey);
+      } else if (depMode === "host") {
+        localStorage.setItem("crowforge_host_port", depHostPort);
+        localStorage.setItem("crowforge_host_api_key", depHostKey);
+      }
+      syncAxiosDefaults();
+      // Check if backend needs restart (bind address changed)
+      try {
+        const h = await axios.get(`${LOCAL_API_BASE}/health`);
+        if (h.data.needs_restart) {
+          toast("Settings saved. Restart CrowForge to apply network changes.");
+        } else {
+          toast("Connection settings saved");
+        }
+      } catch {
+        toast("Connection settings saved");
+      }
+    } catch {
+      toast("Failed to save", "error");
+    } finally {
+      setDepSaving(false);
+    }
+  };
+
+  const depGenerateKey = () => {
+    const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+    let key = "sk-cf-";
+    for (let i = 0; i < 16; i++) key += chars[Math.floor(Math.random() * chars.length)];
+    setDepHostKey(key);
+  };
+
   // PM workflow config
   const STATUS_COLOR_PRESETS = [
     { value: "bg-muted-foreground/30", hex: "#888" },
@@ -616,7 +708,7 @@ export function SettingsPage({ theme, setTheme }: SettingsPageProps) {
   async function deleteData(target: "chat" | "documents" | "sheets" | "canvases" | "projects" | "issues" | "all") {
     setDeleting(true);
     try {
-      await axios.delete(`${API_BASE}/data/${target}`);
+      await axios.delete(`${getAPIBase()}/data/${target}`);
       const labels: Record<string, string> = { chat: "Chat", documents: "Documents", sheets: "Sheets", canvases: "Canvases", projects: "Projects", issues: "Issues", all: "All data" };
       toast(`${labels[target]} deleted.`);
       // Notify all pages to reload their data
@@ -651,14 +743,14 @@ export function SettingsPage({ theme, setTheme }: SettingsPageProps) {
   const reinitPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   function refreshModels() {
-    axios.get(`${API_BASE}/ai/models`).then((r) => {
+    axios.get(`${getAPIBase()}/ai/models`).then((r) => {
       setInstalledFiles(r.data.models.map((m: { filename: string }) => m.filename));
     }).catch(() => {});
   }
 
   async function handleDeleteModel(filename: string) {
     try {
-      await axios.delete(`${API_BASE}/ai/models/${encodeURIComponent(filename)}`);
+      await axios.delete(`${getAPIBase()}/ai/models/${encodeURIComponent(filename)}`);
       toast(`"${filename}" deleted.`);
       refreshModels();
     } catch {
@@ -667,7 +759,7 @@ export function SettingsPage({ theme, setTheme }: SettingsPageProps) {
   }
 
   function refreshDownloads() {
-    axios.get(`${API_BASE}/ai/models/download/status`).then((r) => {
+    axios.get(`${getAPIBase()}/ai/models/download/status`).then((r) => {
       setDownloads(r.data.downloads ?? {});
       // If any download just finished, rescan installed models
       const states: DownloadState[] = Object.values(r.data.downloads ?? {});
@@ -676,7 +768,7 @@ export function SettingsPage({ theme, setTheme }: SettingsPageProps) {
   }
 
   useEffect(() => {
-    axios.get(`${API_BASE}/settings/ai`).then((r) => setConfig(r.data)).catch(() => {});
+    axios.get(`${getAPIBase()}/settings/ai`).then((r) => setConfig(r.data)).catch(() => {});
     refreshModels();
     return () => {
       if (reinitPollRef.current) { clearInterval(reinitPollRef.current); reinitPollRef.current = null; }
@@ -687,16 +779,16 @@ export function SettingsPage({ theme, setTheme }: SettingsPageProps) {
     if (section === "ai") {
       refreshModels();
       refreshDownloads();
-      axios.get(`${API_BASE}/system/specs`).then((r) => setSpecs(r.data)).catch(() => {});
+      axios.get(`${getAPIBase()}/system/specs`).then((r) => setSpecs(r.data)).catch(() => {});
     }
     if (section === "pm") {
-      axios.get(`${API_BASE}/pm/members`).then((r) => setPmMembers(r.data)).catch(() => {});
+      axios.get(`${getAPIBase()}/pm/members`).then((r) => setPmMembers(r.data)).catch(() => {});
     }
     if (section === "preferences") {
       setPluginsLoading(true);
       Promise.all([
-        axios.get(`${API_BASE}/plugins`),
-        axios.get(`${API_BASE}/plugins/dir`),
+        axios.get(`${getAPIBase()}/plugins`),
+        axios.get(`${getAPIBase()}/plugins/dir`),
       ]).then(([p, d]) => {
         setPlugins(p.data);
         setPluginsDir(d.data.path ?? "");
@@ -722,12 +814,12 @@ export function SettingsPage({ theme, setTheme }: SettingsPageProps) {
     setSaving(true);
     setReinitError(null);
     try {
-      await axios.post(`${API_BASE}/settings/ai`, config);
+      await axios.post(`${getAPIBase()}/settings/ai`, config);
       setReinitStatus("reinitializing");
       // Poll until backend finishes re-initializing engines
       reinitPollRef.current = setInterval(async () => {
         try {
-          const r = await axios.get(`${API_BASE}/settings/ai/status`);
+          const r = await axios.get(`${getAPIBase()}/settings/ai/status`);
           if (r.data.status === "ready") {
             clearInterval(reinitPollRef.current!);
             reinitPollRef.current = null;
@@ -754,7 +846,7 @@ export function SettingsPage({ theme, setTheme }: SettingsPageProps) {
   async function reloadPlugins() {
     setPluginsReloading(true);
     try {
-      const res = await axios.post(`${API_BASE}/plugins/reload`);
+      const res = await axios.post(`${getAPIBase()}/plugins/reload`);
       setPlugins(res.data);
       toast(`Plugins reloaded — ${res.data.length} found`, "success");
     } catch {
@@ -769,7 +861,7 @@ export function SettingsPage({ theme, setTheme }: SettingsPageProps) {
 
   async function handleDownload(model: GalleryModel) {
     try {
-      await axios.post(`${API_BASE}/ai/models/download`, {
+      await axios.post(`${getAPIBase()}/ai/models/download`, {
         url: model.url,
         filename: model.filename,
       });
@@ -785,7 +877,7 @@ export function SettingsPage({ theme, setTheme }: SettingsPageProps) {
   }
 
   async function handleCancelDownload(filename: string) {
-    await axios.delete(`${API_BASE}/ai/models/download/${encodeURIComponent(filename)}`).catch(() => {});
+    await axios.delete(`${getAPIBase()}/ai/models/download/${encodeURIComponent(filename)}`).catch(() => {});
     setDownloads((prev) => {
       const next = { ...prev };
       delete next[filename];
@@ -795,6 +887,7 @@ export function SettingsPage({ theme, setTheme }: SettingsPageProps) {
 
   const navItems: { id: Section; label: string; dot: string }[] = [
     { id: "ai", label: "AI & Models", dot: "var(--accent-orange)" },
+    { id: "connection", label: "Connection", dot: "var(--accent-teal)" },
     { id: "preferences", label: "Preferences", dot: "var(--accent-teal)" },
     { id: "pm", label: "Team & Workflow", dot: "var(--accent-violet)" },
     { id: "news", label: "News Feeds", dot: "var(--accent-teal)" },
@@ -1153,6 +1246,157 @@ export function SettingsPage({ theme, setTheme }: SettingsPageProps) {
           </>
         )}
 
+        {section === "connection" && (
+          <div className="max-w-2xl space-y-6">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-5 rounded-sm shrink-0" style={{ background: 'var(--accent-teal)' }} />
+              <h2 className="font-display font-bold riso-title" style={{ fontSize: '1.1rem', letterSpacing: '-0.01em' }}>Connection</h2>
+            </div>
+
+            {depRestarting && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.7)" }}>
+                <div className="flex items-center gap-3 px-6 py-4 rounded-lg" style={{ background: "var(--background-2)", border: "1px solid var(--border-strong)" }}>
+                  <Loader2 size={20} className="animate-spin" style={{ color: "var(--accent-orange)" }} />
+                  <span className="font-mono-ui text-sm">Restarting backend...</span>
+                </div>
+              </div>
+            )}
+
+            {depConfirmRestart && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.6)" }}>
+                <div className="flex flex-col gap-4 px-6 py-5 rounded-lg max-w-sm" style={{ background: "var(--background-2)", border: "1px solid var(--border-strong)" }}>
+                  <p className="font-mono-ui text-sm">Switch deployment mode and save?</p>
+                  <div className="flex justify-end gap-2">
+                    <button onClick={() => setDepConfirmRestart(false)} className="btn-tactile btn-tactile-outline px-3 py-1.5 text-xs font-mono-ui uppercase">Cancel</button>
+                    <button onClick={() => { setDepConfirmRestart(false); depSave(true); }} className="btn-tactile btn-tactile-orange px-3 py-1.5 text-xs font-mono-ui uppercase">Save</button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Mode selector */}
+            <div className="card-riso rounded-lg border surface-noise p-4 space-y-4" style={{ borderColor: 'var(--border-strong)' }}>
+              <label className="riso-section-label">Deployment Mode</label>
+              <div className="grid grid-cols-3 gap-3">
+                {([
+                  { id: "local" as DeployMode, icon: Monitor, label: "Local", desc: "Everything on this PC" },
+                  { id: "connect" as DeployMode, icon: Globe, label: "Connect", desc: "Join a team server" },
+                  { id: "host" as DeployMode, icon: Server, label: "Host", desc: "Run as server" },
+                ] as const).map(({ id, icon: Icon, label, desc }) => (
+                  <button
+                    key={id}
+                    onClick={() => setDepMode(id)}
+                    className="flex flex-col items-start gap-2 p-3 rounded-lg text-left transition-all"
+                    style={{
+                      background: depMode === id ? "var(--background-3)" : "var(--background-2)",
+                      border: depMode === id ? "1px solid var(--accent-teal)" : "1px solid var(--border-strong)",
+                      borderLeftWidth: depMode === id ? 3 : 1,
+                    }}
+                  >
+                    <Icon size={18} style={{ color: depMode === id ? "var(--accent-teal)" : "var(--muted-foreground)" }} />
+                    <span className="text-sm font-semibold">{label}</span>
+                    <span className="font-mono-ui text-xs" style={{ color: "var(--muted-foreground)" }}>{desc}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Mode-specific config */}
+            {depMode === "local" && (
+              <div className="card-riso rounded-lg border surface-noise p-4" style={{ borderColor: 'var(--border-strong)' }}>
+                <p className="font-mono-ui text-sm" style={{ color: "var(--muted-foreground)" }}>
+                  Everything runs on this PC. No network configuration required.
+                </p>
+                <button onClick={() => depSave()} disabled={depSaving} className="btn-tactile btn-tactile-teal px-4 py-1.5 text-xs font-mono-ui uppercase mt-3">
+                  {depSaving ? <Loader2 size={12} className="animate-spin" /> : "Save"}
+                </button>
+              </div>
+            )}
+
+            {depMode === "connect" && (
+              <div className="card-riso rounded-lg border surface-noise p-4 space-y-3" style={{ borderColor: 'var(--border-strong)' }}>
+                <label className="riso-section-label">Server Connection</label>
+                <input
+                  type="url" placeholder="https://crowforge.example.com" value={depServerUrl}
+                  onChange={e => setDepServerUrl(e.target.value)}
+                  className="w-full px-3 py-2 rounded-md font-mono-ui text-sm outline-none bg-background border"
+                  style={{ borderColor: "var(--border-strong)" }}
+                />
+                <input
+                  type="text" placeholder="API Key" value={depServerKey}
+                  onChange={e => setDepServerKey(e.target.value)}
+                  className="w-full px-3 py-2 rounded-md font-mono-ui text-sm outline-none bg-background border"
+                  style={{ borderColor: "var(--border-strong)" }}
+                />
+                <div className="flex items-center gap-3">
+                  <button onClick={depTestConnection} disabled={!depServerUrl || depTestStatus === "testing"} className="btn-tactile px-3 py-1.5 text-xs font-mono-ui uppercase disabled:opacity-40">
+                    {depTestStatus === "testing" ? <Loader2 size={12} className="animate-spin" /> : "Test connection"}
+                  </button>
+                  {depTestStatus === "success" && (
+                    <span className="flex items-center gap-1 font-mono-ui text-xs" style={{ color: "var(--accent-teal)" }}>
+                      <CheckCircle2 size={14} /> Connected · v{depTestResult.version}
+                    </span>
+                  )}
+                  {depTestStatus === "error" && (
+                    <span className="flex items-center gap-1 font-mono-ui text-xs text-destructive">
+                      <AlertCircle size={14} /> {depTestResult.error}
+                    </span>
+                  )}
+                </div>
+                <button onClick={() => setDepConfirmRestart(true)} disabled={depSaving} className="btn-tactile btn-tactile-orange px-4 py-1.5 text-xs font-mono-ui uppercase">
+                  {depSaving ? <Loader2 size={12} className="animate-spin" /> : "Save"}
+                </button>
+              </div>
+            )}
+
+            {depMode === "host" && (
+              <div className="card-riso rounded-lg border surface-noise p-4 space-y-3" style={{ borderColor: 'var(--border-strong)' }}>
+                <label className="riso-section-label">Host Configuration</label>
+                <div className="flex gap-3">
+                  <div className="w-28">
+                    <span className="font-mono-ui text-xs block mb-1" style={{ color: "var(--muted-foreground)" }}>Port</span>
+                    <input type="text" value={depHostPort} onChange={e => setDepHostPort(e.target.value.replace(/\D/g, ""))}
+                      className="w-full px-3 py-2 rounded-md font-mono-ui text-sm outline-none bg-background border" style={{ borderColor: "var(--border-strong)" }} />
+                  </div>
+                  <div className="flex-1">
+                    <span className="font-mono-ui text-xs block mb-1" style={{ color: "var(--muted-foreground)" }}>API Key</span>
+                    <div className="flex gap-2">
+                      <input type="text" value={depHostKey} onChange={e => setDepHostKey(e.target.value)} placeholder="Generate a key"
+                        className="flex-1 px-3 py-2 rounded-md font-mono-ui text-sm outline-none bg-background border" style={{ borderColor: "var(--border-strong)" }} />
+                      <button onClick={depGenerateKey} className="btn-tactile px-3 py-1.5 text-xs font-mono-ui uppercase flex items-center gap-1">
+                        <RefreshCw size={12} /> Generate
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {depHostKey && (
+                  <div className="p-3 rounded-lg border" style={{ background: "var(--background-2)", borderColor: "var(--border-strong)" }}>
+                    <span className="font-mono-ui text-xs block mb-1" style={{ color: "var(--muted-foreground)" }}>Team connection details</span>
+                    <p className="font-mono-ui text-xs">http://{depLocalIp}:{depHostPort}</p>
+                    <p className="font-mono-ui text-xs" style={{ color: "var(--muted-foreground)" }}>Key: {depHostKey}</p>
+                    <div className="flex items-center gap-3 mt-2">
+                      <button onClick={() => {
+                        navigator.clipboard.writeText(`Server: http://${depLocalIp}:${depHostPort}\nAPI Key: ${depHostKey}`);
+                        setDepCopied(true); setTimeout(() => setDepCopied(false), 2000);
+                      }} className="flex items-center gap-1 font-mono-ui text-xs px-2 py-1 rounded" style={{ color: "var(--accent-teal)", background: "rgba(11,114,104,0.1)" }}>
+                        <Copy size={12} /> {depCopied ? "Copied!" : "Copy"}
+                      </button>
+                      <span className="font-mono-ui text-xs" style={{ color: "var(--muted-foreground)" }}>
+                        {depClientCount} client{depClientCount !== 1 ? "s" : ""} connected
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                <button onClick={() => setDepConfirmRestart(true)} disabled={depSaving || !depHostKey} className="btn-tactile btn-tactile-orange px-4 py-1.5 text-xs font-mono-ui uppercase disabled:opacity-40">
+                  {depSaving ? <Loader2 size={12} className="animate-spin" /> : "Save"}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
         {section === "preferences" && (
           <div className="grid grid-cols-2 gap-8 items-start">
             {/* ── Left: Appearance ── */}
@@ -1274,7 +1518,7 @@ export function SettingsPage({ theme, setTheme }: SettingsPageProps) {
                         filters: [{ name: "Database", extensions: ["db"] }],
                       });
                       if (!path) return;
-                      await axios.post(`${API_BASE}/backup/export`, { path });
+                      await axios.post(`${getAPIBase()}/backup/export`, { path });
                       toast("Backup exported successfully", "success");
                     } catch (e: unknown) {
                       toast(getErrorDetail(e), "error");
@@ -1295,7 +1539,7 @@ export function SettingsPage({ theme, setTheme }: SettingsPageProps) {
                         multiple: false,
                       });
                       if (!path) return;
-                      await axios.post(`${API_BASE}/backup/import`, { path });
+                      await axios.post(`${getAPIBase()}/backup/import`, { path });
                       toast("Database imported. Restarting backend...", "success");
                       const { invoke } = await import("@tauri-apps/api/core");
                       await invoke("restart_backend");
@@ -1415,7 +1659,7 @@ export function SettingsPage({ theme, setTheme }: SettingsPageProps) {
                   placeholder="New member name"
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && newMemberName.trim()) {
-                      axios.post(`${API_BASE}/pm/members`, { name: newMemberName.trim(), avatar_color: newMemberColor }).then((r) => {
+                      axios.post(`${getAPIBase()}/pm/members`, { name: newMemberName.trim(), avatar_color: newMemberColor }).then((r) => {
                         setPmMembers((prev) => [...prev, r.data]);
                         setNewMemberName("");
                       }).catch(() => toast("Failed to add member", "error"));
@@ -1442,7 +1686,7 @@ export function SettingsPage({ theme, setTheme }: SettingsPageProps) {
                   style={{ padding: '5.5px 12px' }}
                   disabled={!newMemberName.trim()}
                   onClick={() => {
-                    axios.post(`${API_BASE}/pm/members`, { name: newMemberName.trim(), avatar_color: newMemberColor }).then((r) => {
+                    axios.post(`${getAPIBase()}/pm/members`, { name: newMemberName.trim(), avatar_color: newMemberColor }).then((r) => {
                       setPmMembers((prev) => [...prev, r.data]);
                       setNewMemberName("");
                     }).catch(() => toast("Failed to add member", "error"));
@@ -1463,7 +1707,7 @@ export function SettingsPage({ theme, setTheme }: SettingsPageProps) {
                         className="text-muted-foreground hover:text-destructive transition-colors p-1 rounded"
                         title="Remove member"
                         onClick={() => {
-                          axios.delete(`${API_BASE}/pm/members/${m.id}`).then(() => {
+                          axios.delete(`${getAPIBase()}/pm/members/${m.id}`).then(() => {
                             setPmMembers((prev) => prev.filter((x) => x.id !== m.id));
                           }).catch(() => toast("Failed to delete member", "error"));
                         }}

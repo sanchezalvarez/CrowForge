@@ -23,8 +23,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../components/ui/select";
+import { getAPIBase } from "../lib/api";
 
-const API_BASE = "http://127.0.0.1:8000";
 
 export function IssueTrackerPage() {
   const { issues, loading, update, bulkUpdate, bulkDelete, create, load } = useIssues();
@@ -49,15 +49,15 @@ export function IssueTrackerPage() {
   const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
-    axios.get(`${API_BASE}/pm/members`).then((r) => setMembers(r.data)).catch(() => {});
-    axios.get(`${API_BASE}/pm/projects`).then((r) => setProjects(r.data)).catch(() => {});
+    axios.get(`${getAPIBase()}/pm/members`).then((r) => setMembers(r.data)).catch(() => {});
+    axios.get(`${getAPIBase()}/pm/projects`).then((r) => setProjects(r.data)).catch(() => {});
   }, []);
 
   // Load stories when project changes
   useEffect(() => {
     const pid = formProjectId !== "none" ? Number(formProjectId) : null;
     if (!pid) { setParentOptions([]); setFormParentId("none"); return; }
-    axios.get(`${API_BASE}/pm/tasks`, { params: { project_id: pid } })
+    axios.get(`${getAPIBase()}/pm/tasks`, { params: { project_id: pid } })
       .then((r) => {
         const parents = (r.data as PMTask[]).filter((t) => t.item_type === "story");
         setParentOptions(parents.map((p) => ({ id: p.id, title: p.title, item_type: p.item_type })));
@@ -78,7 +78,7 @@ export function IssueTrackerPage() {
 
   const handleIssueClick = useCallback(async (issue: PMIssue) => {
     try {
-      const res = await axios.get(`${API_BASE}/pm/tasks/${issue.id}`);
+      const res = await axios.get(`${getAPIBase()}/pm/tasks/${issue.id}`);
       setSelectedTask(res.data);
       setDetailOpen(true);
     } catch {
@@ -97,7 +97,7 @@ export function IssueTrackerPage() {
   }, [update]);
 
   const handleDetailDelete = useCallback(async (id: number) => {
-    await axios.delete(`${API_BASE}/pm/tasks/${id}`);
+    await axios.delete(`${getAPIBase()}/pm/tasks/${id}`);
     setDetailOpen(false);
     setSelectedTask(null);
     await load();
@@ -117,7 +117,7 @@ export function IssueTrackerPage() {
       for (const file of Array.from(files)) {
         const fd = new FormData();
         fd.append("file", file);
-        const res = await axios.post(`${API_BASE}/pm/files/upload`, fd);
+        const res = await axios.post(`${getAPIBase()}/pm/files/upload`, fd);
         setFormScreenshots((prev) => [...prev, res.data.url]);
       }
     } catch {

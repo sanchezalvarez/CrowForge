@@ -297,7 +297,7 @@
 </div>
 
 <div class="app-name">CrowForge</div>
-<div class="app-version" id="version">v0.4.6</div>
+<div class="app-version" id="version">v0.5.2</div>
 
 <div class="status-row">
   <span class="status" id="status">Preparing installation...</span>
@@ -330,12 +330,12 @@
 
   // Fallback animated steps while waiting for Rust events
   const steps = [
-    { pct: 5,  text: 'Preparing installation...',   delay: 0     },
+    { pct: 5,  text: 'Preparing installation...',   delay: 1000     },
     { pct: 15, text: 'Extracting files...',          delay: 2500  },
     { pct: 30, text: 'Copying files...',             delay: 5500  },
     { pct: 50, text: 'Setting up workspace...',      delay: 9000  },
     { pct: 65, text: 'Configuring AI engine...',     delay: 13000 },
-    { pct: 80, text: 'Creating shortcuts...',        delay: 17000 },
+    { pct: 80, text: 'Learning to fly...',           delay: 17000 },
     { pct: 90, text: 'Finalizing...',                delay: 21000 },
     { pct: 95, text: 'Almost done...',               delay: 25000 },
   ];

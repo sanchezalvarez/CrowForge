@@ -16,12 +16,12 @@ import {
   DialogTitle,
 } from "../components/ui/dialog";
 import { cn } from "../lib/utils";
+import { getAPIBase } from "../lib/api";
 import { toast } from "../hooks/useToast";
 import { DocumentEditor } from "../editor";
 import type { EditorDocument, DocumentContext } from "../editor";
 import type { TuningParams } from "../components/AIControlPanel";
 
-const API_BASE = "http://127.0.0.1:8000";
 
 interface DocumentsPageProps {
   onContextChange?: (ctx: DocumentContext | null) => void;
@@ -64,7 +64,7 @@ export function DocumentsPage({ onContextChange, tuningParams, initialDocId }: D
 
   async function loadDocuments() {
     try {
-      const res = await axios.get(`${API_BASE}/documents`);
+      const res = await axios.get(`${getAPIBase()}/documents`);
       const loaded = res.data;
       setDocuments(loaded);
       // Auto-select the most recently opened document
@@ -76,7 +76,7 @@ export function DocumentsPage({ onContextChange, tuningParams, initialDocId }: D
 
   async function fetchActiveEngine() {
     try {
-      const res = await axios.get(`${API_BASE}/ai/engines`);
+      const res = await axios.get(`${getAPIBase()}/ai/engines`);
       const active = (res.data as { name: string; active: boolean }[]).find((e) => e.active);
       if (active) setActiveEngine(active.name);
     } catch { /* ignore */ }
@@ -85,7 +85,7 @@ export function DocumentsPage({ onContextChange, tuningParams, initialDocId }: D
   // ── CRUD ────────────────────────────────────────────────────────────────
   async function createDocument() {
     try {
-      const res = await axios.post(`${API_BASE}/documents`, { title: "Untitled", content_json: {} });
+      const res = await axios.post(`${getAPIBase()}/documents`, { title: "Untitled", content_json: {} });
       const doc: EditorDocument = res.data;
       setDocuments((prev) => [doc, ...prev]);
       setActiveDocId(doc.id);
@@ -95,13 +95,13 @@ export function DocumentsPage({ onContextChange, tuningParams, initialDocId }: D
   async function deleteDocument(id: string) {
     setDocuments((prev) => prev.filter((d) => d.id !== id));
     if (activeDocId === id) setActiveDocId(null);
-    try { await axios.delete(`${API_BASE}/documents/${id}`); }
+    try { await axios.delete(`${getAPIBase()}/documents/${id}`); }
     catch { toast("Failed to delete document.", "error"); }
   }
 
   async function duplicateDocument(id: string) {
     try {
-      const res = await axios.post(`${API_BASE}/documents/${id}/duplicate`);
+      const res = await axios.post(`${getAPIBase()}/documents/${id}/duplicate`);
       const doc: EditorDocument = res.data;
       setDocuments((prev) => [doc, ...prev]);
       setActiveDocId(doc.id);
@@ -110,14 +110,14 @@ export function DocumentsPage({ onContextChange, tuningParams, initialDocId }: D
 
   async function updateTitle(docId: string, title: string) {
     try {
-      const res = await axios.put(`${API_BASE}/documents/${docId}`, { title });
+      const res = await axios.put(`${getAPIBase()}/documents/${docId}`, { title });
       setDocuments((prev) => prev.map((d) => (d.id === docId ? res.data : d)));
     } catch { toast("Failed to rename document.", "error"); }
   }
 
   async function saveContent(docId: string, content: Record<string, unknown>) {
     try {
-      const res = await axios.put(`${API_BASE}/documents/${docId}`, { content_json: content });
+      const res = await axios.put(`${getAPIBase()}/documents/${docId}`, { content_json: content });
       setDocuments((prev) => prev.map((d) => (d.id === docId ? res.data : d)));
     } catch { toast("Failed to save document.", "error"); }
   }

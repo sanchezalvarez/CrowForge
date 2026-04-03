@@ -15,8 +15,7 @@ import {
 import { toast } from "../hooks/useToast";
 import type { EngineInfo, LocalModel } from "../types/api";
 import { getErrorDetail } from "../lib/errorUtils";
-
-const API_BASE = "http://127.0.0.1:8000";
+import { getAPIBase } from "../lib/api";
 
 /** Check if running inside Tauri (vs plain browser / Vite dev server) */
 function isTauri(): boolean {
@@ -52,7 +51,7 @@ export function AIControlPanel({ showDebug, onShowDebugChange, tuningParams, onT
   const checkBackend = useCallback(async () => {
     const t0 = performance.now();
     try {
-      await axios.get(`${API_BASE}/state`, { timeout: 2000 });
+      await axios.get(`${getAPIBase()}/state`, { timeout: 2000 });
       setResponseTime(Math.round(performance.now() - t0));
       setBackendStatus("online");
       return true;
@@ -113,7 +112,7 @@ export function AIControlPanel({ showDebug, onShowDebugChange, tuningParams, onT
       }
     } else {
       try {
-        await axios.post(`${API_BASE}/shutdown`, {}, { timeout: 2000 }).catch(() => {});
+        await axios.post(`${getAPIBase()}/shutdown`, {}, { timeout: 2000 }).catch(() => {});
       } catch { /* expected */ }
     }
 
@@ -132,7 +131,7 @@ export function AIControlPanel({ showDebug, onShowDebugChange, tuningParams, onT
       }
     } else {
       try {
-        await axios.post(`${API_BASE}/shutdown`, {}, { timeout: 2000 }).catch(() => {});
+        await axios.post(`${getAPIBase()}/shutdown`, {}, { timeout: 2000 }).catch(() => {});
         setBackendStatus("offline");
       } catch { /* expected */ }
     }
@@ -174,11 +173,11 @@ export function AIControlPanel({ showDebug, onShowDebugChange, tuningParams, onT
   // ── Model idle timeout ─────────────────────────────────────────
   const [idleTimeoutMin, setIdleTimeoutMin] = useState<number>(10);
   useEffect(() => {
-    axios.get(`${API_BASE}/ai/idle-timeout`).then(r => setIdleTimeoutMin(r.data.timeout_minutes ?? 10)).catch(() => {});
+    axios.get(`${getAPIBase()}/ai/idle-timeout`).then(r => setIdleTimeoutMin(r.data.timeout_minutes ?? 10)).catch(() => {});
   }, []);
   const handleIdleTimeoutChange = async (val: number) => {
     setIdleTimeoutMin(val);
-    try { await axios.post(`${API_BASE}/ai/idle-timeout`, { timeout_minutes: val }); } catch { /* ignore */ }
+    try { await axios.post(`${getAPIBase()}/ai/idle-timeout`, { timeout_minutes: val }); } catch { /* ignore */ }
   };
 
   // ── Debug state ────────────────────────────────────────────────
@@ -188,7 +187,7 @@ export function AIControlPanel({ showDebug, onShowDebugChange, tuningParams, onT
   // ── Fetch engines ──────────────────────────────────────────────
   const fetchEngines = useCallback(async () => {
     try {
-      const res = await axios.get<EngineInfo[]>(`${API_BASE}/ai/engines`);
+      const res = await axios.get<EngineInfo[]>(`${getAPIBase()}/ai/engines`);
       setEngines(res.data);
       const active = res.data.find((e) => e.active);
       if (active) setActiveEngine(active.name);
@@ -201,7 +200,7 @@ export function AIControlPanel({ showDebug, onShowDebugChange, tuningParams, onT
   const fetchModels = useCallback(async () => {
     try {
       const res = await axios.get<{ models: LocalModel[]; active_model: string | null }>(
-        `${API_BASE}/ai/models`
+        `${getAPIBase()}/ai/models`
       );
       setModels(res.data.models);
       setActiveModel(res.data.active_model);
@@ -220,7 +219,7 @@ export function AIControlPanel({ showDebug, onShowDebugChange, tuningParams, onT
     if (name === activeEngine) return;
     setEngineSwitching(true);
     try {
-      await axios.post(`${API_BASE}/ai/engine`, { engine: name });
+      await axios.post(`${getAPIBase()}/ai/engine`, { engine: name });
       setActiveEngine(name);
       toast(`Switched to ${name} engine`, "success");
       await fetchEngines();
@@ -238,7 +237,7 @@ export function AIControlPanel({ showDebug, onShowDebugChange, tuningParams, onT
     if (!model) return;
     setModelSwitching(true);
     try {
-      await axios.post(`${API_BASE}/ai/model`, {
+      await axios.post(`${getAPIBase()}/ai/model`, {
         filename: model.filename,
         ctx: model.default_ctx,
       });
@@ -255,7 +254,7 @@ export function AIControlPanel({ showDebug, onShowDebugChange, tuningParams, onT
   const fetchDebug = useCallback(async () => {
     setDebugLoading(true);
     try {
-      const res = await axios.get(`${API_BASE}/ai/debug/last`);
+      const res = await axios.get(`${getAPIBase()}/ai/debug/last`);
       setDebugPayload(res.data.payload);
     } catch {
       // ignore

@@ -1,8 +1,7 @@
 import { useState, useRef } from "react";
 import axios from "axios";
 import type { Sheet, SheetColumn, SheetSizes, CellFormat } from "../lib/cellUtils";
-
-const API_BASE = "http://127.0.0.1:8000";
+import { getAPIBase } from "../lib/api";
 
 export const MAX_HISTORY = 50;
 
@@ -67,7 +66,7 @@ export function useUndoRedo({
     skipHistory.current = true;
     undoRedoInFlight.current = true;
     try {
-      const res = await axios.put(`${API_BASE}/sheets/${activeSheet.id}/data`, {
+      const res = await axios.put(`${getAPIBase()}/sheets/${activeSheet.id}/data`, {
         columns: snapshot.columns,
         rows: snapshot.rows,
         formulas: snapshot.formulas,
@@ -96,7 +95,7 @@ export function useUndoRedo({
     skipHistory.current = true;
     undoRedoInFlight.current = true;
     try {
-      const res = await axios.put(`${API_BASE}/sheets/${activeSheet.id}/data`, {
+      const res = await axios.put(`${getAPIBase()}/sheets/${activeSheet.id}/data`, {
         columns: snapshot.columns,
         rows: snapshot.rows,
         formulas: snapshot.formulas,

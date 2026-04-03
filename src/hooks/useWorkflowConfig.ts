@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
-
-const API_BASE = "http://127.0.0.1:8000";
+import { getAPIBase } from "../lib/api";
 
 export interface StatusConfig {
   key: string;
@@ -52,7 +51,7 @@ let _loading: Promise<WorkflowConfig> | null = null;
 async function fetchConfig(): Promise<WorkflowConfig> {
   if (_cached) return _cached;
   if (_loading) return _loading;
-  _loading = axios.get(`${API_BASE}/pm/workflow`)
+  _loading = axios.get(`${getAPIBase()}/pm/workflow`)
     .then((r) => { _cached = r.data; return _cached!; })
     .catch(() => { _cached = DEFAULT_CONFIG; return _cached!; })
     .finally(() => { _loading = null; });
@@ -72,7 +71,7 @@ export function useWorkflowConfig() {
 
   const save = useCallback(async (newConfig: WorkflowConfig) => {
     try {
-      await axios.put(`${API_BASE}/pm/workflow`, newConfig);
+      await axios.put(`${getAPIBase()}/pm/workflow`, newConfig);
       _cached = newConfig;
       setConfig(newConfig);
     } catch {

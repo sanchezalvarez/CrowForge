@@ -15,8 +15,7 @@ import {
 } from "lucide-react";
 import { PMRef, PMRefType } from "../../types/pm";
 import { Button } from "../ui/button";
-
-const API_BASE = "http://127.0.0.1:8000";
+import { getAPIBase } from "../../lib/api";
 
 const REF_ICONS: Record<PMRefType, typeof Link2> = {
   link:     Link2,
@@ -76,7 +75,7 @@ export function TaskRefs({ refs, onChange, onNavigate }: TaskRefsProps) {
     setPickerSearch("");
     try {
       const endpoint = type === "document" ? "/documents" : type === "sheet" ? "/sheets" : "/canvas";
-      const res = await axios.get(`${API_BASE}${endpoint}`);
+      const res = await axios.get(`${getAPIBase()}${endpoint}`);
       const items: InternalItem[] = res.data.map((r: { id: string; title?: string; name?: string }) => ({
         id: r.id,
         title: r.title ?? r.name ?? r.id,

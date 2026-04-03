@@ -3,8 +3,7 @@ import { RefreshCw, AlertCircle } from "lucide-react";
 import axios from "axios";
 import ReactMarkdown from "react-markdown";
 import { useFetchSSE } from "../../hooks/useFetchSSE";
-
-const API_BASE = "http://127.0.0.1:8000";
+import { getAPIBase } from "../../lib/api";
 
 interface AIStandupProps {
   projectId?: number;
@@ -24,7 +23,7 @@ export function AIStandup({ projectId }: AIStandupProps) {
 
   const checkModel = async () => {
     try {
-      const res = await axios.get(`${API_BASE}/ai/model/status`);
+      const res = await axios.get(`${getAPIBase()}/ai/model/status`);
       setModelReady(res.data?.status === "ready" || res.data?.engine !== "local");
     } catch {
       setModelReady(true); // assume ready if endpoint fails
@@ -33,7 +32,7 @@ export function AIStandup({ projectId }: AIStandupProps) {
 
   const loadCache = async () => {
     try {
-      const res = await axios.get(`${API_BASE}/pm/ai/standup/cache`, {
+      const res = await axios.get(`${getAPIBase()}/pm/ai/standup/cache`, {
         params: projectId ? { project_id: projectId } : {},
       });
       if (res.data.cache) {
@@ -47,7 +46,7 @@ export function AIStandup({ projectId }: AIStandupProps) {
     setIsGenerating(true);
     setContent("");
     start(
-      `${API_BASE}/pm/ai/standup`,
+      `${getAPIBase()}/pm/ai/standup`,
       projectId ? { project_id: projectId } : {},
       {
         onToken: (token) => setContent((prev) => prev + token),

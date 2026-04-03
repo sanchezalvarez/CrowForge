@@ -1,4 +1,5 @@
 import { useRef, useCallback } from "react";
+import { getAPIHeaders } from "../lib/api";
 
 export interface AgentEvent {
   type: "started_tool" | "finished_tool" | "thinking" | "error" | "tool_error";
@@ -31,7 +32,7 @@ export function useFetchSSE() {
       try {
         const response = await fetch(url, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: getAPIHeaders(),
           body: JSON.stringify(body),
           signal: controller.signal,
         });

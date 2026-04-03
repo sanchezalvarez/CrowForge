@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  crowforge:
+    build: .
+    container_name: crowforge-backend
+    restart: unless-stopped
+    ports:
+      - "${CROWFORGE_HOST_PORT:-8000}:8000"
+    volumes:
+      - crowforge-data:/data
+    environment:
+      - CROWFORGE_DEPLOYMENT_MODE=host
+      - CROWFORGE_HOST_PORT=8000
+      - CROWFORGE_DB_PATH=/data/crowforge.db
+      - CROWFORGE_HOST_API_KEY=${CROWFORGE_HOST_API_KEY}
+      - CROWFORGE_LOG_LEVEL=${CROWFORGE_LOG_LEVEL:-INFO}
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  crowforge-data:
+    driver: local

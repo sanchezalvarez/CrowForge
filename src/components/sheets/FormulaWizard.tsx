@@ -4,8 +4,7 @@ import axios from "axios";
 import type { Sheet } from "../../lib/cellUtils";
 import { useEscapeKey } from "../../hooks/useEscapeKey";
 import { idxToCol } from "../../lib/cellUtils";
-
-const API_BASE = "http://127.0.0.1:8000";
+import { getAPIBase } from "../../lib/api";
 
 const EXAMPLES = [
   "sum of column B where column A > 100",
@@ -48,7 +47,7 @@ export function FormulaWizard({ sheet, selection, onInsert, onClose }: FormulaWi
     setError(null);
     setFormula("");
     try {
-      const res = await axios.post(`${API_BASE}/ai/formula-assist`, {
+      const res = await axios.post(`${getAPIBase()}/ai/formula-assist`, {
         description: desc,
         columns: sheet.columns.map((c) => ({ name: c.name, type: c.type })),
         sample_row: sampleRow.slice(0, 10),

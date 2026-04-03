@@ -4,19 +4,19 @@ import { ReactFlowProvider } from "@xyflow/react";
 import { CanvasView }    from "../components/Canvas/CanvasView";
 import { CanvasSidebar } from "../components/Canvas/CanvasSidebar";
 import type { NavigateCallback } from "../types/api";
+import { getAPIBase } from "../lib/api";
 
-const API_BASE = "http://127.0.0.1:8000";
 
 async function ensureDefaultCanvas(): Promise<string> {
   try {
     // Check if default canvas exists
-    await axios.get(`${API_BASE}/canvas/default`);
+    await axios.get(`${getAPIBase()}/canvas/default`);
     return "default";
   } catch (err: unknown) {
     if ((err as { response?: { status?: number } })?.response?.status === 404) {
       // Create it
       try {
-        await axios.post(`${API_BASE}/canvas/default`, { nodes: [], edges: [] });
+        await axios.post(`${getAPIBase()}/canvas/default`, { nodes: [], edges: [] });
       } catch {
         // Already exists race condition — OK
       }

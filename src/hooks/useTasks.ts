@@ -2,8 +2,7 @@ import { useState, useCallback, useEffect } from "react";
 import axios from "axios";
 import { PMTask, PMTaskStatus } from "../types/pm";
 import { toast } from "./useToast";
-
-const API_BASE = "http://127.0.0.1:8000";
+import { getAPIBase } from "../lib/api";
 
 export function useTasks(projectId: number | null) {
   const [tasks, setTasks] = useState<PMTask[]>([]);
@@ -13,7 +12,7 @@ export function useTasks(projectId: number | null) {
     if (!projectId) return;
     setLoading(true);
     try {
-      const res = await axios.get(`${API_BASE}/pm/tasks`, { params: { project_id: projectId } });
+      const res = await axios.get(`${getAPIBase()}/pm/tasks`, { params: { project_id: projectId } });
       setTasks(res.data);
     } catch {
       toast("Failed to load tasks", "error");
@@ -24,7 +23,7 @@ export function useTasks(projectId: number | null) {
 
   const create = async (data: Partial<PMTask> & { project_id: number; title: string }) => {
     try {
-      const res = await axios.post(`${API_BASE}/pm/tasks`, data);
+      const res = await axios.post(`${getAPIBase()}/pm/tasks`, data);
       setTasks((prev) => [...prev, res.data]);
       return res.data as PMTask;
     } catch {
@@ -37,7 +36,7 @@ export function useTasks(projectId: number | null) {
     // Optimistic update
     setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, ...data } : t)));
     try {
-      const res = await axios.patch(`${API_BASE}/pm/tasks/${id}`, data);
+      const res = await axios.patch(`${getAPIBase()}/pm/tasks/${id}`, data);
       setTasks((prev) => prev.map((t) => (t.id === id ? res.data : t)));
       return res.data as PMTask;
     } catch {
@@ -50,7 +49,7 @@ export function useTasks(projectId: number | null) {
   const remove = async (id: number) => {
     setTasks((prev) => prev.filter((t) => t.id !== id));
     try {
-      await axios.delete(`${API_BASE}/pm/tasks/${id}`);
+      await axios.delete(`${getAPIBase()}/pm/tasks/${id}`);
     } catch {
       toast("Failed to delete task", "error");
       await load();
@@ -67,7 +66,7 @@ export function useTasks(projectId: number | null) {
       })
     );
     try {
-      await axios.patch(`${API_BASE}/pm/tasks/reorder`, { items });
+      await axios.patch(`${getAPIBase()}/pm/tasks/reorder`, { items });
     } catch {
       toast("Failed to reorder tasks", "error");
       await load();
@@ -76,7 +75,7 @@ export function useTasks(projectId: number | null) {
 
   const loadSubtasks = async (parentId: number): Promise<PMTask[]> => {
     try {
-      const res = await axios.get(`${API_BASE}/pm/tasks`, {
+      const res = await axios.get(`${getAPIBase()}/pm/tasks`, {
         params: { parent_id: parentId },
       });
       return res.data;

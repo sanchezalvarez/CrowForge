@@ -15,8 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../ui/select";
-
-const API_BASE = "http://127.0.0.1:8000";
+import { getAPIBase } from "../../lib/api";
 
 // ── Column definitions ──────────────────────────────────────────────────────
 
@@ -150,7 +149,7 @@ export function BacklogView({
   const handleCtxDuplicate = useCallback(async (task: PMTask) => {
     setCtxMenu(null);
     try {
-      await axios.post(`${API_BASE}/pm/tasks`, {
+      await axios.post(`${getAPIBase()}/pm/tasks`, {
         project_id: task.project_id,
         parent_id: task.parent_id,
         title: `${task.title} (copy)`,

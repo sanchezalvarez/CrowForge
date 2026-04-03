@@ -15,6 +15,7 @@ import { useChatStream } from "../contexts/ChatStreamContext";
 import { Textarea } from "../components/ui/textarea";
 import { Card } from "../components/ui/card";
 import { cn } from "../lib/utils";
+import { getAPIBase } from "../lib/api";
 import { toast } from "../hooks/useToast";
 import { useIsDark } from "../hooks/useIsDark";
 import { useSidebarResize } from "../hooks/useSidebarResize";
@@ -24,7 +25,7 @@ import { RisoBackground } from "../components/RisoBackground";
 import type { TuningParams } from "../components/AIControlPanel";
 import type { ChatSession, ChatMessage, ScopeItem } from "../types/api";
 import { open as tauriOpenDialog } from "@tauri-apps/plugin-dialog";
-const API_BASE = "http://127.0.0.1:8000";
+
 
 // ── Accent color utilities ─────────────────────────────────────────
 // The agent page uses violet instead of the app's primary color.
@@ -148,7 +149,7 @@ function AgentToolBubble({ events, sessionId, isSending }: { events: AgentEvent[
       // Parse the preview result to get args for the actual call
       const parsed = JSON.parse(step.result ?? "{}");
       const { preview: _, action, description: __, ...args } = parsed;
-      const res = await axios.post(`${API_BASE}/chat/session/${sessionId}/agent/apply-write`, {
+      const res = await axios.post(`${getAPIBase()}/chat/session/${sessionId}/agent/apply-write`, {
         tool: action,
         args,
       });
@@ -432,7 +433,7 @@ export function AgentPage({ tuningParams }: AgentPageProps) {
 
   // Check if current engine supports tool calling
   useEffect(() => {
-    axios.get(`${API_BASE}/settings/ai/status`).then(r => {
+    axios.get(`${getAPIBase()}/settings/ai/status`).then(r => {
       setSupportsTools(r.data.supports_tools ?? false);
       setModelLabel(r.data.model_label || r.data.active_engine || "Current model");
     }).catch(() => {
@@ -443,12 +444,12 @@ export function AgentPage({ tuningParams }: AgentPageProps) {
 
   // Load scope items
   useEffect(() => {
-    axios.get(`${API_BASE}/sheets`).then(r => {
+    axios.get(`${getAPIBase()}/sheets`).then(r => {
       const items = (Array.isArray(r.data) ? r.data : []).map((s: { id: string; title: string }) => ({ id: s.id, title: s.title, type: "sheet" as const }));
       setAllSheets(items);
       setSelectedSheetIds(new Set(items.map((s: ScopeItem) => s.id)));
     }).catch(() => { setAllSheets([]); });
-    axios.get(`${API_BASE}/documents`).then(r => {
+    axios.get(`${getAPIBase()}/documents`).then(r => {
       const docs = Array.isArray(r.data) ? r.data : r.data.documents ?? [];
       const items = docs.map((d: { id: string; title: string }) => ({ id: d.id, title: d.title, type: "document" as const }));
       setAllDocuments(items);
@@ -538,26 +539,26 @@ export function AgentPage({ tuningParams }: AgentPageProps) {
 
   // Fetch KB status on mount
   useEffect(() => {
-    axios.get(`${API_BASE}/rag/status`).then(r => setKbStatus(r.data)).catch(() => { setKbStatus({ indexed: false, chunks: 0, path: null, available: false }); });
+    axios.get(`${getAPIBase()}/rag/status`).then(r => setKbStatus(r.data)).catch(() => { setKbStatus({ indexed: false, chunks: 0, path: null, available: false }); });
   }, []);
 
   async function loadSessions() {
     try {
-      const res = await axios.get(`${API_BASE}/chat/sessions?mode=agent`);
+      const res = await axios.get(`${getAPIBase()}/chat/sessions?mode=agent`);
       setSessions(res.data as ChatSession[]);
     } catch { /* backend may be offline */ }
   }
 
   async function loadMessages(sessionId: number) {
     try {
-      const res = await axios.get(`${API_BASE}/chat/session/${sessionId}`);
+      const res = await axios.get(`${getAPIBase()}/chat/session/${sessionId}`);
       setMessages(res.data.messages);
     } catch { setMessages([]); }
   }
 
   async function createSession() {
     try {
-      const res = await axios.post(`${API_BASE}/chat/session`, { mode: "agent" });
+      const res = await axios.post(`${getAPIBase()}/chat/session`, { mode: "agent" });
       const session: ChatSession = res.data;
       setSessions((prev) => [session, ...prev]);
       setActiveSessionId(session.id);
@@ -568,7 +569,7 @@ export function AgentPage({ tuningParams }: AgentPageProps) {
 
   async function deleteSession(id: number) {
     try {
-      await axios.delete(`${API_BASE}/chat/session/${id}`);
+      await axios.delete(`${getAPIBase()}/chat/session/${id}`);
       setSessions((prev) => prev.filter((s) => s.id !== id));
       if (activeSessionId === id) { setActiveSessionId(null); setMessages([]); }
     } catch {
@@ -580,7 +581,7 @@ export function AgentPage({ tuningParams }: AgentPageProps) {
     const t = title.trim();
     if (!t) return;
     try {
-      await axios.put(`${API_BASE}/chat/session/${sessionId}/title`, { title: t });
+      await axios.put(`${getAPIBase()}/chat/session/${sessionId}/title`, { title: t });
       setSessions((prev) => prev.map((s) => (s.id === sessionId ? { ...s, title: t } : s)));
     } catch {
       toast("Failed to save title.", "error");
@@ -659,8 +660,8 @@ export function AgentPage({ tuningParams }: AgentPageProps) {
     setKbIndexing(true);
     setKbError(null);
     try {
-      const res = await axios.post(`${API_BASE}/rag/index`, { path });
-      const updated = await axios.get(`${API_BASE}/rag/status`);
+      const res = await axios.post(`${getAPIBase()}/rag/index`, { path });
+      const updated = await axios.get(`${getAPIBase()}/rag/status`);
       setKbStatus(updated.data);
       toast(`Indexed ${res.data.indexed_chunks} chunks from ${path}`, "success");
     } catch (err: unknown) {

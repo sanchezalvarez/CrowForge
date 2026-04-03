@@ -11,8 +11,7 @@ import {
   parseFormulaRefGroups, resolveRange, resolveCellRef, idxToCol,
   ctrlArrowMove, matchCondRule,
 } from "../../lib/cellUtils";
-
-const API_BASE = "http://127.0.0.1:8000";
+import { getAPIBase } from "../../lib/api";
 
 type SelectionRect = { r1: number; c1: number; r2: number; c2: number };
 type AnchorPoint = { row: number; col: number };
@@ -293,7 +292,7 @@ const SheetRow = React.memo(function SheetRow({
             onClick={() => {
               if (colType === "boolean" && !isEditing) {
                 const next = cell.toLowerCase() === "true" ? "false" : "true";
-                axios.put(`${API_BASE}/sheets/${activeSheet.id}/cell`, {
+                axios.put(`${getAPIBase()}/sheets/${activeSheet.id}/cell`, {
                   row_index: ri, col_index: ci, value: next,
                 }).then((res) => updateSheet(res.data)).catch(() => {});
               } else if (!isEditing && isCellSelected(ri, ci)) {
@@ -874,7 +873,7 @@ export function SheetGrid({
                         const fitW = Math.max(MIN_COL_WIDTH, Math.min(500, Math.ceil(maxW)));
                         const next = { ...colWidths, [ci]: fitW };
                         setColWidths(next);
-                        axios.put(`${API_BASE}/sheets/${activeSheet.id}/sizes`, {
+                        axios.put(`${getAPIBase()}/sheets/${activeSheet.id}/sizes`, {
                           colWidths: next,
                           rowHeights,
                         }).catch(() => {});

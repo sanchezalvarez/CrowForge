@@ -24,17 +24,23 @@ class DatabaseManager:
             self._migrate(conn)
             conn.executescript(schema_script)
 
+    def _safe_alter(self, conn, table: str, column: str, col_def: str):
+        """Add a column to a table if the table exists and column is missing."""
+        try:
+            cols = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+            if not cols:
+                return  # table doesn't exist yet — schema.sql will create it
+            if column not in cols:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {col_def}")
+        except Exception:
+            pass  # table missing or column already exists
+
     def _migrate(self, conn):
         """Add columns/tables that may be missing from older databases."""
         # prompt_templates: add category, description, version
-        cursor = conn.execute("PRAGMA table_info(prompt_templates)")
-        pt_cols = {row["name"] for row in cursor.fetchall()}
-        if "category" not in pt_cols:
-            conn.execute("ALTER TABLE prompt_templates ADD COLUMN category TEXT NOT NULL DEFAULT 'Ideation'")
-        if "description" not in pt_cols:
-            conn.execute("ALTER TABLE prompt_templates ADD COLUMN description TEXT NOT NULL DEFAULT ''")
-        if "version" not in pt_cols:
-            conn.execute("ALTER TABLE prompt_templates ADD COLUMN version INTEGER NOT NULL DEFAULT 1")
+        self._safe_alter(conn, "prompt_templates", "category", "TEXT NOT NULL DEFAULT 'Ideation'")
+        self._safe_alter(conn, "prompt_templates", "description", "TEXT NOT NULL DEFAULT ''")
+        self._safe_alter(conn, "prompt_templates", "version", "INTEGER NOT NULL DEFAULT 1")
 
         # Ensure chat tables exist for older databases
         conn.execute("""CREATE TABLE IF NOT EXISTS chat_sessions (
@@ -44,10 +50,7 @@ class DatabaseManager:
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )""")
         # Add mode column if missing (upgrade from earlier chat schema)
-        cursor = conn.execute("PRAGMA table_info(chat_sessions)")
-        cs_cols = {row["name"] for row in cursor.fetchall()}
-        if "mode" not in cs_cols:
-            conn.execute("ALTER TABLE chat_sessions ADD COLUMN mode TEXT NOT NULL DEFAULT 'general'")
+        self._safe_alter(conn, "chat_sessions", "mode", "TEXT NOT NULL DEFAULT 'general'")
         conn.execute("""CREATE TABLE IF NOT EXISTS chat_messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             session_id INTEGER NOT NULL,
@@ -68,17 +71,11 @@ class DatabaseManager:
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )""")
 
-        # Add formulas_json column if missing (upgrade from earlier schema)
-        cursor = conn.execute("PRAGMA table_info(sheets)")
-        sheets_cols = {row["name"] for row in cursor.fetchall()}
-        if "formulas_json" not in sheets_cols:
-            conn.execute("ALTER TABLE sheets ADD COLUMN formulas_json TEXT NOT NULL DEFAULT '{}'")
-        if "sizes_json" not in sheets_cols:
-            conn.execute("ALTER TABLE sheets ADD COLUMN sizes_json TEXT NOT NULL DEFAULT '{}'")
-        if "alignments_json" not in sheets_cols:
-            conn.execute("ALTER TABLE sheets ADD COLUMN alignments_json TEXT NOT NULL DEFAULT '{}'")
-        if "formats_json" not in sheets_cols:
-            conn.execute("ALTER TABLE sheets ADD COLUMN formats_json TEXT NOT NULL DEFAULT '{}'")
+        # Add columns if missing (upgrade from earlier schema)
+        self._safe_alter(conn, "sheets", "formulas_json", "TEXT NOT NULL DEFAULT '{}'")
+        self._safe_alter(conn, "sheets", "sizes_json", "TEXT NOT NULL DEFAULT '{}'")
+        self._safe_alter(conn, "sheets", "alignments_json", "TEXT NOT NULL DEFAULT '{}'")
+        self._safe_alter(conn, "sheets", "formats_json", "TEXT NOT NULL DEFAULT '{}'")
 
         # Ensure documents table exists
         conn.execute("""CREATE TABLE IF NOT EXISTS documents (
@@ -90,23 +87,13 @@ class DatabaseManager:
         )""")
 
         # Add metadata column to chat_messages if missing
-        cursor = conn.execute("PRAGMA table_info(chat_messages)")
-        cm_cols = {row["name"] for row in cursor.fetchall()}
-        if "metadata" not in cm_cols:
-            conn.execute("ALTER TABLE chat_messages ADD COLUMN metadata TEXT")
+        self._safe_alter(conn, "chat_messages", "metadata", "TEXT")
 
         # Add last_opened_at and page_settings_json to documents if missing
-        cursor = conn.execute("PRAGMA table_info(documents)")
-        doc_cols = {row["name"] for row in cursor.fetchall()}
-        if "last_opened_at" not in doc_cols:
-            conn.execute("ALTER TABLE documents ADD COLUMN last_opened_at TEXT")
-        if "page_settings_json" not in doc_cols:
-            conn.execute("ALTER TABLE documents ADD COLUMN page_settings_json TEXT")
+        self._safe_alter(conn, "documents", "last_opened_at", "TEXT")
+        self._safe_alter(conn, "documents", "page_settings_json", "TEXT")
 
-        cursor = conn.execute("PRAGMA table_info(sheets)")
-        sheet_cols = {row["name"] for row in cursor.fetchall()}
-        if "last_opened_at" not in sheet_cols:
-            conn.execute("ALTER TABLE sheets ADD COLUMN last_opened_at TEXT")
+        self._safe_alter(conn, "sheets", "last_opened_at", "TEXT")
 
         # Ensure canvases table exists
         conn.execute("""CREATE TABLE IF NOT EXISTS canvases (
@@ -148,9 +135,7 @@ class DatabaseManager:
             FOREIGN KEY (project_id) REFERENCES pm_projects(id) ON DELETE CASCADE
         )""")
         # Migrate pm_tasks: add refs_json if missing
-        _pm_cols = {row["name"] for row in conn.execute("PRAGMA table_info(pm_tasks)").fetchall()}
-        if _pm_cols and "refs_json" not in _pm_cols:
-            conn.execute("ALTER TABLE pm_tasks ADD COLUMN refs_json TEXT NOT NULL DEFAULT '[]'")
+        self._safe_alter(conn, "pm_tasks", "refs_json", "TEXT NOT NULL DEFAULT '[]'")
 
         # Migrate pm_tasks: if old schema (has parent_task_id), recreate with new schema
         pm_tasks_cols = {row["name"] for row in conn.execute("PRAGMA table_info(pm_tasks)").fetchall()}
@@ -225,13 +210,9 @@ class DatabaseManager:
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )""")
             # Add new columns to existing pm_tasks if missing
-            _pm_tasks_cols = {row["name"] for row in conn.execute("PRAGMA table_info(pm_tasks)").fetchall()}
-            if "project_task_id" not in _pm_tasks_cols:
-                conn.execute("ALTER TABLE pm_tasks ADD COLUMN project_task_id INTEGER DEFAULT NULL")
-            if "severity" not in _pm_tasks_cols:
-                conn.execute("ALTER TABLE pm_tasks ADD COLUMN severity TEXT NOT NULL DEFAULT 'Minor'")
-            if "code" not in {row["name"] for row in conn.execute("PRAGMA table_info(pm_projects)").fetchall()}:
-                conn.execute("ALTER TABLE pm_projects ADD COLUMN code TEXT NOT NULL DEFAULT ''")
+            self._safe_alter(conn, "pm_tasks", "project_task_id", "INTEGER DEFAULT NULL")
+            self._safe_alter(conn, "pm_tasks", "severity", "TEXT NOT NULL DEFAULT 'Minor'")
+            self._safe_alter(conn, "pm_projects", "code", "TEXT NOT NULL DEFAULT ''")
         conn.execute("""CREATE TABLE IF NOT EXISTS pm_task_labels (
             task_id INTEGER NOT NULL,
             label TEXT NOT NULL,
@@ -275,6 +256,11 @@ class AppRepository:
             conn.commit()
 
     def get_setting(self, key: str) -> Optional[str]:
+        import os
+        env_key = "CROWFORGE_" + key.upper()
+        env_val = os.environ.get(env_key)
+        if env_val is not None:
+            return env_val
         sql = "SELECT value FROM settings WHERE key = ?"
         with self.db.get_connection() as conn:
             row = conn.execute(sql, (key,)).fetchone()

@@ -240,3 +240,12 @@ CREATE INDEX IF NOT EXISTS idx_pm_activity_project ON pm_activity(project_id, cr
 INSERT OR IGNORE INTO pm_members (id, name, email, avatar_color, initials)
 VALUES (1, 'Agent Crowner', '', '#E04E0E', 'AC');
 UPDATE pm_members SET name = 'Agent Crowner', initials = 'AC', avatar_color = '#E04E0E' WHERE id = 1;
+
+-- ── Deployment mode settings ───────────────────────────────────────────────
+INSERT OR IGNORE INTO settings (key, value) VALUES ('deployment_mode', 'local');
+INSERT OR IGNORE INTO settings (key, value) VALUES ('server_url', '');
+INSERT OR IGNORE INTO settings (key, value) VALUES ('server_api_key', '');
+INSERT OR IGNORE INTO settings (key, value) VALUES ('server_nickname', '');
+INSERT OR IGNORE INTO settings (key, value) VALUES ('host_port', '8000');
+INSERT OR IGNORE INTO settings (key, value) VALUES ('host_api_key', '');
+INSERT OR IGNORE INTO settings (key, value) VALUES ('setup_completed', 'false');

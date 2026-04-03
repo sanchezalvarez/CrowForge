@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { X, Plus, Trash2, ArrowUp, ArrowDown } from "lucide-react";
 import type { Sheet } from "../../lib/cellUtils";
+import { useEscapeKey } from "../../hooks/useEscapeKey";
 
 export interface SortLevel {
   col_index: number;
@@ -18,11 +19,7 @@ export function MultiSortDialog({ sheet, onApply, onClose }: MultiSortDialogProp
     { col_index: 0, ascending: true },
   ]);
 
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    document.addEventListener("keydown", handler);
-    return () => document.removeEventListener("keydown", handler);
-  }, [onClose]);
+  useEscapeKey(onClose);
 
   const addLevel = () => {
     const used = new Set(levels.map((l) => l.col_index));

@@ -363,6 +363,11 @@ input, textarea, [contenteditable] {
   border-color: rgba(0,0,0,0.15);
   color: #fff;
 }
+.dark .btn-tactile-orange,
+.dark .btn-tactile-teal,
+.dark .btn-tactile-violet {
+  border-color: rgba(255,255,255,0.12);
+}
 .btn-tactile-outline {
   background: transparent;
   background-image: none;
@@ -395,6 +400,25 @@ input, textarea, [contenteditable] {
 }
 .card-riso-violet::after {
   box-shadow: 3px 3px 0 var(--riso-violet);
+}
+
+/* ── Task card riso ────────────────────────────────────────────────────── */
+.task-card-riso {
+  box-shadow: 2px 2px 0 var(--riso-teal);
+}
+.task-card-riso:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 3px 3px 0 var(--riso-teal);
+}
+.task-card-riso:active {
+  transform: translate(1px, 1px);
+  box-shadow: 0 0 0 var(--riso-teal);
+}
+.task-card-riso.task-card-compact {
+  box-shadow: 1px 1px 0 var(--riso-teal);
+}
+.task-card-riso.task-card-compact:hover {
+  box-shadow: 2px 2px 0 var(--riso-teal);
 }
 
 /* ── Halftone patch ─────────────────────────────────────────────────────── */
@@ -831,6 +855,12 @@ input[type="range"]:focus-visible::-webkit-slider-thumb {
 }
 .animate-msg-in {
   animation: riso-msg-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* ── Chat message virtualization ──────────────────────────────────────── */
+.chat-msg-virtual {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 120px;
 }
 
 /* ── Projects page — hide scrollbar completely ─────────────────────────── */

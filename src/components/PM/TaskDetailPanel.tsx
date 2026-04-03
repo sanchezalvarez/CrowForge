@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback, type ComponentPropsWithoutRef
 import { timeAgo } from "../../lib/pmUtils";
 import ReactMarkdown from "react-markdown";
 import { X, Trash2, ChevronRight, ChevronsUpDown, ImagePlus, Youtube, Loader2 } from "lucide-react";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import axios from "axios";
 import { PMTask, PMTaskStatus, PMItemType, PMMember, PMSprint, PMActivity, PMRef } from "../../types/pm";
 import { StatusBadge } from "./StatusBadge";
@@ -18,8 +19,7 @@ import {
 } from "../ui/select";
 import { Textarea } from "../ui/textarea";
 import { toast } from "../../hooks/useToast";
-
-const API_BASE = "http://127.0.0.1:8000";
+import { API_BASE } from "../../lib/constants";
 
 // Valid parent types for each item type
 const VALID_PARENT_TYPES: Record<PMItemType, PMItemType[]> = {
@@ -54,7 +54,7 @@ function MdImg({ src, alt }: ComponentPropsWithoutRef<"img">) {
       alt={alt || ""}
       className="max-w-full rounded-lg border border-border cursor-pointer hover:opacity-90 transition-opacity my-1"
       style={{ maxHeight: 280 }}
-      onClick={() => src && window.open(src, "_blank", "noopener,noreferrer")}
+      onClick={() => src && openUrl(src)}
     />
   );
 }

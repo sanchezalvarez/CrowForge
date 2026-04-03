@@ -3,16 +3,16 @@ import axios from "axios";
 import { ReactFlowProvider } from "@xyflow/react";
 import { CanvasView }    from "../components/Canvas/CanvasView";
 import { CanvasSidebar } from "../components/Canvas/CanvasSidebar";
-
-const API_BASE = "http://127.0.0.1:8000";
+import type { NavigateCallback } from "../types/api";
+import { API_BASE } from "../lib/constants";
 
 async function ensureDefaultCanvas(): Promise<string> {
   try {
     // Check if default canvas exists
     await axios.get(`${API_BASE}/canvas/default`);
     return "default";
-  } catch (err: any) {
-    if (err?.response?.status === 404) {
+  } catch (err: unknown) {
+    if ((err as { response?: { status?: number } })?.response?.status === 404) {
       // Create it
       try {
         await axios.post(`${API_BASE}/canvas/default`, { nodes: [], edges: [] });
@@ -24,7 +24,7 @@ async function ensureDefaultCanvas(): Promise<string> {
   }
 }
 
-export function CanvasPage(_props: { onNavigate?: (page: any, id?: string) => void }) {
+export function CanvasPage(_props: { onNavigate?: NavigateCallback }) {
   const [activeCanvasId, setActiveCanvasId] = useState<string>("default");
   const [ready, setReady] = useState(false);
 

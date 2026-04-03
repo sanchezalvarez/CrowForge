@@ -3,8 +3,7 @@ import axios from "axios";
 import { PlusCircle, Trash2, Loader2, Pencil, Copy, Workflow } from "lucide-react";
 import { ScrollArea } from "../ui/scroll-area";
 import { cn } from "../../lib/utils";
-
-const API_BASE = "http://127.0.0.1:8000";
+import { API_BASE } from "../../lib/constants";
 
 interface CanvasItem {
   id:         string;

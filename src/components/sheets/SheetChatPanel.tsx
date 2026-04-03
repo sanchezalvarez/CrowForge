@@ -4,8 +4,7 @@ import { Button } from "../ui/button";
 import { useFetchSSE } from "../../hooks/useFetchSSE";
 import type { Sheet } from "../../lib/cellUtils";
 import { idxToCol } from "../../lib/cellUtils";
-
-const API_BASE = "http://127.0.0.1:8000";
+import { API_BASE } from "../../lib/constants";
 
 interface Message {
   role: "user" | "assistant";

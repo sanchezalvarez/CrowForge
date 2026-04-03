@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { PlusCircle, Sparkles, Upload, Loader2, Table2, X } from "lucide-react";
 import { ScrollArea } from "../ui/scroll-area";
 import { cn } from "../../lib/utils";
+import { useEscapeKey } from "../../hooks/useEscapeKey";
 import { SHEET_IMPORT_ACCEPT } from "../../lib/fileService";
 import { type Sheet } from "../../lib/cellUtils";
 import { SHEET_TEMPLATES, type SheetTemplate } from "../../lib/sheetTemplates";
@@ -44,12 +45,7 @@ export function SheetSidebar({
 }: SheetSidebarProps) {
   const [pickerOpen, setPickerOpen] = useState(false);
 
-  useEffect(() => {
-    if (!pickerOpen) return;
-    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") setPickerOpen(false); };
-    document.addEventListener("keydown", handler);
-    return () => document.removeEventListener("keydown", handler);
-  }, [pickerOpen]);
+  useEscapeKey(() => setPickerOpen(false), pickerOpen);
 
   return (
     <div className="w-[220px] shrink-0 border-r flex flex-col" style={{ background: 'var(--background-2)' }}>

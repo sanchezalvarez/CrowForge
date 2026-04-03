@@ -8,6 +8,7 @@ import { StatusBadge } from "./StatusBadge";
 import { MemberAvatar } from "./MemberAvatar";
 import { toast } from "../../hooks/useToast";
 import { Button } from "../ui/button";
+import { API_BASE } from "../../lib/constants";
 import {
   Select,
   SelectContent,
@@ -15,8 +16,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../ui/select";
-
-const API_BASE = "http://127.0.0.1:8000";
 
 // ── Column definitions ──────────────────────────────────────────────────────
 

@@ -2,8 +2,7 @@ import { createContext, useContext, useRef, useState, useCallback } from "react"
 import type { ReactNode } from "react";
 import { useFetchSSE } from "../hooks/useFetchSSE";
 import type { AgentEvent } from "../hooks/useFetchSSE";
-
-const API_BASE = "http://127.0.0.1:8000";
+import { API_BASE } from "../lib/constants";
 
 export interface AgentScope {
   sheet_ids?: string[];

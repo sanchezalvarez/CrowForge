@@ -1,4 +1,5 @@
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState, useEffect, useCallback } from "react";
+import { useEscapeKey } from "../../hooks/useEscapeKey";
 import { useReactFlow } from "@xyflow/react";
 import {
   Bot, Image, LayoutDashboard, Trash2, Grid3x3,
@@ -49,15 +50,16 @@ export function CanvasToolbar({
   const [showHelp, setShowHelp] = useState(false);
   const helpRef = useRef<HTMLDivElement>(null);
 
+  const closeHelp = useCallback(() => setShowHelp(false), []);
+  useEscapeKey(closeHelp, showHelp);
+
   useEffect(() => {
     if (!showHelp) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setShowHelp(false); };
     const onClick = (e: MouseEvent) => {
       if (helpRef.current && !helpRef.current.contains(e.target as Node)) setShowHelp(false);
     };
-    document.addEventListener("keydown", onKey);
     document.addEventListener("mousedown", onClick);
-    return () => { document.removeEventListener("keydown", onKey); document.removeEventListener("mousedown", onClick); };
+    return () => document.removeEventListener("mousedown", onClick);
   }, [showHelp]);
 
   function handleAutoLayout() {

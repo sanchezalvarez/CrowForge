@@ -2,9 +2,9 @@ import { useState, useRef, useEffect } from "react";
 import { X, Sparkles, Loader2, Check, RefreshCw } from "lucide-react";
 import axios from "axios";
 import type { Sheet } from "../../lib/cellUtils";
+import { useEscapeKey } from "../../hooks/useEscapeKey";
 import { idxToCol } from "../../lib/cellUtils";
-
-const API_BASE = "http://127.0.0.1:8000";
+import { API_BASE } from "../../lib/constants";
 
 const EXAMPLES = [
   "sum of column B where column A > 100",
@@ -32,11 +32,7 @@ export function FormulaWizard({ sheet, selection, onInsert, onClose }: FormulaWi
     inputRef.current?.focus();
   }, []);
 
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    document.addEventListener("keydown", handler);
-    return () => document.removeEventListener("keydown", handler);
-  }, [onClose]);
+  useEscapeKey(onClose);
 
   const currentCell = selection
     ? `${idxToCol(selection.c1)}${selection.r1 + 1}`

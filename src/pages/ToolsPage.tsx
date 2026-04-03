@@ -11,6 +11,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
 import { Label } from "../components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { cn } from "../lib/utils";
+import { getErrorDetail } from "../lib/errorUtils";
+import type { CalcBtnProps } from "../types/api";
+import { RisoBackground } from "../components/RisoBackground";
 
 // ---------------------------------------------------------------------------
 // Math Engine
@@ -289,7 +292,7 @@ function CalculatorWidget({ id, title, isActive, onActivate }: CalcWidgetProps) 
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [isActive, append, equals, backspace, clear]);
 
-  const CalcBtn = ({ label, onClick, variant = "outline", className, span = 1 }: any) => (
+  const CalcBtn = ({ label, onClick, variant = "outline", className, span = 1 }: CalcBtnProps) => (
     <Button
       variant={variant}
       onClick={onClick}
@@ -663,10 +666,11 @@ function CurrencyWidget() {
       };
       setCache(newCache);
       saveCachedRates(newCache);
-    } catch (e: any) {
-      if (e?.name === "TimeoutError" || e?.message?.includes("timeout") || e?.message?.includes("signal"))
+    } catch (e: unknown) {
+      const msg = getErrorDetail(e);
+      if (msg.includes("timeout") || msg.includes("signal") || msg.includes("TimeoutError"))
         setError("Request timed out — check your internet connection and try again.");
-      else setError(e.message ?? "Failed to fetch rates");
+      else setError(msg);
     } finally {
       setLoading(false);
     }
@@ -770,7 +774,7 @@ function CurrencyWidget() {
                     key={code}
                     onClick={() => {
                       const raw = convertRaw(code);
-                      if (!isNaN(raw)) { setAmount(String(raw)); setBase(code); }
+                      if (!isNaN(raw)) { setAmount(parseFloat(raw.toPrecision(10)).toString()); setBase(code); }
                     }}
                     className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-muted/60 transition-colors text-left border border-transparent hover:border-border/40"
                     title={`Switch to ${code}`}
@@ -897,46 +901,8 @@ export function ToolsPage() {
   const [activeCalc, setActiveCalc] = useState<"A" | "B">("A");
 
   return (
-    <div className="relative flex flex-col h-full overflow-hidden p-4 md:p-6 lg:p-8 gap-6 max-w-[1800px] mx-auto w-full riso-noise">
-      {/* Riso background — same as Dashboard */}
-      <div className="pointer-events-none select-none" style={{ position: 'absolute', inset: 0, zIndex: 0 }}>
-        <div className="animate-blob-drift" style={{ position: 'absolute', width: 600, height: 600, borderRadius: '50%', background: 'var(--accent-teal)', opacity: 0.10, mixBlendMode: 'multiply', top: -200, right: -180 }} />
-        <div className="animate-blob-drift-b" style={{ position: 'absolute', width: 500, height: 500, borderRadius: '50%', background: 'var(--accent-orange)', opacity: 0.09, mixBlendMode: 'multiply', bottom: -160, left: -160 }} />
-        <div className="animate-blob-drift-c" style={{ position: 'absolute', width: 380, height: 380, borderRadius: '50%', background: 'var(--accent-violet)', opacity: 0.07, mixBlendMode: 'multiply', bottom: 80, right: -100 }} />
-        <div className="animate-blob-drift-d" style={{ position: 'absolute', width: 260, height: 260, borderRadius: '50%', background: 'var(--accent-teal)', opacity: 0.06, mixBlendMode: 'multiply', top: '35%', left: -100 }} />
-        <svg style={{ position: 'absolute', top: 8, right: 8, width: 48, height: 48 }} xmlns="http://www.w3.org/2000/svg">
-          <line x1="4" y1="20" x2="28" y2="20" stroke="rgba(11,114,104,0.45)" strokeWidth="1.5" />
-          <line x1="16" y1="8" x2="16" y2="32" stroke="rgba(11,114,104,0.45)" strokeWidth="1.5" />
-          <circle cx="16" cy="20" r="5" stroke="rgba(11,114,104,0.3)" strokeWidth="1" fill="none" />
-        </svg>
-        <svg style={{ position: 'absolute', bottom: 8, left: 8, width: 48, height: 48 }} xmlns="http://www.w3.org/2000/svg">
-          <line x1="4" y1="28" x2="28" y2="28" stroke="rgba(224,78,14,0.45)" strokeWidth="1.5" />
-          <line x1="16" y1="16" x2="16" y2="40" stroke="rgba(224,78,14,0.45)" strokeWidth="1.5" />
-          <circle cx="16" cy="28" r="5" stroke="rgba(224,78,14,0.3)" strokeWidth="1" fill="none" />
-        </svg>
-        <svg style={{ position: 'absolute', top: 8, left: 8, width: 48, height: 48 }} xmlns="http://www.w3.org/2000/svg">
-          <line x1="4" y1="20" x2="28" y2="20" stroke="rgba(92,58,156,0.35)" strokeWidth="1.5" />
-          <line x1="16" y1="8" x2="16" y2="32" stroke="rgba(92,58,156,0.35)" strokeWidth="1.5" />
-        </svg>
-        <svg style={{ position: 'absolute', bottom: 8, right: 8, width: 48, height: 48 }} xmlns="http://www.w3.org/2000/svg">
-          <line x1="4" y1="28" x2="28" y2="28" stroke="rgba(11,114,104,0.25)" strokeWidth="1" />
-          <line x1="16" y1="16" x2="16" y2="40" stroke="rgba(11,114,104,0.25)" strokeWidth="1" />
-        </svg>
-        <svg style={{ position: 'absolute', right: 40, top: 120, width: 100, height: 100 }} viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-          {[[20,20,3.5],[38,14,2.5],[12,38,2],[30,35,3],[48,28,2],[55,42,1.5],[22,52,2],[40,50,1.5],[60,30,1],[15,60,1.5]].map(([x,y,r],i) => <circle key={i} cx={x} cy={y} r={r} fill="rgba(224,78,14,0.28)" />)}
-        </svg>
-        <svg style={{ position: 'absolute', left: 60, bottom: 120, width: 90, height: 90 }} viewBox="0 0 90 90" xmlns="http://www.w3.org/2000/svg">
-          {[[18,18,3],[34,12,2],[10,32,2.5],[28,30,2],[44,22,1.5],[50,36,2],[16,46,1.5],[36,44,1],[55,28,1],[12,58,1.5]].map(([x,y,r],i) => <circle key={i} cx={x} cy={y} r={r} fill="rgba(11,114,104,0.28)" />)}
-        </svg>
-        <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} xmlns="http://www.w3.org/2000/svg">
-          <circle cx="18%" cy="12%" r="3" fill="rgba(224,78,14,0.20)" />
-          <circle cx="23%" cy="8%"  r="1.5" fill="rgba(224,78,14,0.14)" />
-          <circle cx="72%" cy="55%" r="2.5" fill="rgba(11,114,104,0.18)" />
-          <circle cx="88%" cy="30%" r="2" fill="rgba(92,58,156,0.18)" />
-          <circle cx="40%" cy="85%" r="2.5" fill="rgba(224,78,14,0.16)" />
-          <circle cx="10%" cy="70%" r="2" fill="rgba(11,114,104,0.16)" />
-        </svg>
-      </div>
+    <div className="relative flex flex-col h-full overflow-hidden p-4 md:p-6 lg:p-8 gap-6 max-w-[2400px] mx-auto w-full riso-noise">
+      <RisoBackground />
       <header className="flex flex-col gap-3 shrink-0 animate-ink-in" style={{ position: 'relative', zIndex: 1 }}>
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-xl" style={{ background: 'color-mix(in srgb, var(--accent-orange) 12%, transparent)' }}>

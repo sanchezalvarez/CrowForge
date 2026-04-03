@@ -151,16 +151,17 @@ export function resolveRange(ref: string): { r1: number; c1: number; r2: number;
   return null;
 }
 
+const _ruleValueCache = new WeakMap<object, number>();
+
 /** Returns true if the cell value matches the conditional rule. */
 export function matchCondRule(rule: ConditionalRule, value: string): boolean {
   const v = value ?? "";
   const rv = rule.value ?? "";
   const num = parseFloat(v);
-  // Cache parsed rule value on the rule object to avoid re-parsing on every cell
-  let rnum = (rule as any)._parsedValue;
+  let rnum = _ruleValueCache.get(rule);
   if (rnum === undefined) {
     rnum = parseFloat(rv);
-    (rule as any)._parsedValue = rnum;
+    _ruleValueCache.set(rule, rnum);
   }
   switch (rule.operator) {
     case "isEmpty":    return v.trim() === "";

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { Bug, Loader2, Plus, ImagePlus, X } from "lucide-react";
+import { RisoBackground } from "../components/RisoBackground";
 import { PMProject, PMMember, PMTask, PMIssue, PMSeverity } from "../types/pm";
 import { TaskDetailPanel } from "../components/PM/TaskDetailPanel";
 import { useIssues } from "../hooks/useIssues";
@@ -15,6 +16,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "../components/ui/dialog";
+import { API_BASE } from "../lib/constants";
 import {
   Select,
   SelectContent,
@@ -22,8 +24,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../components/ui/select";
-
-const API_BASE = "http://127.0.0.1:8000";
 
 export function IssueTrackerPage() {
   const { issues, loading, update, bulkUpdate, bulkDelete, create, load } = useIssues();
@@ -167,28 +167,7 @@ export function IssueTrackerPage() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden riso-noise" style={{ position: "relative" }}>
-      <div className="pointer-events-none select-none" style={{ position: 'absolute', inset: 0, zIndex: 0 }}>
-        <div className="animate-blob-drift" style={{ position: 'absolute', width: 600, height: 600, borderRadius: '50%', background: 'var(--accent-teal)', opacity: 0.10, mixBlendMode: 'multiply', top: -200, right: -180 }} />
-        <div className="animate-blob-drift-b" style={{ position: 'absolute', width: 500, height: 500, borderRadius: '50%', background: 'var(--accent-orange)', opacity: 0.09, mixBlendMode: 'multiply', bottom: -160, left: -160 }} />
-        <div className="animate-blob-drift-c" style={{ position: 'absolute', width: 380, height: 380, borderRadius: '50%', background: 'var(--accent-violet)', opacity: 0.07, mixBlendMode: 'multiply', bottom: 80, right: -100 }} />
-        <div className="animate-blob-drift-d" style={{ position: 'absolute', width: 260, height: 260, borderRadius: '50%', background: 'var(--accent-teal)', opacity: 0.06, mixBlendMode: 'multiply', top: '35%', left: -100 }} />
-        <svg style={{ position: 'absolute', top: 12, right: 12, width: 44, height: 44 }} xmlns="http://www.w3.org/2000/svg">
-          <line x1="4" y1="18" x2="26" y2="18" stroke="rgba(11,114,104,0.40)" strokeWidth="1.5" />
-          <line x1="15" y1="7" x2="15" y2="29" stroke="rgba(11,114,104,0.40)" strokeWidth="1.5" />
-          <circle cx="15" cy="18" r="5" stroke="rgba(11,114,104,0.28)" strokeWidth="1" fill="none" />
-        </svg>
-        <svg style={{ position: 'absolute', bottom: 12, left: 12, width: 44, height: 44 }} xmlns="http://www.w3.org/2000/svg">
-          <line x1="4" y1="26" x2="26" y2="26" stroke="rgba(224,78,14,0.40)" strokeWidth="1.5" />
-          <line x1="15" y1="15" x2="15" y2="37" stroke="rgba(224,78,14,0.40)" strokeWidth="1.5" />
-          <circle cx="15" cy="26" r="5" stroke="rgba(224,78,14,0.28)" strokeWidth="1" fill="none" />
-        </svg>
-        <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} xmlns="http://www.w3.org/2000/svg">
-          <circle cx="18%" cy="12%" r="3" fill="rgba(224,78,14,0.20)" />
-          <circle cx="72%" cy="55%" r="2.5" fill="rgba(11,114,104,0.18)" />
-          <circle cx="88%" cy="30%" r="2" fill="rgba(92,58,156,0.18)" />
-          <circle cx="10%" cy="70%" r="2" fill="rgba(11,114,104,0.16)" />
-        </svg>
-      </div>
+      <RisoBackground />
 
       {/* Header — matches ProjectsPage layout */}
       <div className="flex items-center justify-between px-6 pt-6 pb-4 flex-shrink-0" style={{ position: "relative", zIndex: 1 }}>

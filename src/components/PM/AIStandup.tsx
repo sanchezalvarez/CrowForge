@@ -3,8 +3,7 @@ import { RefreshCw, AlertCircle } from "lucide-react";
 import axios from "axios";
 import ReactMarkdown from "react-markdown";
 import { useFetchSSE } from "../../hooks/useFetchSSE";
-
-const API_BASE = "http://127.0.0.1:8000";
+import { API_BASE } from "../../lib/constants";
 
 interface AIStandupProps {
   projectId?: number;

@@ -2,8 +2,7 @@ import { useState, useCallback, useEffect } from "react";
 import axios from "axios";
 import { PMSprint } from "../types/pm";
 import { toast } from "./useToast";
-
-const API_BASE = "http://127.0.0.1:8000";
+import { API_BASE } from "../lib/constants";
 
 export function useSprints(projectId: number | null) {
   const [sprints, setSprints] = useState<PMSprint[]>([]);

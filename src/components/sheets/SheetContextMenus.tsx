@@ -9,8 +9,7 @@ import {
 } from "../ui/dialog";
 import { idxToCol } from "../../lib/cellUtils";
 import type { Sheet, SheetSizes } from "../../lib/cellUtils";
-
-const API_BASE = "http://127.0.0.1:8000";
+import { API_BASE } from "../../lib/constants";
 
 export interface SheetContextMenusProps {
   // Sheet context menu

@@ -2,8 +2,7 @@ import { useState, useCallback, useEffect } from "react";
 import axios from "axios";
 import { PMTask, PMTaskStatus } from "../types/pm";
 import { toast } from "./useToast";
-
-const API_BASE = "http://127.0.0.1:8000";
+import { API_BASE } from "../lib/constants";
 
 export function useTasks(projectId: number | null) {
   const [tasks, setTasks] = useState<PMTask[]>([]);

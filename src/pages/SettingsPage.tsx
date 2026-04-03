@@ -1,13 +1,14 @@
 import { useState, useEffect, useRef } from "react";
 import axios from "axios";
-import { APP_VERSION } from "../lib/constants";
+import { APP_VERSION, API_BASE} from "../lib/constants";
 import { Download, CheckCircle2, Loader2, X, AlertCircle, Trash2, ExternalLink, Cpu, HardDrive, Monitor, MemoryStick, Rss, Plus, ToggleLeft, ToggleRight, Check, Newspaper } from "lucide-react";
 import { toast } from "../hooks/useToast";
 import { useWorkflowConfig, invalidateWorkflowCache } from "../hooks/useWorkflowConfig";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useRssFeeds, RssFeed } from "../hooks/useRssFeeds";
-
-const API_BASE = "http://127.0.0.1:8000";
+import type { EngineType, AIConfig, GalleryModel, SystemSpecs, DownloadState } from "../types/api";
+import { getErrorDetail } from "../lib/errorUtils";
+import { RisoBackground } from "../components/RisoBackground";
 
 const USER_AVATARS = [
   { emoji: "🐱", label: "Cat" },
@@ -23,47 +24,6 @@ const USER_AVATARS = [
   { emoji: "🐧", label: "Penguin" },
   { emoji: "🦔", label: "Hedgehog" },
 ];
-
-type EngineType = "mock" | "http" | "local" | "gemini";
-
-interface AIConfig {
-  enable_llm: boolean;
-  engine: EngineType;
-  base_url: string;
-  api_key: string;
-  model: string;
-  model_path: string;
-  models_dir: string;
-  ctx_size: number;
-  gemini_api_key: string;
-  gemini_model: string;
-}
-
-interface GalleryModel {
-  name: string;
-  size: string;
-  license: string;
-  description: string;
-  filename: string;
-  url: string;
-  infoUrl?: string;
-  tags?: string[];
-  vram?: string;
-  ram?: string;
-  recommended?: boolean;
-}
-
-interface SystemSpecs {
-  cpu: string;
-  cpu_cores: number;
-  ram_total_gb: number;
-  ram_available_gb: number;
-  disk_total_gb: number;
-  disk_free_gb: number;
-  os: string;
-  gpu: string | null;
-  gpu_vram_gb: number | null;
-}
 
 const GALLERY_MODELS: GalleryModel[] = [
   // ── Agent-capable models (tool calling / function calling) ──
@@ -353,8 +313,8 @@ function NewsFeedsSection() {
       await addFeed(urlInput.trim(), titleInput.trim());
       setUrlInput("");
       setTitleInput("");
-    } catch (e: any) {
-      setAddError(e?.response?.data?.detail ?? "Failed to add feed.");
+    } catch (e: unknown) {
+      setAddError(getErrorDetail(e));
     } finally {
       setAdding(false);
     }
@@ -565,14 +525,6 @@ function NewsFeedsSection() {
       </div>
     </div>
   );
-}
-
-interface DownloadState {
-  progress: number;
-  total: number;
-  done: boolean;
-  error: string | null;
-  running: boolean;
 }
 
 function fmt_bytes(b: number) {
@@ -825,8 +777,8 @@ export function SettingsPage({ theme, setTheme }: SettingsPageProps) {
       }));
       // Start polling
       refreshDownloads();
-    } catch (e: any) {
-      toast(`Failed to start download: ${e?.response?.data?.detail ?? e.message}`, "error");
+    } catch (e: unknown) {
+      toast(`Failed to start download: ${getErrorDetail(e)}`, "error");
     }
   }
 
@@ -853,28 +805,7 @@ export function SettingsPage({ theme, setTheme }: SettingsPageProps) {
 
   return (
     <div className="flex flex-col h-full relative overflow-hidden riso-noise">
-      <div className="pointer-events-none select-none" style={{ position: 'absolute', inset: 0, zIndex: 0 }}>
-        <div className="animate-blob-drift" style={{ position: 'absolute', width: 600, height: 600, borderRadius: '50%', background: 'var(--accent-teal)', opacity: 0.10, mixBlendMode: 'multiply', top: -200, right: -180 }} />
-        <div className="animate-blob-drift-b" style={{ position: 'absolute', width: 500, height: 500, borderRadius: '50%', background: 'var(--accent-orange)', opacity: 0.09, mixBlendMode: 'multiply', bottom: -160, left: -160 }} />
-        <div className="animate-blob-drift-c" style={{ position: 'absolute', width: 380, height: 380, borderRadius: '50%', background: 'var(--accent-violet)', opacity: 0.07, mixBlendMode: 'multiply', bottom: 80, right: -100 }} />
-        <div className="animate-blob-drift-d" style={{ position: 'absolute', width: 260, height: 260, borderRadius: '50%', background: 'var(--accent-teal)', opacity: 0.06, mixBlendMode: 'multiply', top: '35%', left: -100 }} />
-        <svg style={{ position: 'absolute', top: 12, right: 12, width: 44, height: 44 }} xmlns="http://www.w3.org/2000/svg">
-          <line x1="4" y1="18" x2="26" y2="18" stroke="rgba(11,114,104,0.40)" strokeWidth="1.5" />
-          <line x1="15" y1="7" x2="15" y2="29" stroke="rgba(11,114,104,0.40)" strokeWidth="1.5" />
-          <circle cx="15" cy="18" r="5" stroke="rgba(11,114,104,0.28)" strokeWidth="1" fill="none" />
-        </svg>
-        <svg style={{ position: 'absolute', bottom: 12, left: 12, width: 44, height: 44 }} xmlns="http://www.w3.org/2000/svg">
-          <line x1="4" y1="26" x2="26" y2="26" stroke="rgba(224,78,14,0.40)" strokeWidth="1.5" />
-          <line x1="15" y1="15" x2="15" y2="37" stroke="rgba(224,78,14,0.40)" strokeWidth="1.5" />
-          <circle cx="15" cy="26" r="5" stroke="rgba(224,78,14,0.28)" strokeWidth="1" fill="none" />
-        </svg>
-        <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} xmlns="http://www.w3.org/2000/svg">
-          <circle cx="18%" cy="12%" r="3" fill="rgba(224,78,14,0.20)" />
-          <circle cx="72%" cy="55%" r="2.5" fill="rgba(11,114,104,0.18)" />
-          <circle cx="88%" cy="30%" r="2" fill="rgba(92,58,156,0.18)" />
-          <circle cx="10%" cy="70%" r="2" fill="rgba(11,114,104,0.16)" />
-        </svg>
-      </div>
+      <RisoBackground />
       {/* Re-init overlay */}
       {(reinitStatus === "reinitializing" || reinitStatus === "done" || reinitStatus === "error") && (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
@@ -942,7 +873,7 @@ export function SettingsPage({ theme, setTheme }: SettingsPageProps) {
       </nav>
 
       {/* Content */}
-      <div className={`flex-1 overflow-y-auto p-10 animate-ink-in ${["ai", "news", "preferences", "pm"].includes(section) ? "" : "max-w-2xl mx-auto w-full"} space-y-8`} style={{ position: 'relative', zIndex: 1 }}>
+      <div className={`flex-1 overflow-y-auto p-10 animate-ink-in ${["ai", "news", "preferences", "pm"].includes(section) ? "" : "max-w-4xl mx-auto w-full"} space-y-8`} style={{ position: 'relative', zIndex: 1 }}>
         {section === "ai" && (
           <>
             <div className="grid gap-6 items-start" style={{ gridTemplateColumns: "340px 1fr" }}>
@@ -1343,8 +1274,8 @@ export function SettingsPage({ theme, setTheme }: SettingsPageProps) {
                       if (!path) return;
                       await axios.post(`${API_BASE}/backup/export`, { path });
                       toast("Backup exported successfully", "success");
-                    } catch (e: any) {
-                      toast(e?.response?.data?.detail || "Export failed", "error");
+                    } catch (e: unknown) {
+                      toast(getErrorDetail(e), "error");
                     }
                   }}
                 >
@@ -1366,8 +1297,8 @@ export function SettingsPage({ theme, setTheme }: SettingsPageProps) {
                       toast("Database imported. Restarting backend...", "success");
                       const { invoke } = await import("@tauri-apps/api/core");
                       await invoke("restart_backend");
-                    } catch (e: any) {
-                      toast(e?.response?.data?.detail || "Import failed", "error");
+                    } catch (e: unknown) {
+                      toast(getErrorDetail(e), "error");
                     }
                   }}
                 >

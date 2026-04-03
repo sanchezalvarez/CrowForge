@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, Component, Fragment, type ReactNode } from "react";
 import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
 import axios from "axios";
-import { APP_VERSION } from "./lib/constants";
+import { APP_VERSION, API_BASE} from "./lib/constants";
 import {
   Gauge,
   MessageSquare,
@@ -39,8 +39,6 @@ import { Toaster } from "./components/ui/toaster";
 import { AIControlPanel, TuningParams } from "./components/AIControlPanel";
 import { ChatStreamProvider } from "./contexts/ChatStreamContext";
 import { Home } from "lucide-react";
-
-const API_BASE = "http://127.0.0.1:8000";
 
 class PageErrorBoundary extends Component<{ children: ReactNode; page: string }, { error: Error | null }> {
   constructor(props: { children: ReactNode; page: string }) {
@@ -244,7 +242,7 @@ export default function App() {
     if (appStatus === "ready" || appStatus === "onboarding") {
       const win = getCurrentWindow();
       win.setMinSize(new LogicalSize(800, 500)).then(() =>
-        win.maximize().then(() => win.show())
+        win.maximize()
       );
     }
   }, [appStatus]);

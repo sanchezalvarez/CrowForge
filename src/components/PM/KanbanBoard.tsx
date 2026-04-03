@@ -55,12 +55,15 @@ export function KanbanBoard({ tasks, members, onTaskClick, onStatusChange, onReo
     [tasks, shownTypes]
   );
 
-  const grouped = COLUMNS.reduce(
-    (acc, s) => ({
-      ...acc,
-      [s]: filteredTasks.filter((t) => t.status === s).sort((a, b) => a.position - b.position),
-    }),
-    {} as Record<PMTaskStatus, PMTask[]>
+  const grouped = useMemo(
+    () => COLUMNS.reduce(
+      (acc, s) => ({
+        ...acc,
+        [s]: filteredTasks.filter((t) => t.status === s).sort((a, b) => a.position - b.position),
+      }),
+      {} as Record<PMTaskStatus, PMTask[]>
+    ),
+    [filteredTasks]
   );
 
   const toggleType = (type: PMItemType) => {
@@ -75,27 +78,30 @@ export function KanbanBoard({ tasks, members, onTaskClick, onStatusChange, onReo
   const onDragEnd = async (result: DropResult) => {
     if (dragging.current) return;
     dragging.current = true;
-    setTimeout(() => { dragging.current = false; }, 100);
 
-    const { source, destination } = result;
-    if (!destination) return;
+    try {
+      const { source, destination } = result;
+      if (!destination) return;
 
-    const srcStatus = source.droppableId as PMTaskStatus;
-    const dstStatus = destination.droppableId as PMTaskStatus;
-    const srcItems = [...grouped[srcStatus]];
-    const [moved] = srcItems.splice(source.index, 1);
+      const srcStatus = source.droppableId as PMTaskStatus;
+      const dstStatus = destination.droppableId as PMTaskStatus;
+      const srcItems = [...grouped[srcStatus]];
+      const [moved] = srcItems.splice(source.index, 1);
 
-    if (srcStatus === dstStatus) {
-      srcItems.splice(destination.index, 0, moved);
-      await onReorder(srcItems.map((t, i) => ({ id: t.id, position: (i + 1) * 1000 })));
-    } else {
-      const dstItems = [...grouped[dstStatus]];
-      dstItems.splice(destination.index, 0, { ...moved, status: dstStatus });
-      await onStatusChange(moved.id, dstStatus);
-      await onReorder([
-        ...srcItems.map((t, i) => ({ id: t.id, position: (i + 1) * 1000 })),
-        ...dstItems.map((t, i) => ({ id: t.id, position: (i + 1) * 1000, status: dstStatus })),
-      ]);
+      if (srcStatus === dstStatus) {
+        srcItems.splice(destination.index, 0, moved);
+        await onReorder(srcItems.map((t, i) => ({ id: t.id, position: (i + 1) * 1000 })));
+      } else {
+        const dstItems = [...grouped[dstStatus]];
+        dstItems.splice(destination.index, 0, { ...moved, status: dstStatus });
+        await onStatusChange(moved.id, dstStatus);
+        await onReorder([
+          ...srcItems.map((t, i) => ({ id: t.id, position: (i + 1) * 1000 })),
+          ...dstItems.map((t, i) => ({ id: t.id, position: (i + 1) * 1000, status: dstStatus })),
+        ]);
+      }
+    } finally {
+      dragging.current = false;
     }
   };
 

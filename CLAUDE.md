@@ -12,7 +12,7 @@ After implementing any fix, do a self-review pass checking for: stale state clos
 
 ## Build & Release
 
-Use semver format (e.g., `0.4.4` not `0.4`) for all version strings. Current version: **0.4.4** (set in `package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`, displayed in `App.tsx` sidebar and `SettingsPage.tsx` About). Always validate version format before committing.
+Use semver format (e.g., `0.4.6` not `0.4`) for all version strings. Current version: **0.4.6** (set in `package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`, displayed in `App.tsx` sidebar and `SettingsPage.tsx` About). Always validate version format before committing.
 
 ## Problem Solving
 

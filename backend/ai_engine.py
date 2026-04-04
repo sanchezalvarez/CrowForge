@@ -226,6 +226,17 @@ class HTTPAIEngine(AIEngine):
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             try:
                 async with client.stream("POST", f"{self.base_url}/chat/completions", json=payload, headers=headers) as response:
+                    if response.status_code != 200:
+                        body = await response.aread()
+                        err_text = body.decode(errors="replace")[:300]
+                        # If tool_choice caused the error, retry without it
+                        if response.status_code in (400, 422) and "tool_choice" in payload:
+                            del payload["tool_choice"]
+                            async for event in self._stream_tool_response(client, payload, headers):
+                                yield event
+                            return
+                        yield json.dumps({"type": "error", "message": f"HTTP {response.status_code}: {err_text}"})
+                        return
                     async for line in response.aiter_lines():
                         if not line.startswith("data: "):
                             continue
@@ -253,6 +264,30 @@ class HTTPAIEngine(AIEngine):
                 yield json.dumps({"type": "error", "message": "LLM request timed out"})
             except Exception as e:
                 yield json.dumps({"type": "error", "message": str(e)})
+
+    async def _stream_tool_response(self, client, payload, headers):
+        """Helper to retry tool call streaming (e.g. after removing tool_choice)."""
+        async with client.stream("POST", f"{self.base_url}/chat/completions", json=payload, headers=headers) as response:
+            if response.status_code != 200:
+                body = await response.aread()
+                yield json.dumps({"type": "error", "message": f"HTTP {response.status_code}: {body.decode(errors='replace')[:300]}"})
+                return
+            async for line in response.aiter_lines():
+                if not line.startswith("data: "):
+                    continue
+                raw = line[6:].strip()
+                if raw == "[DONE]":
+                    break
+                try:
+                    chunk = json.loads(raw)
+                    delta = chunk["choices"][0].get("delta", {})
+                    if delta.get("content"):
+                        yield json.dumps({"type": "token", "content": delta["content"]})
+                    if delta.get("tool_calls"):
+                        for tc in delta["tool_calls"]:
+                            yield json.dumps({"type": "tool_call_delta", "tool_call": tc})
+                except (json.JSONDecodeError, KeyError, IndexError):
+                    continue
 
 class GeminiAIEngine(AIEngine):
     """Google Gemini API engine using native REST streaming."""
@@ -311,28 +346,147 @@ class GeminiAIEngine(AIEngine):
             except Exception as e:
                 yield f"[ERROR] {str(e)}"
 
+    @property
+    def supports_tools(self) -> bool:
+        return True
+
+    async def generate_with_tools(
+        self, *, messages: list[dict], tools: list[dict],
+        temperature: float = 0.7, max_tokens: int = 1024,
+    ) -> AsyncGenerator[str, None]:
+        """Gemini function calling via generateContent (non-streaming for tool parsing)."""
+        # Convert OpenAI-format messages to Gemini contents
+        contents = []
+        system_text = ""
+        for msg in messages:
+            role = msg.get("role", "")
+            if role == "system":
+                system_text = msg.get("content", "")
+            elif role == "user":
+                contents.append({"role": "user", "parts": [{"text": msg.get("content", "")}]})
+            elif role == "assistant":
+                parts = []
+                if msg.get("content"):
+                    parts.append({"text": msg["content"]})
+                if msg.get("tool_calls"):
+                    for tc in msg["tool_calls"]:
+                        fn = tc.get("function", {})
+                        try:
+                            args = json.loads(fn.get("arguments", "{}"))
+                        except (json.JSONDecodeError, TypeError):
+                            args = {}
+                        parts.append({"functionCall": {"name": fn.get("name", ""), "args": args}})
+                if parts:
+                    contents.append({"role": "model", "parts": parts})
+            elif role == "tool":
+                # Gemini expects functionResponse in a user-role turn
+                content = msg.get("content", "")
+                try:
+                    result = json.loads(content)
+                except (json.JSONDecodeError, TypeError):
+                    result = {"result": content}
+                contents.append({"role": "user", "parts": [
+                    {"functionResponse": {"name": msg.get("name", "tool"), "response": result}}
+                ]})
+
+        # Convert OpenAI tool schemas to Gemini function declarations
+        gemini_tools = []
+        for t in tools:
+            fn = t.get("function", t)
+            decl = {"name": fn["name"], "description": fn.get("description", "")}
+            params = fn.get("parameters")
+            if params:
+                decl["parameters"] = params
+            gemini_tools.append(decl)
+
+        url = f"{self._GEMINI_BASE}/{self.model}:generateContent?key={self.api_key}"
+        payload: dict = {
+            "contents": contents,
+            "tools": [{"functionDeclarations": gemini_tools}],
+            "generationConfig": {
+                "temperature": temperature,
+                "maxOutputTokens": max_tokens,
+            },
+        }
+        if system_text:
+            payload["system_instruction"] = {"parts": [{"text": system_text}]}
+
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            try:
+                response = await client.post(url, json=payload)
+                if response.status_code != 200:
+                    yield json.dumps({"type": "error", "message": f"Gemini API error {response.status_code}: {response.text[:300]}"})
+                    return
+                data = response.json()
+                candidate = data.get("candidates", [{}])[0]
+                parts = candidate.get("content", {}).get("parts", [])
+
+                for i, part in enumerate(parts):
+                    if "text" in part:
+                        yield json.dumps({"type": "token", "content": part["text"]})
+                    elif "functionCall" in part:
+                        fc = part["functionCall"]
+                        yield json.dumps({
+                            "type": "tool_call_delta",
+                            "tool_call": {
+                                "index": i,
+                                "id": f"call_{i}",
+                                "function": {
+                                    "name": fc.get("name", ""),
+                                    "arguments": json.dumps(fc.get("args", {})),
+                                },
+                            },
+                        })
+            except httpx.ReadTimeout:
+                yield json.dumps({"type": "error", "message": "Gemini request timed out"})
+            except Exception as e:
+                yield json.dumps({"type": "error", "message": str(e)})
+
 
 class LocalLLAMAEngine(AIEngine):
     """Local GGUF engine with runtime model hot-swap."""
 
-    def __init__(self, model_path: str | None = None, n_ctx: int | None = None, chat_format: str = "chatml"):
+    # Map model name patterns to chat format and stop tokens
+    _FORMAT_MAP = [
+        (["gemma"],    "gemma",   ["<end_of_turn>", "<eos>"]),
+        (["llama-3", "llama3"],   "llama-3", ["<|eot_id|>", "<|end_of_text|>"]),
+        (["mistral", "mixtral"],  "chatml",  ["<|im_start|>", "<|im_end|>", "</s>"]),
+        (["phi-3", "phi3"],       "chatml",  ["<|im_start|>", "<|im_end|>", "<|end|>"]),
+        (["qwen"],     "chatml",  ["<|im_start|>", "<|im_end|>", "<|endoftext|>"]),
+    ]
+    _DEFAULT_STOPS = ["<|im_start|>", "<|im_end|>", "<|endoftext|>", "<|eot_id|>", "<end_of_turn>", "Assistant:", "User:"]
+
+    @staticmethod
+    def _detect_format(model_path: str) -> tuple[str, list[str]]:
+        """Auto-detect chat format and stop tokens from model filename."""
+        name = os.path.basename(model_path).lower()
+        for patterns, fmt, stops in LocalLLAMAEngine._FORMAT_MAP:
+            if any(p in name for p in patterns):
+                return fmt, stops
+        return "chatml", LocalLLAMAEngine._DEFAULT_STOPS
+
+    def __init__(self, model_path: str | None = None, n_ctx: int | None = None, chat_format: str | None = None):
         self.llm = None
         self.is_ready = False
         self.model_path: str | None = None
         self.n_ctx: int = 0
-        self.chat_format = chat_format
+        self.chat_format = chat_format or "chatml"
+        self.stop_tokens: list[str] = self._DEFAULT_STOPS
         self._lock = threading.Lock()
         self._generating = False
         self.last_used: float = 0.0  # epoch seconds; 0 means never used
 
         path = model_path or os.getenv("LLM_MODEL_PATH")
-        ctx = n_ctx or int(os.getenv("LLM_CTX_SIZE", "2048"))
+        ctx = n_ctx or int(os.getenv("LLM_CTX_SIZE", "4096"))
         if path and os.path.exists(path):
             self._load_model(path, ctx)
 
     def _load_model(self, model_path: str, n_ctx: int) -> None:
         """Load model; raises on failure so callers can propagate the real error."""
         from llama_cpp import Llama
+        # Auto-detect chat format and stop tokens from model filename
+        detected_fmt, detected_stops = self._detect_format(model_path)
+        chat_fmt = self.chat_format if self.chat_format != "chatml" else detected_fmt
         with self._lock:
             old = self.llm
             self.is_ready = False
@@ -342,12 +496,14 @@ class LocalLLAMAEngine(AIEngine):
                     n_ctx=n_ctx,
                     n_threads=os.cpu_count(),
                     verbose=False,
-                    chat_format=self.chat_format,
+                    chat_format=chat_fmt,
                 )
                 self.model_path = model_path
                 self.n_ctx = n_ctx
+                self.chat_format = chat_fmt
+                self.stop_tokens = detected_stops
                 self.is_ready = True
-                print(f"[LOCAL_LLM] Loaded: {os.path.basename(model_path)} (ctx={n_ctx})")
+                print(f"[LOCAL_LLM] Loaded: {os.path.basename(model_path)} (ctx={n_ctx}, format={chat_fmt})")
             except Exception as e:
                 print(f"[AI_ERROR] Local model failed to load: {e}")
                 # Free partially-constructed model if different from old
@@ -395,6 +551,7 @@ class LocalLLAMAEngine(AIEngine):
             "model_path": self.model_path,
             "model_name": os.path.basename(self.model_path) if self.model_path else None,
             "n_ctx": self.n_ctx,
+            "chat_format": self.chat_format,
             "is_ready": self.is_ready,
             "last_used": self.last_used,
         }
@@ -427,7 +584,7 @@ class LocalLLAMAEngine(AIEngine):
                 top_p=top_p,
                 repeat_penalty=1.3,
                 stream=True,
-                stop=["<|im_start|>", "<|im_end|>", "<|endoftext|>", "<|eot_id|>", "Assistant:", "User:"],
+                stop=self.stop_tokens,
             )
             if json_mode:
                 kwargs["response_format"] = {"type": "json_object"}

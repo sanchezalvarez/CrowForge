@@ -1484,8 +1484,8 @@ async def delete_all_projects():
         conn.execute("DELETE FROM pm_project_members")
         conn.execute("DELETE FROM pm_activity")
         count = conn.execute("SELECT changes()").fetchone()[0]
-        conn.execute("DELETE FROM pm_projects")
-        count = conn.execute("SELECT COUNT(*) FROM pm_projects").fetchone()[0]
+        cursor = conn.execute("DELETE FROM pm_projects")
+        count = cursor.rowcount
         conn.commit()
     return {"deleted": count, "module": "projects"}
 
@@ -1926,6 +1926,9 @@ async def paste_cells(sheet_id: str, req: dict):
                 sheet.rows.append([""] * num_cols)
             for dc, val in enumerate(row_vals):
                 ci = start_col + dc
+                # Pad row if shorter than target column
+                while ci >= len(sheet.rows[ri]):
+                    sheet.rows[ri].append("")
                 val_str = str(val)
                 key = f"{ri},{ci}"
                 changed.add(key)

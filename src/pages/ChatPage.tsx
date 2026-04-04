@@ -250,10 +250,16 @@ export function ChatPage({ documentContext, onDisconnectDoc, onConnectDoc, tunin
   useEffect(() => {
     if (activeSessionId) {
       loadMessages(activeSessionId);
-      const s = sessions.find((s) => s.id === activeSessionId);
-      if (s) setActiveMode(s.mode);
     } else {
       setMessages([]);
+    }
+  }, [activeSessionId]);
+
+  // Sync active mode when active session changes or sessions list updates
+  useEffect(() => {
+    if (activeSessionId) {
+      const s = sessions.find((s) => s.id === activeSessionId);
+      if (s) setActiveMode(s.mode);
     }
   }, [activeSessionId, sessions]);
 

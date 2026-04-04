@@ -254,10 +254,12 @@ export function SheetsPage({ tuningParams, initialSheetId }: SheetsPageProps) {
       const prevSheet = sheets.find(s => s.id === prevSheetId.current);
       if (prevSheet) {
         const { row, col } = editingCell;
-        const original = prevSheet.rows[row]?.[col] ?? "";
-        if (editValue !== original) {
+        const formulaKey = `${row},${col}`;
+        const original = prevSheet.formulas?.[formulaKey] ?? prevSheet.rows[row]?.[col] ?? "";
+        const currentValue = editValueRef.current;
+        if (currentValue !== original) {
           axios.put(`${getAPIBase()}/sheets/${prevSheet.id}/cell`, {
-            row_index: row, col_index: col, value: editValue,
+            row_index: row, col_index: col, value: currentValue,
           }).catch(() => {});
         }
       }

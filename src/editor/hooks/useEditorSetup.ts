@@ -47,14 +47,18 @@ export function useEditorSetup({
   onOutlineChange,
 }: UseEditorSetupOptions) {
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingSaveRef = useRef<(() => void) | null>(null);
 
   // Debounced save
   const debouncedSave = useCallback(
     (docId: string, content: Record<string, unknown>) => {
       if (saveTimer.current) clearTimeout(saveTimer.current);
-      saveTimer.current = setTimeout(() => {
+      const doSave = () => {
+        pendingSaveRef.current = null;
         onSave(docId, content);
-      }, 1200);
+      };
+      pendingSaveRef.current = doSave;
+      saveTimer.current = setTimeout(doSave, 1200);
     },
     [onSave],
   );
@@ -64,6 +68,10 @@ export function useEditorSetup({
     if (saveTimer.current) {
       clearTimeout(saveTimer.current);
       saveTimer.current = null;
+      // Flush the pending save so edits are not lost on doc switch
+      if (pendingSaveRef.current) {
+        pendingSaveRef.current();
+      }
     }
     if (!editor) return;
     if (activeDoc) {

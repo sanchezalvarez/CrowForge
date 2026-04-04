@@ -157,8 +157,8 @@ async def run_agent_loop(
                     pass
 
             if error_msg:
-                # Track failure count
-                fail_key = f"{name}:{call_id}"
+                # Track failure count per tool name (not call_id, which is unique each iteration)
+                fail_key = name
                 tool_failure_counts[fail_key] = tool_failure_counts.get(fail_key, 0) + 1
                 consecutive_errors += 1
 

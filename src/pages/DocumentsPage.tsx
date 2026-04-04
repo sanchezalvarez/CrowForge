@@ -55,21 +55,21 @@ export function DocumentsPage({ onContextChange, tuningParams, initialDocId }: D
       if (target === "documents" || target === "all") {
         setDocuments([]);
         setActiveDocId(null);
-        loadDocuments();
+        loadDocuments(true);
       }
     }
     window.addEventListener("crowforge:data-deleted", onDataDeleted);
     return () => window.removeEventListener("crowforge:data-deleted", onDataDeleted);
   }, []);
 
-  async function loadDocuments() {
+  async function loadDocuments(forceAutoSelect = false) {
     try {
       const res = await axios.get(`${getAPIBase()}/documents`);
       const loaded = res.data;
       setDocuments(loaded);
       // Auto-select the most recently opened document
-      if (!activeDocId && loaded.length > 0) {
-        setActiveDocId(loaded[0].id);
+      if (loaded.length > 0) {
+        setActiveDocId((prev) => (!prev || forceAutoSelect) ? loaded[0].id : prev);
       }
     } catch { /* backend offline */ }
   }

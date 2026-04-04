@@ -120,6 +120,25 @@ async def run_agent_loop(
                 args = json.loads(tc_msg["function"]["arguments"]) if tc_msg["function"]["arguments"] else {}
             except json.JSONDecodeError:
                 args = {}
+                # Tell the LLM its arguments were malformed so it can retry properly
+                raw_args = tc_msg["function"]["arguments"]
+                yield json.dumps({
+                    "type": "tool_error",
+                    "tool": name,
+                    "call_id": call_id,
+                    "error": f"Malformed JSON arguments: {raw_args[:200]}",
+                    "duration_ms": 0,
+                })
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "content": f"Tool '{name}' could not parse arguments — invalid JSON: {raw_args[:200]}. Please retry with valid JSON arguments.",
+                })
+                consecutive_errors += 1
+                if consecutive_errors >= MAX_CONSECUTIVE_ERRORS:
+                    yield json.dumps({"type": "error", "message": "Too many consecutive tool errors — stopping agent loop."})
+                    return
+                continue
 
             # ── started_tool ──
             yield json.dumps({

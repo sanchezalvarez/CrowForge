@@ -4,6 +4,7 @@ import os
 import json
 import re
 import shutil
+import sqlite3
 import uuid
 import logging
 import httpx
@@ -1500,10 +1501,14 @@ async def delete_all_issues():
 @app.delete("/data/canvases")
 async def delete_all_canvases():
     canvases = canvas_repo.delete_all()
+    rf = 0
     with db.get_connection() as conn:
-        cursor = conn.execute("DELETE FROM rf_canvases")
-        rf = cursor.rowcount
-        conn.commit()
+        try:
+            cursor = conn.execute("DELETE FROM rf_canvases")
+            rf = cursor.rowcount
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass  # table may not exist in older DBs
     return {"deleted": canvases + rf, "module": "canvases"}
 
 @app.delete("/data/all")
@@ -1513,12 +1518,11 @@ async def delete_all_data():
     sheets = sheet_repo.delete_all()
     canvases = canvas_repo.delete_all()
     with db.get_connection() as conn:
-        conn.execute("DELETE FROM rf_canvases")
-        conn.execute("DELETE FROM pm_tasks")
-        conn.execute("DELETE FROM pm_sprints")
-        conn.execute("DELETE FROM pm_project_members")
-        conn.execute("DELETE FROM pm_activity")
-        conn.execute("DELETE FROM pm_projects")
+        for tbl in ["rf_canvases", "pm_tasks", "pm_sprints", "pm_project_members", "pm_activity", "pm_projects"]:
+            try:
+                conn.execute(f"DELETE FROM {tbl}")
+            except sqlite3.OperationalError:
+                pass  # table may not exist in older DBs
         conn.commit()
     return {"deleted": {"chat": chat, "documents": docs, "sheets": sheets, "canvases": canvases, "projects": "all", "issues": "all"}}
 
@@ -1553,6 +1557,9 @@ async def import_backup(request: Request):
         shutil.copy2(dest, dest + ".bak")
     try:
         shutil.copy2(src, dest)
+        # Reinitialize schema on the imported DB so migrations run and
+        # any missing tables/columns are created for the current app version.
+        db.initialize_schema(get_resource_path("backend/schema.sql"))
         return {"success": True}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

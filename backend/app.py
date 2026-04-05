@@ -4,6 +4,7 @@ import os
 import json
 import re
 import shutil
+import sqlite3
 import uuid
 import logging
 import httpx
@@ -304,6 +305,8 @@ def get_local_ip() -> str:
 PM_FILES_DIR = os.path.join(get_app_data_dir(), "pm_files")
 os.makedirs(PM_FILES_DIR, exist_ok=True)
 app.mount("/pm_files", StaticFiles(directory=PM_FILES_DIR), name="pm_files")
+WORKSPACE_DIR = os.path.join(get_app_data_dir(), "workspace")
+os.makedirs(WORKSPACE_DIR, exist_ok=True)
 
 _db_path = os.environ.get("CROWFORGE_DB_PATH") or os.path.join(get_app_data_dir(), "crowforge.db")
 os.makedirs(os.path.dirname(os.path.abspath(_db_path)), exist_ok=True)
@@ -1328,6 +1331,9 @@ async def stream_chat_message(session_id: int, req: ChatMessageRequest, request:
 async def stream_agent_message(session_id: int, req: ChatMessageRequest, request: Request):
     if not _agent_available:
         raise HTTPException(status_code=503, detail="Agent modules are not available")
+    engine = engine_manager.get_active()
+    if not engine.supports_tools:
+        raise HTTPException(status_code=400, detail="Active AI engine does not support tool calling. Switch to a compatible engine in Settings.")
     session = chat_session_repo.get_by_id(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Chat session not found")
@@ -1353,15 +1359,26 @@ async def stream_agent_message(session_id: int, req: ChatMessageRequest, request
     scope = req.scope or {}
     scoped_sheet_ids = scope.get("sheet_ids")  # None means all
     scoped_document_ids = scope.get("document_ids")  # None means all
+    scoped_workspace_dir = scope.get("workspace_dir")
+    effective_workspace_dir = scoped_workspace_dir if scoped_workspace_dir and os.path.isdir(scoped_workspace_dir) else WORKSPACE_DIR
     if scoped_sheet_ids is not None or scoped_document_ids is not None:
         scoped_registry = build_tool_registry(
             sheet_repo, document_repo,
             sheet_ids=scoped_sheet_ids,
             document_ids=scoped_document_ids,
+            workspace_dir=effective_workspace_dir,
         )
     else:
         scoped_registry = build_tool_registry(
             sheet_repo, document_repo,
+            workspace_dir=effective_workspace_dir,
+        )
+
+    if effective_workspace_dir != WORKSPACE_DIR:
+        system_prompt += (
+            f"\n\nThe user has attached a working directory: {effective_workspace_dir}\n"
+            "You have filesystem tools (list_directory, read_file, write_file, append_to_file) "
+            "that resolve relative paths from this directory. Use them to explore and work with the user's files."
         )
 
     messages = [{"role": "system", "content": system_prompt}]
@@ -1376,7 +1393,7 @@ async def stream_agent_message(session_id: int, req: ChatMessageRequest, request
             import json as _json
             STRUCTURED_TYPES = ("started_tool", "finished_tool", "thinking", "error", "tool_error")
             async for event_str in run_agent_loop(
-                engine=engine_manager.get_active(),
+                engine=engine,
                 tool_registry=scoped_registry,
                 messages=messages,
                 temperature=temperature,
@@ -1426,11 +1443,14 @@ async def apply_agent_write(session_id: int, data: dict):
         raise HTTPException(status_code=400, detail="Missing 'tool' field")
     # Build a non-preview registry, preserving scope if provided
     scope = data.get("scope") or {}
+    apply_wd = scope.get("workspace_dir")
+    effective_wd = apply_wd if apply_wd and os.path.isdir(apply_wd) else WORKSPACE_DIR
     registry = build_tool_registry(
         sheet_repo, document_repo,
         sheet_ids=scope.get("sheet_ids"),
         document_ids=scope.get("document_ids"),
         preview_writes=False,
+        workspace_dir=effective_wd,
     )
     result_str = await registry.call(tool_name, args)
     try:
@@ -1484,8 +1504,8 @@ async def delete_all_projects():
         conn.execute("DELETE FROM pm_project_members")
         conn.execute("DELETE FROM pm_activity")
         count = conn.execute("SELECT changes()").fetchone()[0]
-        conn.execute("DELETE FROM pm_projects")
-        count = conn.execute("SELECT COUNT(*) FROM pm_projects").fetchone()[0]
+        cursor = conn.execute("DELETE FROM pm_projects")
+        count = cursor.rowcount
         conn.commit()
     return {"deleted": count, "module": "projects"}
 
@@ -1500,10 +1520,14 @@ async def delete_all_issues():
 @app.delete("/data/canvases")
 async def delete_all_canvases():
     canvases = canvas_repo.delete_all()
+    rf = 0
     with db.get_connection() as conn:
-        cursor = conn.execute("DELETE FROM rf_canvases")
-        rf = cursor.rowcount
-        conn.commit()
+        try:
+            cursor = conn.execute("DELETE FROM rf_canvases")
+            rf = cursor.rowcount
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass  # table may not exist in older DBs
     return {"deleted": canvases + rf, "module": "canvases"}
 
 @app.delete("/data/all")
@@ -1513,12 +1537,11 @@ async def delete_all_data():
     sheets = sheet_repo.delete_all()
     canvases = canvas_repo.delete_all()
     with db.get_connection() as conn:
-        conn.execute("DELETE FROM rf_canvases")
-        conn.execute("DELETE FROM pm_tasks")
-        conn.execute("DELETE FROM pm_sprints")
-        conn.execute("DELETE FROM pm_project_members")
-        conn.execute("DELETE FROM pm_activity")
-        conn.execute("DELETE FROM pm_projects")
+        for tbl in ["rf_canvases", "pm_tasks", "pm_sprints", "pm_project_members", "pm_activity", "pm_projects"]:
+            try:
+                conn.execute(f"DELETE FROM {tbl}")
+            except sqlite3.OperationalError:
+                pass  # table may not exist in older DBs
         conn.commit()
     return {"deleted": {"chat": chat, "documents": docs, "sheets": sheets, "canvases": canvases, "projects": "all", "issues": "all"}}
 
@@ -1553,6 +1576,9 @@ async def import_backup(request: Request):
         shutil.copy2(dest, dest + ".bak")
     try:
         shutil.copy2(src, dest)
+        # Reinitialize schema on the imported DB so migrations run and
+        # any missing tables/columns are created for the current app version.
+        db.initialize_schema(get_resource_path("backend/schema.sql"))
         return {"success": True}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -1926,6 +1952,9 @@ async def paste_cells(sheet_id: str, req: dict):
                 sheet.rows.append([""] * num_cols)
             for dc, val in enumerate(row_vals):
                 ci = start_col + dc
+                # Pad row if shorter than target column
+                while ci >= len(sheet.rows[ri]):
+                    sheet.rows[ri].append("")
                 val_str = str(val)
                 key = f"{ri},{ci}"
                 changed.add(key)

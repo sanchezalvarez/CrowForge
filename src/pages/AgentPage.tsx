@@ -398,6 +398,9 @@ export function AgentPage({ tuningParams }: AgentPageProps) {
   const [showContextPanel, setShowContextPanel] = useState(false);
   const [showKbPanel, setShowKbPanel] = useState(false);
   const kbPanelRef = useRef<HTMLDivElement>(null);
+  const [workspaceDir, setWorkspaceDir] = useState<string>("");
+  const [showWdPanel, setShowWdPanel] = useState(false);
+  const wdPanelRef = useRef<HTMLDivElement>(null);
 
   // Knowledge Base state
   interface KbStatus { indexed: boolean; chunks: number; path: string | null; available: boolean }
@@ -537,6 +540,18 @@ export function AgentPage({ tuningParams }: AgentPageProps) {
     return () => document.removeEventListener("mousedown", onClickOutside);
   }, [showKbPanel]);
 
+  // Close Working Directory panel on outside click
+  useEffect(() => {
+    if (!showWdPanel) return;
+    function onClickOutside(e: MouseEvent) {
+      if (wdPanelRef.current && !wdPanelRef.current.contains(e.target as Node)) {
+        setShowWdPanel(false);
+      }
+    }
+    document.addEventListener("mousedown", onClickOutside);
+    return () => document.removeEventListener("mousedown", onClickOutside);
+  }, [showWdPanel]);
+
   // Fetch KB status on mount
   useEffect(() => {
     axios.get(`${getAPIBase()}/rag/status`).then(r => setKbStatus(r.data)).catch(() => { setKbStatus({ indexed: false, chunks: 0, path: null, available: false }); });
@@ -601,11 +616,14 @@ export function AgentPage({ tuningParams }: AgentPageProps) {
   function buildScope(): AgentScope | undefined {
     const allSheetsSelected = selectedSheetIds.size === allSheets.length;
     const allDocsSelected = selectedDocumentIds.size === allDocuments.length;
-    if (allSheetsSelected && allDocsSelected) return undefined; // no filter = full access
-    return {
+    const hasWd = workspaceDir.trim().length > 0;
+    if (allSheetsSelected && allDocsSelected && !hasWd) return undefined;
+    const scope: AgentScope = {
       sheet_ids: [...selectedSheetIds],
       document_ids: [...selectedDocumentIds],
     };
+    if (hasWd) scope.workspace_dir = workspaceDir.trim();
+    return scope;
   }
 
   function sendMessage() {
@@ -652,6 +670,13 @@ export function AgentPage({ tuningParams }: AgentPageProps) {
     } catch {
       // Not in Tauri context or dialog cancelled — ignore
     }
+  }
+
+  async function browseWorkspaceDir() {
+    try {
+      const selected = await tauriOpenDialog({ directory: true, multiple: false });
+      if (selected && typeof selected === "string") setWorkspaceDir(selected);
+    } catch {}
   }
 
   async function indexKnowledgeBase() {
@@ -828,6 +853,74 @@ export function AgentPage({ tuningParams }: AgentPageProps) {
                     </button>
                     <p className="font-mono-ui text-[10px] text-muted-foreground mt-2">
                       Supports PDF, DOCX, TXT, MD. The agent will use <code>query_knowledge_base</code> automatically.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Working Directory picker */}
+              <div className="relative" ref={wdPanelRef}>
+                <button
+                  onClick={() => setShowWdPanel(!showWdPanel)}
+                  className={cn(
+                    "btn-tactile",
+                    showWdPanel ? "btn-tactile-teal" : "btn-tactile-outline"
+                  )}
+                  title="Working Directory — set the filesystem root for agent file tools"
+                >
+                  <FolderOpen className="h-3.5 w-3.5" />
+                  Dir
+                  {workspaceDir && (
+                    <span className="tag-riso tag-riso-teal" style={{ fontSize: 9, padding: '0px 5px' }}>
+                      ✓
+                    </span>
+                  )}
+                </button>
+
+                {showWdPanel && (
+                  <div className="absolute top-full mt-1 right-0 z-50 bg-card border border-border-strong rounded-lg card-riso card-riso-teal p-4 w-[320px]">
+                    <p className="riso-section-label mb-3">
+                      <FolderOpen className="h-3.5 w-3.5" />
+                      Working Directory
+                    </p>
+                    {workspaceDir ? (
+                      <div className="mb-3 font-mono-ui text-[11px] text-muted-foreground rounded px-3 py-2 border border-border-strong" style={{ background: 'color-mix(in srgb, var(--accent-teal) 6%, transparent)' }}>
+                        <span className="font-medium" style={{ color: 'var(--accent-teal)' }}>Active</span>
+                        <br />
+                        <span className="truncate block mt-0.5" title={workspaceDir}>{workspaceDir}</span>
+                      </div>
+                    ) : (
+                      <p className="font-mono-ui text-[11px] text-muted-foreground mb-3">
+                        No folder selected. Pick a folder to give the agent access to files on disk.
+                      </p>
+                    )}
+                    <div className="flex gap-2 mb-2">
+                      <input
+                        type="text"
+                        className="flex-1 font-mono-ui text-xs border border-border-strong rounded px-2 py-1.5 bg-background placeholder:text-muted-foreground focus:outline-none focus:border-accent-teal transition-colors"
+                        style={{ '--tw-ring-color': 'var(--accent-teal)' } as React.CSSProperties}
+                        placeholder="/path/to/folder"
+                        value={workspaceDir}
+                        onChange={e => setWorkspaceDir(e.target.value)}
+                      />
+                      <button
+                        onClick={browseWorkspaceDir}
+                        className="btn-tactile btn-tactile-outline shrink-0 px-2"
+                        title="Browse for folder"
+                      >
+                        <FolderOpen className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                    {workspaceDir && (
+                      <button
+                        onClick={() => setWorkspaceDir("")}
+                        className="btn-tactile btn-tactile-outline w-full justify-center"
+                      >
+                        Clear
+                      </button>
+                    )}
+                    <p className="font-mono-ui text-[10px] text-muted-foreground mt-2">
+                      The agent can <code>list_directory</code>, <code>read_file</code>, <code>write_file</code>, and <code>append_to_file</code> relative to this folder.
                     </p>
                   </div>
                 )}

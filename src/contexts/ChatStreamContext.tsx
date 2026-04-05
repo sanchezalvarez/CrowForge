@@ -7,6 +7,7 @@ import { getAPIBase } from "../lib/api";
 export interface AgentScope {
   sheet_ids?: string[];
   document_ids?: string[];
+  workspace_dir?: string;
 }
 
 interface SendMessageParams {

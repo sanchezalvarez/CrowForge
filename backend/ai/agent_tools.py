@@ -1,6 +1,7 @@
 """Build concrete tool handlers wired to repository instances."""
 
 import json
+import os
 from typing import Optional
 from backend.ai.tool_registry import ToolRegistry
 from backend.ai.web_tools import search_web, get_page_content
@@ -54,7 +55,18 @@ def _find_snippet(text: str, query: str, window: int = 120) -> str:
     return snippet
 
 
-WRITE_TOOLS = {"write_to_sheet", "add_sheet_row", "add_sheet_column", "create_sheet", "create_document", "update_document"}
+WRITE_TOOLS = {"write_to_sheet", "add_sheet_row", "add_sheet_column", "create_sheet", "create_document", "update_document", "write_file", "append_to_file"}
+
+MAX_READ_SIZE = 50 * 1024  # 50 KB
+
+
+def _resolve_path(user_path: str, base_dir: str) -> str:
+    """Resolve user_path — absolute paths used as-is, relative resolved from base_dir."""
+    if not user_path or user_path == ".":
+        return os.path.realpath(base_dir)
+    if os.path.isabs(user_path):
+        return os.path.realpath(user_path)
+    return os.path.realpath(os.path.join(base_dir, user_path))
 
 
 def _text_to_tiptap(text: str) -> dict:
@@ -76,12 +88,18 @@ def build_tool_registry(
     sheet_ids: Optional[list[str]] = None,
     document_ids: Optional[list[str]] = None,
     preview_writes: bool = False,
+    workspace_dir: Optional[str] = None,
 ) -> ToolRegistry:
     """Create a ToolRegistry with handlers bound to the given repositories.
 
     When sheet_ids or document_ids are provided, tools are scoped to only
     those items. None means "all items" (no filtering).
     """
+    if workspace_dir is None:
+        from backend.app import get_app_data_dir
+        workspace_dir = os.path.join(get_app_data_dir(), "workspace")
+    os.makedirs(workspace_dir, exist_ok=True)
+
     registry = ToolRegistry()
 
     async def list_sheets():
@@ -211,6 +229,58 @@ def build_tool_registry(
         results = engine.query(query, top_k=top_k)
         return results
 
+    # ── Filesystem handlers ───────────────────────────────────────────
+
+    async def list_directory_handler(path: str = ""):
+        resolved = _resolve_path(path, workspace_dir)
+        if not os.path.isdir(resolved):
+            return {"error": f"Not a directory: {path}"}
+        entries = []
+        for name in sorted(os.listdir(resolved)):
+            full = os.path.join(resolved, name)
+            entry = {"name": name, "type": "dir" if os.path.isdir(full) else "file"}
+            if os.path.isfile(full):
+                entry["size"] = os.path.getsize(full)
+            entries.append(entry)
+        return entries
+
+    async def read_file_handler(path: str, encoding: str = "utf-8"):
+        resolved = _resolve_path(path, workspace_dir)
+        if not os.path.isfile(resolved):
+            return {"error": f"File not found: {path}"}
+        size = os.path.getsize(resolved)
+        if size > MAX_READ_SIZE:
+            return {"error": f"File too large ({size} bytes, max {MAX_READ_SIZE}). Use a smaller file."}
+        try:
+            with open(resolved, "r", encoding=encoding) as f:
+                content = f.read()
+            return {"path": path, "content": content, "size": len(content)}
+        except UnicodeDecodeError:
+            return {"error": f"Cannot read file as text ({encoding}). It may be a binary file."}
+
+    async def write_file_handler(path: str, content: str, encoding: str = "utf-8"):
+        resolved = _resolve_path(path, workspace_dir)
+        if preview_writes:
+            return {"preview": True, "action": "write_file", "path": path,
+                    "description": f"Write {len(content)} chars to {path}"}
+        parent = os.path.dirname(resolved)
+        if parent:
+            os.makedirs(parent, exist_ok=True)
+        with open(resolved, "w", encoding=encoding) as f:
+            f.write(content)
+        return {"ok": True, "path": path, "size": len(content)}
+
+    async def append_to_file_handler(path: str, content: str):
+        resolved = _resolve_path(path, workspace_dir)
+        if not os.path.isfile(resolved):
+            return {"error": f"File not found: {path}"}
+        if preview_writes:
+            return {"preview": True, "action": "append_to_file", "path": path,
+                    "description": f"Append {len(content)} chars to {path}"}
+        with open(resolved, "a", encoding="utf-8") as f:
+            f.write(content)
+        return {"ok": True, "path": path, "appended": len(content)}
+
     registry.register("list_sheets", list_sheets)
     registry.register("read_sheet", read_sheet)
     registry.register("write_to_sheet", write_to_sheet)
@@ -226,6 +296,10 @@ def build_tool_registry(
     registry.register("read_web_page", read_web_page_handler)
     registry.register("index_knowledge_base", index_knowledge_base_handler)
     registry.register("query_knowledge_base", query_knowledge_base_handler)
+    registry.register("list_directory", list_directory_handler)
+    registry.register("read_file", read_file_handler)
+    registry.register("write_file", write_file_handler)
+    registry.register("append_to_file", append_to_file_handler)
 
     # Load dynamic tools from plugins
     GlobalPluginRegistry().apply_to(registry)

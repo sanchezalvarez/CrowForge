@@ -864,7 +864,7 @@ export function AgentPage({ tuningParams }: AgentPageProps) {
                   onClick={() => setShowWdPanel(!showWdPanel)}
                   className={cn(
                     "btn-tactile",
-                    showWdPanel || workspaceDir ? "btn-tactile-teal" : "btn-tactile-outline"
+                    showWdPanel ? "btn-tactile-teal" : "btn-tactile-outline"
                   )}
                   title="Working Directory — set the filesystem root for agent file tools"
                 >

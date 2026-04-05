@@ -1359,17 +1359,26 @@ async def stream_agent_message(session_id: int, req: ChatMessageRequest, request
     scope = req.scope or {}
     scoped_sheet_ids = scope.get("sheet_ids")  # None means all
     scoped_document_ids = scope.get("document_ids")  # None means all
+    scoped_workspace_dir = scope.get("workspace_dir")
+    effective_workspace_dir = scoped_workspace_dir if scoped_workspace_dir and os.path.isdir(scoped_workspace_dir) else WORKSPACE_DIR
     if scoped_sheet_ids is not None or scoped_document_ids is not None:
         scoped_registry = build_tool_registry(
             sheet_repo, document_repo,
             sheet_ids=scoped_sheet_ids,
             document_ids=scoped_document_ids,
-            workspace_dir=WORKSPACE_DIR,
+            workspace_dir=effective_workspace_dir,
         )
     else:
         scoped_registry = build_tool_registry(
             sheet_repo, document_repo,
-            workspace_dir=WORKSPACE_DIR,
+            workspace_dir=effective_workspace_dir,
+        )
+
+    if effective_workspace_dir != WORKSPACE_DIR:
+        system_prompt += (
+            f"\n\nThe user has attached a working directory: {effective_workspace_dir}\n"
+            "You have filesystem tools (list_directory, read_file, write_file, append_to_file) "
+            "that resolve relative paths from this directory. Use them to explore and work with the user's files."
         )
 
     messages = [{"role": "system", "content": system_prompt}]
@@ -1434,12 +1443,14 @@ async def apply_agent_write(session_id: int, data: dict):
         raise HTTPException(status_code=400, detail="Missing 'tool' field")
     # Build a non-preview registry, preserving scope if provided
     scope = data.get("scope") or {}
+    apply_wd = scope.get("workspace_dir")
+    effective_wd = apply_wd if apply_wd and os.path.isdir(apply_wd) else WORKSPACE_DIR
     registry = build_tool_registry(
         sheet_repo, document_repo,
         sheet_ids=scope.get("sheet_ids"),
         document_ids=scope.get("document_ids"),
         preview_writes=False,
-        workspace_dir=WORKSPACE_DIR,
+        workspace_dir=effective_wd,
     )
     result_str = await registry.call(tool_name, args)
     try:

@@ -20,6 +20,8 @@ Developed by indie game developers from **rembrosoft.com**. We got tired of jugg
 -   **AI Agent with Tools:** ReAct agent with Knowledge Base (RAG), filesystem access, and live model switching.
 -   **Blazing Fast:** No loading spinners. As fast as your code.
 -   **Docker Multi-User Server:** Run CrowForge backend as a Docker container for team use — tested on Synology NAS.
+-   **Risograph Design System:** Unique visual identity — offset shadows, grain textures, registration marks, tactile buttons. Not your typical generic UI.
+-   **Guided Onboarding:** First-run setup wizard walks you through AI engine config, so you're productive in minutes.
 -   **Indie-First:** Built for solo devs and small teams. No corporate overhead.
 
 ## 💰 Transparent & Free
@@ -46,6 +48,7 @@ Developed by indie game developers from **rembrosoft.com**. We got tired of jugg
 | **Issue Tracker** | Cross-project bug tracking with severity, bulk actions, screenshots, filters |
 | **Agent** | ReAct agent with tool use, Knowledge Base (RAG), Working Directory, AI Controls panel |
 | **Benchmark** | Side-by-side model comparison with latency and quality metrics |
+| **Tools** | Utility widgets — world clock, RSS news reader, and more |
 | **Dashboard** | Activity overview, quick actions, AI news digest from RSS |
 | **Settings** | AI engine config, GGUF model gallery (Qwen3.5, Gemma 4, Llama 4, Mistral Small 3.1, DeepSeek-R1, etc.), team, workflows, feeds |
 
@@ -66,7 +69,7 @@ Developed by indie game developers from **rembrosoft.com**. We got tired of jugg
 
 ### Dev Setup
 ```bash
-git clone https://github.com/yourusername/crowforge.git
+git clone https://github.com/sanchezalvarez/CrowForge.git
 cd crowforge
 npm install
 pip install -r requirements.txt

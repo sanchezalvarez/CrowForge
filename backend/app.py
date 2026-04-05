@@ -305,6 +305,8 @@ def get_local_ip() -> str:
 PM_FILES_DIR = os.path.join(get_app_data_dir(), "pm_files")
 os.makedirs(PM_FILES_DIR, exist_ok=True)
 app.mount("/pm_files", StaticFiles(directory=PM_FILES_DIR), name="pm_files")
+WORKSPACE_DIR = os.path.join(get_app_data_dir(), "workspace")
+os.makedirs(WORKSPACE_DIR, exist_ok=True)
 
 _db_path = os.environ.get("CROWFORGE_DB_PATH") or os.path.join(get_app_data_dir(), "crowforge.db")
 os.makedirs(os.path.dirname(os.path.abspath(_db_path)), exist_ok=True)
@@ -1362,10 +1364,12 @@ async def stream_agent_message(session_id: int, req: ChatMessageRequest, request
             sheet_repo, document_repo,
             sheet_ids=scoped_sheet_ids,
             document_ids=scoped_document_ids,
+            workspace_dir=WORKSPACE_DIR,
         )
     else:
         scoped_registry = build_tool_registry(
             sheet_repo, document_repo,
+            workspace_dir=WORKSPACE_DIR,
         )
 
     messages = [{"role": "system", "content": system_prompt}]
@@ -1435,6 +1439,7 @@ async def apply_agent_write(session_id: int, data: dict):
         sheet_ids=scope.get("sheet_ids"),
         document_ids=scope.get("document_ids"),
         preview_writes=False,
+        workspace_dir=WORKSPACE_DIR,
     )
     result_str = await registry.call(tool_name, args)
     try:

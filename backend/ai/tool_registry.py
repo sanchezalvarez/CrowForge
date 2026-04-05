@@ -224,6 +224,67 @@ TOOL_DEFINITIONS = [
             },
         },
     },
+    # ── Filesystem tools ──────────────────────────────────────────────
+    {
+        "type": "function",
+        "function": {
+            "name": "list_directory",
+            "description": "List files and subdirectories in a workspace directory. Returns [{name, type, size}].",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Relative path from workspace root. Use '.' or '' for root."},
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "read_file",
+            "description": "Read a text file from the workspace. Returns {path, content, size}. Max 50 KB.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Relative path from workspace root."},
+                    "encoding": {"type": "string", "description": "File encoding (default: utf-8)."},
+                },
+                "required": ["path"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "write_file",
+            "description": "Create or overwrite a file in the workspace with the given content. Creates parent directories automatically.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Relative path from workspace root."},
+                    "content": {"type": "string", "description": "The text content to write."},
+                    "encoding": {"type": "string", "description": "File encoding (default: utf-8)."},
+                },
+                "required": ["path", "content"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "append_to_file",
+            "description": "Append text content to an existing file in the workspace.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Relative path from workspace root."},
+                    "content": {"type": "string", "description": "The text content to append."},
+                },
+                "required": ["path", "content"],
+            },
+        },
+    },
 ]
 
 

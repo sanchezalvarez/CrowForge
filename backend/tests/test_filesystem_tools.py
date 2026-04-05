@@ -20,34 +20,32 @@ class _FakeRAG:
 _fake_rag_mod.RAGEngine = _FakeRAG
 sys.modules["backend.ai.rag_engine"] = _fake_rag_mod
 
-from backend.ai.agent_tools import _resolve_safe_path, MAX_READ_SIZE, build_tool_registry
+from backend.ai.agent_tools import _resolve_path, MAX_READ_SIZE, build_tool_registry
 
 
-# ── Path validation ──────────────────────────────────────────────────────────
+# ── Path resolution ──────────────────────────────────────────────────────────
 
-class TestResolveSafePath:
-    def test_relative_path_resolves(self, tmp_path):
-        result = _resolve_safe_path("subdir/file.txt", str(tmp_path))
+class TestResolvePath:
+    def test_relative_path_resolves_from_base(self, tmp_path):
+        result = _resolve_path("subdir/file.txt", str(tmp_path))
         assert result == os.path.realpath(os.path.join(str(tmp_path), "subdir/file.txt"))
 
-    def test_traversal_blocked(self, tmp_path):
-        result = _resolve_safe_path("../../etc/passwd", str(tmp_path))
-        assert isinstance(result, dict)
-        assert "error" in result
-        assert "escapes" in result["error"]
-
     def test_empty_path_returns_base(self, tmp_path):
-        result = _resolve_safe_path("", str(tmp_path))
+        result = _resolve_path("", str(tmp_path))
         assert result == os.path.realpath(str(tmp_path))
 
     def test_dot_path_returns_base(self, tmp_path):
-        result = _resolve_safe_path(".", str(tmp_path))
+        result = _resolve_path(".", str(tmp_path))
         assert result == os.path.realpath(str(tmp_path))
 
-    def test_absolute_path_outside_blocked(self, tmp_path):
-        result = _resolve_safe_path("/etc/passwd", str(tmp_path))
-        assert isinstance(result, dict)
-        assert "error" in result
+    def test_absolute_path_used_as_is(self, tmp_path):
+        result = _resolve_path("/tmp/somefile.txt", str(tmp_path))
+        assert result == os.path.realpath("/tmp/somefile.txt")
+
+    def test_parent_traversal_allowed(self, tmp_path):
+        result = _resolve_path("../other", str(tmp_path))
+        assert isinstance(result, str)
+        assert ".." not in result  # realpath resolves it
 
 
 # ── Filesystem tool handlers (via registry) ──────────────────────────────────
@@ -88,10 +86,12 @@ class TestListDirectory:
         assert dir_entry["type"] == "dir"
 
     @pytest.mark.asyncio
-    async def test_list_traversal_blocked(self, tmp_path):
+    async def test_list_absolute_path(self, tmp_path):
+        (tmp_path / "x.txt").write_text("hi")
         registry = make_registry(str(tmp_path))
-        result = json.loads(await registry.call("list_directory", {"path": "../../"}))
-        assert "error" in result
+        result = json.loads(await registry.call("list_directory", {"path": str(tmp_path)}))
+        names = {e["name"] for e in result}
+        assert "x.txt" in names
 
 
 class TestReadFile:
@@ -140,10 +140,12 @@ class TestWriteFile:
         assert (tmp_path / "a" / "b" / "c.txt").read_text() == "deep"
 
     @pytest.mark.asyncio
-    async def test_write_traversal_blocked(self, tmp_path):
+    async def test_write_with_absolute_path(self, tmp_path):
+        target = str(tmp_path / "abs_test.txt")
         registry = make_registry(str(tmp_path))
-        result = json.loads(await registry.call("write_file", {"path": "../../evil.txt", "content": "bad"}))
-        assert "error" in result
+        result = json.loads(await registry.call("write_file", {"path": target, "content": "abs"}))
+        assert result["ok"] is True
+        assert (tmp_path / "abs_test.txt").read_text() == "abs"
 
 
 class TestAppendToFile:

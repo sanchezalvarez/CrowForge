@@ -229,11 +229,11 @@ TOOL_DEFINITIONS = [
         "type": "function",
         "function": {
             "name": "list_directory",
-            "description": "List files and subdirectories in a workspace directory. Returns [{name, type, size}].",
+            "description": "List files and subdirectories in a directory. Returns [{name, type, size}].",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "path": {"type": "string", "description": "Relative path from workspace root. Use '.' or '' for root."},
+                    "path": {"type": "string", "description": "Absolute or relative path. Empty string for workspace root."},
                 },
                 "required": [],
             },
@@ -243,11 +243,11 @@ TOOL_DEFINITIONS = [
         "type": "function",
         "function": {
             "name": "read_file",
-            "description": "Read a text file from the workspace. Returns {path, content, size}. Max 50 KB.",
+            "description": "Read a text file. Returns {path, content, size}. Max 50 KB.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "path": {"type": "string", "description": "Relative path from workspace root."},
+                    "path": {"type": "string", "description": "Absolute or relative path to the file."},
                     "encoding": {"type": "string", "description": "File encoding (default: utf-8)."},
                 },
                 "required": ["path"],
@@ -258,11 +258,11 @@ TOOL_DEFINITIONS = [
         "type": "function",
         "function": {
             "name": "write_file",
-            "description": "Create or overwrite a file in the workspace with the given content. Creates parent directories automatically.",
+            "description": "Create or overwrite a file with the given content. Creates parent directories automatically.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "path": {"type": "string", "description": "Relative path from workspace root."},
+                    "path": {"type": "string", "description": "Absolute or relative path to the file."},
                     "content": {"type": "string", "description": "The text content to write."},
                     "encoding": {"type": "string", "description": "File encoding (default: utf-8)."},
                 },
@@ -274,11 +274,11 @@ TOOL_DEFINITIONS = [
         "type": "function",
         "function": {
             "name": "append_to_file",
-            "description": "Append text content to an existing file in the workspace.",
+            "description": "Append text content to an existing file.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "path": {"type": "string", "description": "Relative path from workspace root."},
+                    "path": {"type": "string", "description": "Absolute or relative path to the file."},
                     "content": {"type": "string", "description": "The text content to append."},
                 },
                 "required": ["path", "content"],

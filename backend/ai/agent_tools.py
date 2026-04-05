@@ -60,15 +60,13 @@ WRITE_TOOLS = {"write_to_sheet", "add_sheet_row", "add_sheet_column", "create_sh
 MAX_READ_SIZE = 50 * 1024  # 50 KB
 
 
-def _resolve_safe_path(user_path: str, base_dir: str) -> str | dict:
-    """Resolve user_path relative to base_dir. Returns absolute path or error dict."""
+def _resolve_path(user_path: str, base_dir: str) -> str:
+    """Resolve user_path — absolute paths used as-is, relative resolved from base_dir."""
     if not user_path or user_path == ".":
         return os.path.realpath(base_dir)
-    joined = os.path.join(base_dir, user_path)
-    resolved = os.path.realpath(joined)
-    if not resolved.startswith(os.path.realpath(base_dir)):
-        return {"error": f"Path escapes workspace: {user_path}"}
-    return resolved
+    if os.path.isabs(user_path):
+        return os.path.realpath(user_path)
+    return os.path.realpath(os.path.join(base_dir, user_path))
 
 
 def _text_to_tiptap(text: str) -> dict:
@@ -234,9 +232,7 @@ def build_tool_registry(
     # ── Filesystem handlers ───────────────────────────────────────────
 
     async def list_directory_handler(path: str = ""):
-        resolved = _resolve_safe_path(path, workspace_dir)
-        if isinstance(resolved, dict):
-            return resolved
+        resolved = _resolve_path(path, workspace_dir)
         if not os.path.isdir(resolved):
             return {"error": f"Not a directory: {path}"}
         entries = []
@@ -249,9 +245,7 @@ def build_tool_registry(
         return entries
 
     async def read_file_handler(path: str, encoding: str = "utf-8"):
-        resolved = _resolve_safe_path(path, workspace_dir)
-        if isinstance(resolved, dict):
-            return resolved
+        resolved = _resolve_path(path, workspace_dir)
         if not os.path.isfile(resolved):
             return {"error": f"File not found: {path}"}
         size = os.path.getsize(resolved)
@@ -265,9 +259,7 @@ def build_tool_registry(
             return {"error": f"Cannot read file as text ({encoding}). It may be a binary file."}
 
     async def write_file_handler(path: str, content: str, encoding: str = "utf-8"):
-        resolved = _resolve_safe_path(path, workspace_dir)
-        if isinstance(resolved, dict):
-            return resolved
+        resolved = _resolve_path(path, workspace_dir)
         if preview_writes:
             return {"preview": True, "action": "write_file", "path": path,
                     "description": f"Write {len(content)} chars to {path}"}
@@ -279,9 +271,7 @@ def build_tool_registry(
         return {"ok": True, "path": path, "size": len(content)}
 
     async def append_to_file_handler(path: str, content: str):
-        resolved = _resolve_safe_path(path, workspace_dir)
-        if isinstance(resolved, dict):
-            return resolved
+        resolved = _resolve_path(path, workspace_dir)
         if not os.path.isfile(resolved):
             return {"error": f"File not found: {path}"}
         if preview_writes:

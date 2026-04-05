@@ -1329,6 +1329,9 @@ async def stream_chat_message(session_id: int, req: ChatMessageRequest, request:
 async def stream_agent_message(session_id: int, req: ChatMessageRequest, request: Request):
     if not _agent_available:
         raise HTTPException(status_code=503, detail="Agent modules are not available")
+    engine = engine_manager.get_active()
+    if not engine.supports_tools:
+        raise HTTPException(status_code=400, detail="Active AI engine does not support tool calling. Switch to a compatible engine in Settings.")
     session = chat_session_repo.get_by_id(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Chat session not found")
@@ -1377,7 +1380,7 @@ async def stream_agent_message(session_id: int, req: ChatMessageRequest, request
             import json as _json
             STRUCTURED_TYPES = ("started_tool", "finished_tool", "thinking", "error", "tool_error")
             async for event_str in run_agent_loop(
-                engine=engine_manager.get_active(),
+                engine=engine,
                 tool_registry=scoped_registry,
                 messages=messages,
                 temperature=temperature,

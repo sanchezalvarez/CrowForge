@@ -187,6 +187,10 @@ class HTTPAIEngine(AIEngine):
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             try:
                 async with client.stream("POST", f"{self.base_url}/chat/completions", json=payload, headers=headers) as response:
+                    if response.status_code != 200:
+                        body = await response.aread()
+                        yield f"[ERROR] HTTP {response.status_code}: {body.decode(errors='replace')[:300]}"
+                        return
                     async for line in response.aiter_lines():
                         if line.startswith("data: "):
                             try:
@@ -341,6 +345,11 @@ class GeminiAIEngine(AIEngine):
                                     yield text
                         except (json.JSONDecodeError, IndexError, KeyError):
                             continue
+            except ConnectionResetError as e:
+                if getattr(e, 'winerror', None) == 10054:
+                    print("[GEMINI_ENGINE] Client disconnected (WinError 10054) — stream closed cleanly")
+                else:
+                    yield f"[ERROR] {str(e)}"
             except httpx.ReadTimeout:
                 yield "[ERROR] Gemini request timed out"
             except Exception as e:
@@ -635,7 +644,7 @@ class LocalLLAMAEngine(AIEngine):
 
     @property
     def supports_tools(self) -> bool:
-        return self.is_ready
+        return True
 
     async def generate_with_tools(
         self, *, messages: list[dict], tools: list[dict],

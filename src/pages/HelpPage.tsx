@@ -974,27 +974,29 @@ export function HelpPage() {
                   </div>
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
-                      <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide">3B — Fast &amp; light</p>
+                      <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide">2–4B — Fast &amp; light</p>
                       <ul className="space-y-1.5 text-xs text-muted-foreground">
-                        <li className="flex items-start gap-2"><CheckCircle2 size={12} className="text-emerald-500 mt-0.5 shrink-0" /><span><strong>Phi-3.5-mini-instruct</strong> Q4_K_M (~2.2 GB) — Microsoft model, great at coding</span></li>
-                        <li className="flex items-start gap-2"><CheckCircle2 size={12} className="text-emerald-500 mt-0.5 shrink-0" /><span><strong>Llama-3.2-3B-Instruct</strong> Q4_K_M (~2 GB) — Solid all-rounder</span></li>
-                        <li className="flex items-start gap-2"><CheckCircle2 size={12} className="text-emerald-500 mt-0.5 shrink-0" /><span><strong>Qwen2.5-3B-Instruct</strong> Q4_K_M (~2 GB) — Strong at analysis &amp; math</span></li>
+                        <li className="flex items-start gap-2"><CheckCircle2 size={12} className="text-emerald-500 mt-0.5 shrink-0" /><span><strong>Qwen3.5 4B</strong> Q4_K_M (~2.7 GB) — Lightweight with tool calling</span></li>
+                        <li className="flex items-start gap-2"><CheckCircle2 size={12} className="text-emerald-500 mt-0.5 shrink-0" /><span><strong>Gemma 4 E4B</strong> Q4_K_M (~3 GB) — Compact multimodal with tool calling</span></li>
+                        <li className="flex items-start gap-2"><CheckCircle2 size={12} className="text-emerald-500 mt-0.5 shrink-0" /><span><strong>Phi-4 Mini 3.8B</strong> Q4_K_M (~2.5 GB) — Strong coding &amp; reasoning</span></li>
+                        <li className="flex items-start gap-2"><CheckCircle2 size={12} className="text-emerald-500 mt-0.5 shrink-0" /><span><strong>Llama 3.2 3B</strong> Q4_K_M (~2 GB) — Solid general-purpose chat</span></li>
                       </ul>
                     </div>
                     <div className="space-y-2">
-                      <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide">7B — Recommended for most users</p>
+                      <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide">7–9B — Recommended for most users</p>
                       <ul className="space-y-1.5 text-xs text-muted-foreground">
-                        <li className="flex items-start gap-2"><CheckCircle2 size={12} className="text-blue-500 mt-0.5 shrink-0" /><span><strong>Mistral-7B-Instruct-v0.3</strong> Q4_K_M (~4.1 GB) — Fast and reliable</span></li>
-                        <li className="flex items-start gap-2"><CheckCircle2 size={12} className="text-blue-500 mt-0.5 shrink-0" /><span><strong>Llama-3.1-8B-Instruct</strong> Q4_K_M (~5 GB) — Excellent for writing &amp; chat</span></li>
-                        <li className="flex items-start gap-2"><CheckCircle2 size={12} className="text-blue-500 mt-0.5 shrink-0" /><span><strong>Qwen2.5-7B-Instruct</strong> Q4_K_M (~4.7 GB) — Best-in-class coding at 7B</span></li>
+                        <li className="flex items-start gap-2"><CheckCircle2 size={12} className="text-blue-500 mt-0.5 shrink-0" /><span><strong>Qwen3.5 9B</strong> Q4_K_M (~5.8 GB) — Best local agent model, 262k context ⭐</span></li>
+                        <li className="flex items-start gap-2"><CheckCircle2 size={12} className="text-blue-500 mt-0.5 shrink-0" /><span><strong>DeepSeek-R1 Distill Qwen 7B</strong> Q4_K_M (~4.7 GB) — Great reasoning at low cost</span></li>
+                        <li className="flex items-start gap-2"><CheckCircle2 size={12} className="text-blue-500 mt-0.5 shrink-0" /><span><strong>Phi-4 14B</strong> Q4_K_M (~8.9 GB) — Punches above its weight in reasoning</span></li>
                       </ul>
                     </div>
                     <div className="space-y-2">
-                      <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide">12–14B — Higher quality</p>
+                      <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide">24–32B — Higher quality</p>
                       <ul className="space-y-1.5 text-xs text-muted-foreground">
-                        <li className="flex items-start gap-2"><CheckCircle2 size={12} className="text-amber-500 mt-0.5 shrink-0" /><span><strong>Mistral-Nemo-12B-Instruct</strong> Q4_K_M (~7 GB) — 128k context window</span></li>
-                        <li className="flex items-start gap-2"><CheckCircle2 size={12} className="text-amber-500 mt-0.5 shrink-0" /><span><strong>Phi-4-14B-Instruct</strong> Q4_K_M (~8 GB) — Microsoft's best small model</span></li>
-                        <li className="flex items-start gap-2"><CheckCircle2 size={12} className="text-amber-500 mt-0.5 shrink-0" /><span><strong>Qwen2.5-14B-Instruct</strong> Q4_K_M (~8.5 GB) — Excellent reasoning</span></li>
+                        <li className="flex items-start gap-2"><CheckCircle2 size={12} className="text-amber-500 mt-0.5 shrink-0" /><span><strong>Mistral Small 3.1 24B</strong> Q4_K_M (~14.3 GB) — Native tool calling, 128k context</span></li>
+                        <li className="flex items-start gap-2"><CheckCircle2 size={12} className="text-amber-500 mt-0.5 shrink-0" /><span><strong>Qwen3.5 27B</strong> Q4_K_M (~16.5 GB) — Exceptional reasoning &amp; coding, 262k context</span></li>
+                        <li className="flex items-start gap-2"><CheckCircle2 size={12} className="text-amber-500 mt-0.5 shrink-0" /><span><strong>Gemma 4 31B</strong> Q4_K_M (~19.5 GB) — Google's flagship, #3 on Arena AI</span></li>
+                        <li className="flex items-start gap-2"><CheckCircle2 size={12} className="text-amber-500 mt-0.5 shrink-0" /><span><strong>DeepSeek-R1 Distill Qwen 32B</strong> Q4_K_M (~19.5 GB) — Strongest R1 chain-of-thought</span></li>
                       </ul>
                     </div>
                     <div className="space-y-2">
@@ -1009,7 +1011,7 @@ export function HelpPage() {
                   </div>
                   <div className="flex items-center gap-2 pt-2 text-xs text-muted-foreground border-t">
                     <ExternalLink size={12} />
-                    <span>Download at: <strong className="text-foreground">huggingface.co</strong> — search model name + "GGUF" (e.g. "Mistral 7B GGUF")</span>
+                    <span>Download at: <strong className="text-foreground">huggingface.co</strong> — search model name + "GGUF" (e.g. "Qwen3.5 9B GGUF"), or use the <strong className="text-foreground">Model Gallery</strong> in Settings</span>
                   </div>
                 </div>
               </div>
@@ -1026,23 +1028,43 @@ export function HelpPage() {
 
                   <FaqItem q="How do I set up a local GGUF model?">
                     <ol className="list-decimal list-inside space-y-1">
-                      <li>Download a <code className="bg-muted px-1 rounded">.gguf</code> file from Hugging Face</li>
-                      <li>Open <strong>Settings → AI Engine</strong> in CrowForge</li>
-                      <li>Select the <strong>Local (GGUF)</strong> engine</li>
-                      <li>Paste the full path to the file into <strong>Model Path</strong> (e.g. <code className="bg-muted px-1 rounded">C:\Models\mistral-7b.gguf</code>)</li>
-                      <li>Set <strong>Context Size</strong> — recommended: 4096 for 7B, 2048 for 3B</li>
-                      <li>Click <strong>Save &amp; Reload</strong> — the model loads into RAM</li>
+                      <li>Open <strong>Settings → AI Engine</strong> and select <strong>Local GGUF</strong></li>
+                      <li>Set the <strong>Models Directory</strong> (e.g. <code className="bg-muted px-1 rounded">C:\models</code>) — this is where model files are stored</li>
+                      <li>Set <strong>Context Size</strong> — recommended: 4096 for small models, 8192+ for 9B+</li>
+                      <li>Click <strong>Save &amp; Reload</strong></li>
+                      <li>Download a model from the <strong>Model Gallery</strong> below (or manually place a <code className="bg-muted px-1 rounded">.gguf</code> file in the models directory)</li>
+                      <li>On the <strong>Agent</strong> page, open <strong>AI Controls → Engine</strong> and select the model from the dropdown</li>
                     </ol>
                   </FaqItem>
 
                   <FaqItem q="How do I connect to OpenAI or another cloud API?">
-                    <p>Go to <strong>Settings → AI Engine</strong>, choose <strong>OpenAI-compatible</strong>, and fill in:</p>
+                    <p>Go to <strong>Settings → AI Engine</strong>, choose <strong>HTTP / OpenAI-compatible</strong>, and fill in:</p>
                     <ul className="list-disc list-inside mt-2 space-y-1">
                       <li><strong>Base URL:</strong> <code className="bg-muted px-1 rounded">https://api.openai.com/v1</code></li>
                       <li><strong>API Key:</strong> your key (e.g. <code className="bg-muted px-1 rounded">sk-...</code>)</li>
                       <li><strong>Model:</strong> e.g. <code className="bg-muted px-1 rounded">gpt-4o-mini</code> or <code className="bg-muted px-1 rounded">gpt-4o</code></li>
                     </ul>
                     <p className="mt-2">Works with local servers too: <strong>LM Studio</strong> (<code className="bg-muted px-1 rounded">http://localhost:1234/v1</code>) and <strong>Ollama</strong> (<code className="bg-muted px-1 rounded">http://localhost:11434/v1</code>, API Key: <code className="bg-muted px-1 rounded">ollama</code>).</p>
+                  </FaqItem>
+
+                  <FaqItem q="How do I connect to Google Gemini?">
+                    <p>Go to <strong>Settings → AI Engine</strong>, choose <strong>Google Gemini</strong>, and fill in:</p>
+                    <ul className="list-disc list-inside mt-2 space-y-1">
+                      <li><strong>API Key:</strong> your Gemini API key (starts with <code className="bg-muted px-1 rounded">AIza...</code>)</li>
+                      <li><strong>Model:</strong> <code className="bg-muted px-1 rounded">gemini-2.5-flash</code> (fast, recommended) or <code className="bg-muted px-1 rounded">gemini-2.5-pro</code> (most powerful)</li>
+                    </ul>
+                    <p className="mt-2">Get a free API key at <strong>aistudio.google.com</strong>.</p>
+                  </FaqItem>
+
+                  <FaqItem q="How do I download models from the Model Gallery?">
+                    <ol className="list-decimal list-inside space-y-1">
+                      <li>Go to <strong>Settings → AI Engine</strong> and select <strong>Local GGUF</strong></li>
+                      <li>Scroll down to the <strong>Model Gallery</strong></li>
+                      <li>Filter by tags (agent, coding, reasoning, etc.) to find a model</li>
+                      <li>Click <strong>Download</strong> — the file downloads to your Models Directory in the background</li>
+                      <li>Once downloaded, select the model in <strong>AI Controls → Engine</strong> on the Agent page</li>
+                    </ol>
+                    <p className="mt-2">You can also manually place any <code className="bg-muted px-1 rounded">.gguf</code> file in the Models Directory — it will appear in the dropdown automatically.</p>
                   </FaqItem>
 
                   <FaqItem q="What is Context Size and how should I set it?">
@@ -1053,6 +1075,16 @@ export function HelpPage() {
                       <li><strong>13B+ models:</strong> 8192 – 32768+</li>
                     </ul>
                     <p className="mt-2 text-amber-600 dark:text-amber-400">⚠ If the model crashes or is extremely slow, reduce Context Size first.</p>
+                  </FaqItem>
+
+                  <FaqItem q="What is the Agent and how does it work?">
+                    <p>The <strong>Agent</strong> is a ReAct-style AI assistant that can use tools to accomplish tasks. It thinks step-by-step, calls tools, and feeds results back into its reasoning.</p>
+                    <ul className="list-disc list-inside mt-2 space-y-1">
+                      <li><strong>Knowledge Base (RAG):</strong> index a folder so the agent can search your files for relevant context</li>
+                      <li><strong>Working Directory:</strong> set a filesystem root so the agent can read/write files with its tools</li>
+                      <li><strong>AI Controls:</strong> switch engines and models, tune parameters, and view debug info — all from the right panel</li>
+                    </ul>
+                    <p className="mt-2">For best results with tool calling, use models tagged <strong>agent</strong> in the Model Gallery (e.g. Qwen3.5, Gemma 4, Mistral Small 3.1).</p>
                   </FaqItem>
 
                   <FaqItem q="What is Max Tokens and when should I change it?">

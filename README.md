@@ -1,9 +1,10 @@
 <div align="center">
-  <img src="src/assets/AgentCrowner_512.png" alt="Agent Crowner" width="250">
-  <p>Agent Crowner</p>
+  <img src="src/assets/crowforge_ico.png" alt="CrowForge" width="120">
 </div>
 
 # CrowForge
+
+> **Alpha** — actively developed and tested. Expect rough edges and breaking changes.
 
 **Stop Managing. Start Creating.**
 
@@ -49,10 +50,10 @@ We're focused on providing a clean, efficient, and inspiring environment for cre
 | **Canvas** | Infinite node-based canvas with AI nodes, auto-layout, and execution chains |
 | **Projects** | Scrum project management — Kanban board, Backlog (tree hierarchy), Sprint view, Roadmap |
 | **Issue Tracker** | Cross-project bug tracking with severity levels, bulk actions, screenshots, and filters |
-| **Agent** | ReAct agent with tool use — reads/writes sheets and documents autonomously |
+| **Agent** | ReAct agent with tool use, Knowledge Base (RAG), Working Directory for filesystem access, and live AI Controls panel for engine/model switching |
 | **Benchmark** | Side-by-side model comparison with latency and quality metrics |
 | **Dashboard** | Activity overview, quick actions, AI news digest from RSS feeds |
-| **Settings** | AI engine config, GGUF model gallery, team members, custom workflows, news feeds |
+| **Settings** | AI engine config, GGUF model gallery (Qwen3.5, Gemma 4, Llama 4, Mistral Small 3.1, DeepSeek-R1, and more), team members, custom workflows, news feeds |
 
 ---
 

@@ -25,6 +25,7 @@ import { RisoBackground } from "../components/RisoBackground";
 import type { TuningParams } from "../components/AIControlPanel";
 import type { ChatSession, ChatMessage, ScopeItem } from "../types/api";
 import { open as tauriOpenDialog } from "@tauri-apps/plugin-dialog";
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from "../components/ui/dialog";
 
 
 // ── Accent color utilities ─────────────────────────────────────────
@@ -397,10 +398,8 @@ export function AgentPage({ tuningParams }: AgentPageProps) {
   const { sidebarWidth, onResizeStart } = useSidebarResize();
   const [showContextPanel, setShowContextPanel] = useState(false);
   const [showKbPanel, setShowKbPanel] = useState(false);
-  const kbPanelRef = useRef<HTMLDivElement>(null);
   const [workspaceDir, setWorkspaceDir] = useState<string>("");
   const [showWdPanel, setShowWdPanel] = useState(false);
-  const wdPanelRef = useRef<HTMLDivElement>(null);
 
   // Knowledge Base state
   interface KbStatus { indexed: boolean; chunks: number; path: string | null; available: boolean }
@@ -426,7 +425,6 @@ export function AgentPage({ tuningParams }: AgentPageProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const isDark = useIsDark();
-  const contextPanelRef = useRef<HTMLDivElement>(null);
 
   const activeSession = sessions.find((s) => s.id === activeSessionId) ?? null;
   const sending = isSending && streamingSessionId === activeSessionId;
@@ -515,42 +513,6 @@ export function AgentPage({ tuningParams }: AgentPageProps) {
       if (el) el.scrollTop = el.scrollHeight;
     });
   }, [messages, streamingContent, agentEvents]);
-
-  // Close context panel on outside click
-  useEffect(() => {
-    if (!showContextPanel) return;
-    function onClickOutside(e: MouseEvent) {
-      if (contextPanelRef.current && !contextPanelRef.current.contains(e.target as Node)) {
-        setShowContextPanel(false);
-      }
-    }
-    document.addEventListener("mousedown", onClickOutside);
-    return () => document.removeEventListener("mousedown", onClickOutside);
-  }, [showContextPanel]);
-
-  // Close KB panel on outside click
-  useEffect(() => {
-    if (!showKbPanel) return;
-    function onClickOutside(e: MouseEvent) {
-      if (kbPanelRef.current && !kbPanelRef.current.contains(e.target as Node)) {
-        setShowKbPanel(false);
-      }
-    }
-    document.addEventListener("mousedown", onClickOutside);
-    return () => document.removeEventListener("mousedown", onClickOutside);
-  }, [showKbPanel]);
-
-  // Close Working Directory panel on outside click
-  useEffect(() => {
-    if (!showWdPanel) return;
-    function onClickOutside(e: MouseEvent) {
-      if (wdPanelRef.current && !wdPanelRef.current.contains(e.target as Node)) {
-        setShowWdPanel(false);
-      }
-    }
-    document.addEventListener("mousedown", onClickOutside);
-    return () => document.removeEventListener("mousedown", onClickOutside);
-  }, [showWdPanel]);
 
   // Fetch KB status on mount
   useEffect(() => {
@@ -741,7 +703,7 @@ export function AgentPage({ tuningParams }: AgentPageProps) {
               <div className="flex-1" />
 
               {/* Context selector trigger */}
-              <div className="relative" ref={contextPanelRef}>
+              <div>
                 <button
                   onClick={() => setShowContextPanel(!showContextPanel)}
                   className={cn(
@@ -759,37 +721,59 @@ export function AgentPage({ tuningParams }: AgentPageProps) {
                   </span>
                 </button>
 
-                {showContextPanel && (
-                  <div className="absolute top-full mt-1 right-0 z-50 bg-card border border-border-strong rounded-lg card-riso card-riso-violet p-3 min-w-[260px] max-h-[400px] overflow-y-auto">
-                    <ContextSelector
-                      sheets={allSheets}
-                      documents={allDocuments}
-                      selectedSheetIds={selectedSheetIds}
-                      selectedDocumentIds={selectedDocumentIds}
-                      onToggleSheet={(id) => setSelectedSheetIds(prev => {
-                        const next = new Set(prev);
-                        next.has(id) ? next.delete(id) : next.add(id);
-                        return next;
-                      })}
-                      onToggleDocument={(id) => setSelectedDocumentIds(prev => {
-                        const next = new Set(prev);
-                        next.has(id) ? next.delete(id) : next.add(id);
-                        return next;
-                      })}
-                      onSelectAllSheets={() => setSelectedSheetIds(prev =>
-                        prev.size === allSheets.length ? new Set() : new Set(allSheets.map(s => s.id))
-                      )}
-                      onSelectAllDocuments={() => setSelectedDocumentIds(prev =>
-                        prev.size === allDocuments.length ? new Set() : new Set(allDocuments.map(d => d.id))
-                      )}
-                      onClearAll={() => { setSelectedSheetIds(new Set()); setSelectedDocumentIds(new Set()); }}
-                    />
-                  </div>
-                )}
+                <Dialog open={showContextPanel} onOpenChange={setShowContextPanel}>
+                  <DialogContent className="max-w-sm" style={{ boxShadow: '4px 4px 0 var(--riso-violet)' }}>
+                    <DialogTitle className="flex items-center gap-1.5">
+                      <Settings2 className="h-4 w-4" style={{ color: 'var(--accent-violet)' }} />
+                      Agent Context
+                    </DialogTitle>
+                    <DialogDescription className="mt-3">Select which sheets and documents the agent can read and modify.</DialogDescription>
+
+                    <div className="mt-4 max-h-[50vh] overflow-y-auto rounded-md border border-border-strong p-3">
+                      <ContextSelector
+                        sheets={allSheets}
+                        documents={allDocuments}
+                        selectedSheetIds={selectedSheetIds}
+                        selectedDocumentIds={selectedDocumentIds}
+                        onToggleSheet={(id) => setSelectedSheetIds(prev => {
+                          const next = new Set(prev);
+                          next.has(id) ? next.delete(id) : next.add(id);
+                          return next;
+                        })}
+                        onToggleDocument={(id) => setSelectedDocumentIds(prev => {
+                          const next = new Set(prev);
+                          next.has(id) ? next.delete(id) : next.add(id);
+                          return next;
+                        })}
+                        onSelectAllSheets={() => setSelectedSheetIds(prev =>
+                          prev.size === allSheets.length ? new Set() : new Set(allSheets.map(s => s.id))
+                        )}
+                        onSelectAllDocuments={() => setSelectedDocumentIds(prev =>
+                          prev.size === allDocuments.length ? new Set() : new Set(allDocuments.map(d => d.id))
+                        )}
+                        onClearAll={() => { setSelectedSheetIds(new Set()); setSelectedDocumentIds(new Set()); }}
+                      />
+                    </div>
+
+                    <p className="font-mono-ui text-[10px] text-muted-foreground mt-3">
+                      {scopeCount}/{totalCount} items selected
+                    </p>
+
+                    <div className="mt-4 flex justify-end">
+                      <button
+                        onClick={() => setShowContextPanel(false)}
+                        className="btn-tactile btn-tactile-violet px-5"
+                      >
+                        <Check className="h-3.5 w-3.5" />
+                        Done
+                      </button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
               </div>
 
-              {/* Knowledge Base button + panel */}
-              <div className="relative" ref={kbPanelRef}>
+              {/* Knowledge Base button + dialog */}
+              <div>
                 <button
                   onClick={() => setShowKbPanel(!showKbPanel)}
                   className={cn(
@@ -807,59 +791,80 @@ export function AgentPage({ tuningParams }: AgentPageProps) {
                   )}
                 </button>
 
-                {showKbPanel && (
-                  <div className="absolute top-full mt-1 right-0 z-50 bg-card border border-border-strong rounded-lg card-riso card-riso-violet p-4 w-[320px]">
-                    <p className="riso-section-label mb-3">
-                      <BookOpen className="h-3.5 w-3.5" />
+                <Dialog open={showKbPanel} onOpenChange={setShowKbPanel}>
+                  <DialogContent className="max-w-sm" style={{ boxShadow: '4px 4px 0 var(--riso-violet)' }}>
+                    <DialogTitle className="flex items-center gap-1.5">
+                      <BookOpen className="h-4 w-4" style={{ color: 'var(--accent-violet)' }} />
                       Knowledge Base (RAG)
-                    </p>
-                    {kbStatus.indexed ? (
-                      <div className="mb-3 font-mono-ui text-[11px] text-muted-foreground rounded px-3 py-2 border border-border-strong" style={{ background: 'color-mix(in srgb, var(--accent-violet) 6%, transparent)' }}>
-                        <span className="font-medium" style={{ color: 'var(--accent-violet)' }}>{kbStatus.chunks} chunks indexed</span>
-                        <br />
-                        <span className="truncate block mt-0.5" title={kbStatus.path ?? ""}>{kbStatus.path}</span>
+                    </DialogTitle>
+                    <DialogDescription className="mt-3">Index a folder to enable semantic search across your local files.</DialogDescription>
+
+                    {kbStatus.indexed && (
+                      <div className="mt-4 font-mono-ui text-[11px] text-muted-foreground rounded-md px-4 py-3 border border-border-strong" style={{ background: 'color-mix(in srgb, var(--accent-violet) 6%, transparent)' }}>
+                        <span className="font-semibold" style={{ color: 'var(--accent-violet)' }}>{kbStatus.chunks} chunks indexed</span>
+                        <span className="truncate block mt-1 opacity-80" title={kbStatus.path ?? ""}>{kbStatus.path}</span>
                       </div>
-                    ) : (
-                      <p className="font-mono-ui text-[11px] text-muted-foreground mb-3">No folder indexed yet. Select a folder to enable semantic search across your local files.</p>
                     )}
-                    <div className="flex gap-2 mb-2">
-                      <input
-                        type="text"
-                        className="flex-1 font-mono-ui text-xs border border-border-strong rounded px-2 py-1.5 bg-background placeholder:text-muted-foreground focus:outline-none focus:border-accent-violet transition-colors"
-                        style={{ '--tw-ring-color': 'var(--accent-violet)' } as React.CSSProperties}
-                        placeholder="/path/to/folder"
-                        value={kbPath}
-                        onChange={e => setKbPath(e.target.value)}
-                      />
-                      <button
-                        onClick={browseFolder}
-                        className="btn-tactile btn-tactile-outline shrink-0 px-2"
-                        title="Browse for folder"
-                      >
-                        <FolderOpen className="h-3.5 w-3.5" />
-                      </button>
+
+                    <div className="mt-5">
+                      <label className="riso-section-label mb-2 block">Folder Path</label>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          className="flex-1 font-mono-ui text-xs border border-border-strong rounded px-3 py-2 bg-background placeholder:text-muted-foreground focus:outline-none focus:border-accent-violet transition-colors"
+                          style={{ '--tw-ring-color': 'var(--accent-violet)' } as React.CSSProperties}
+                          placeholder="/path/to/folder"
+                          value={kbPath}
+                          onChange={e => setKbPath(e.target.value)}
+                        />
+                        <button
+                          onClick={browseFolder}
+                          className="btn-tactile btn-tactile-outline shrink-0 px-2"
+                          title="Browse for folder"
+                        >
+                          <FolderOpen className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
                     </div>
-                    {kbError && <p className="font-mono-ui text-[11px] text-destructive mb-2">{kbError}</p>}
-                    <button
-                      onClick={indexKnowledgeBase}
-                      disabled={kbIndexing || !kbPath.trim()}
-                      className="btn-tactile btn-tactile-violet w-full justify-center"
-                    >
-                      {kbIndexing ? (
-                        <>
-                          <Loader2 className="h-3 w-3 animate-spin" /> Indexing...
-                        </>
-                      ) : kbStatus.indexed ? "Re-index Folder" : "Index Folder"}
-                    </button>
-                    <p className="font-mono-ui text-[10px] text-muted-foreground mt-2">
+
+                    {kbError && <p className="font-mono-ui text-[11px] text-destructive mt-2">{kbError}</p>}
+
+                    <p className="font-mono-ui text-[10px] text-muted-foreground mt-4">
                       Supports PDF, DOCX, TXT, MD. The agent will use <code>query_knowledge_base</code> automatically.
                     </p>
-                  </div>
-                )}
+
+                    <div className="mt-5 flex justify-end gap-2">
+                      <button
+                        onClick={() => setShowKbPanel(false)}
+                        className="btn-tactile btn-tactile-outline px-4"
+                      >
+                        Close
+                      </button>
+                      <button
+                        onClick={() => { indexKnowledgeBase(); }}
+                        disabled={kbIndexing || !kbPath.trim()}
+                        className="btn-tactile btn-tactile-violet px-4"
+                      >
+                        {kbIndexing ? (
+                          <>
+                            <Loader2 className="h-3 w-3 animate-spin" /> Indexing...
+                          </>
+                        ) : kbStatus.indexed ? (
+                          "Re-index"
+                        ) : (
+                          <>
+                            <Check className="h-3.5 w-3.5" />
+                            Index Folder
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
               </div>
 
               {/* Working Directory picker */}
-              <div className="relative" ref={wdPanelRef}>
+              <div>
                 <button
                   onClick={() => setShowWdPanel(!showWdPanel)}
                   className={cn(
@@ -877,53 +882,65 @@ export function AgentPage({ tuningParams }: AgentPageProps) {
                   )}
                 </button>
 
-                {showWdPanel && (
-                  <div className="absolute top-full mt-1 right-0 z-50 bg-card border border-border-strong rounded-lg card-riso card-riso-teal p-4 w-[320px]">
-                    <p className="riso-section-label mb-3">
-                      <FolderOpen className="h-3.5 w-3.5" />
+                <Dialog open={showWdPanel} onOpenChange={setShowWdPanel}>
+                  <DialogContent className="max-w-sm" style={{ boxShadow: '4px 4px 0 var(--riso-teal)' }}>
+                    <DialogTitle className="flex items-center gap-1.5">
+                      <FolderOpen className="h-4 w-4" style={{ color: 'var(--accent-teal)' }} />
                       Working Directory
-                    </p>
-                    {workspaceDir ? (
-                      <div className="mb-3 font-mono-ui text-[11px] text-muted-foreground rounded px-3 py-2 border border-border-strong" style={{ background: 'color-mix(in srgb, var(--accent-teal) 6%, transparent)' }}>
-                        <span className="font-medium" style={{ color: 'var(--accent-teal)' }}>Active</span>
-                        <br />
-                        <span className="truncate block mt-0.5" title={workspaceDir}>{workspaceDir}</span>
-                      </div>
-                    ) : (
-                      <p className="font-mono-ui text-[11px] text-muted-foreground mb-3">
-                        No folder selected. Pick a folder to give the agent access to files on disk.
-                      </p>
-                    )}
-                    <div className="flex gap-2 mb-2">
-                      <input
-                        type="text"
-                        className="flex-1 font-mono-ui text-xs border border-border-strong rounded px-2 py-1.5 bg-background placeholder:text-muted-foreground focus:outline-none focus:border-accent-teal transition-colors"
-                        style={{ '--tw-ring-color': 'var(--accent-teal)' } as React.CSSProperties}
-                        placeholder="/path/to/folder"
-                        value={workspaceDir}
-                        onChange={e => setWorkspaceDir(e.target.value)}
-                      />
-                      <button
-                        onClick={browseWorkspaceDir}
-                        className="btn-tactile btn-tactile-outline shrink-0 px-2"
-                        title="Browse for folder"
-                      >
-                        <FolderOpen className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
+                    </DialogTitle>
+                    <DialogDescription className="mt-3">Give the agent access to read and write files on disk.</DialogDescription>
+
                     {workspaceDir && (
-                      <button
-                        onClick={() => setWorkspaceDir("")}
-                        className="btn-tactile btn-tactile-outline w-full justify-center"
-                      >
-                        Clear
-                      </button>
+                      <div className="mt-4 font-mono-ui text-[11px] text-muted-foreground rounded-md px-4 py-3 border border-border-strong" style={{ background: 'color-mix(in srgb, var(--accent-teal) 6%, transparent)' }}>
+                        <span className="font-semibold" style={{ color: 'var(--accent-teal)' }}>Active</span>
+                        <span className="truncate block mt-1 opacity-80" title={workspaceDir}>{workspaceDir}</span>
+                      </div>
                     )}
-                    <p className="font-mono-ui text-[10px] text-muted-foreground mt-2">
+
+                    <div className="mt-5">
+                      <label className="riso-section-label mb-2 block">Folder Path</label>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          className="flex-1 font-mono-ui text-xs border border-border-strong rounded px-3 py-2 bg-background placeholder:text-muted-foreground focus:outline-none focus:border-accent-teal transition-colors"
+                          style={{ '--tw-ring-color': 'var(--accent-teal)' } as React.CSSProperties}
+                          placeholder="/path/to/folder"
+                          value={workspaceDir}
+                          onChange={e => setWorkspaceDir(e.target.value)}
+                        />
+                        <button
+                          onClick={browseWorkspaceDir}
+                          className="btn-tactile btn-tactile-outline shrink-0 px-2"
+                          title="Browse for folder"
+                        >
+                          <FolderOpen className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    <p className="font-mono-ui text-[10px] text-muted-foreground mt-4">
                       The agent can <code>list_directory</code>, <code>read_file</code>, <code>write_file</code>, and <code>append_to_file</code> relative to this folder.
                     </p>
-                  </div>
-                )}
+
+                    <div className="mt-5 flex justify-end gap-2">
+                      {workspaceDir && (
+                        <button
+                          onClick={() => setWorkspaceDir("")}
+                          className="btn-tactile btn-tactile-outline px-4"
+                        >
+                          Clear
+                        </button>
+                      )}
+                      <button
+                        onClick={() => setShowWdPanel(false)}
+                        className="btn-tactile btn-tactile-teal px-5"
+                      >
+                        <Check className="h-3.5 w-3.5" />
+                        Done
+                      </button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
               </div>
 
               {/* Web Access badge */}

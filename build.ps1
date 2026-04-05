@@ -1,8 +1,8 @@
-# CrowForge 0.5.2 — Full production build with branded splash installer (Windows)
+# CrowForge 0.5.3 — Full production build with branded splash installer (Windows)
 # Run from the project root: .\build.ps1
 
 $ErrorActionPreference = "Stop"
-$Version = "0.5.2"
+$Version = "0.5.3"
 
 Write-Host ""
 Write-Host "=== CrowForge v$Version Build Started ===" -ForegroundColor Cyan

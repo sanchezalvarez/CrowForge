@@ -517,7 +517,7 @@ async def health():
     current_mode = app_repo.get_setting("deployment_mode") or "local"
     return {
         "status": "ok",
-        "version": "0.5.2",
+        "version": "0.5.3",
         "mode": current_mode,
         "needs_restart": current_mode != _startup_mode,
     }
@@ -3080,7 +3080,9 @@ def _parse_rss(xml_text: str, feed_id: int) -> list:
                 articles.append({"guid": guid, "title": title, "summary": summary[:500], "url": url, "image_url": image_url, "published_at": published or None})
     else:
         # RSS 2.0
-        channel = root.find("channel") or root
+        channel = root.find("channel")
+        if channel is None:
+            channel = root
         for item in channel.findall("item"):
             def _it(tag_name):
                 el = item.find(tag_name)
@@ -3108,7 +3110,9 @@ def _auto_detect_feed_title(xml_text: str) -> tuple[str, str]:
             title = (title_el.text or "").strip() if title_el is not None else ""
             desc = (subtitle_el.text or "").strip() if subtitle_el is not None else ""
         else:
-            channel = root.find("channel") or root
+            channel = root.find("channel")
+        if channel is None:
+            channel = root
             title_el = channel.find("title")
             desc_el = channel.find("description")
             title = (title_el.text or "").strip() if title_el is not None else ""

@@ -300,7 +300,7 @@ class GeminiAIEngine(AIEngine):
 
     def __init__(self, api_key: str | None = None, model: str | None = None):
         self.api_key = api_key or os.getenv("GEMINI_API_KEY", "")
-        self.model = model or os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+        self.model = model or os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
         self.timeout = float(os.getenv("LLM_TIMEOUT", "60.0"))
 
     async def generate_stream(
@@ -458,9 +458,9 @@ class LocalLLAMAEngine(AIEngine):
     # Map model name patterns to chat format and stop tokens
     _FORMAT_MAP = [
         (["gemma"],    "gemma",   ["<end_of_turn>", "<eos>"]),
-        (["llama-3", "llama3"],   "llama-3", ["<|eot_id|>", "<|end_of_text|>"]),
+        (["llama-3", "llama3", "llama-4", "llama4"],   "llama-3", ["<|eot_id|>", "<|end_of_text|>"]),
         (["mistral", "mixtral"],  "chatml",  ["<|im_start|>", "<|im_end|>", "</s>"]),
-        (["phi-3", "phi3"],       "chatml",  ["<|im_start|>", "<|im_end|>", "<|end|>"]),
+        (["phi-3", "phi3", "phi-4", "phi4"],  "chatml",  ["<|im_start|>", "<|im_end|>", "<|end|>"]),
         (["qwen"],     "chatml",  ["<|im_start|>", "<|im_end|>", "<|endoftext|>"]),
     ]
     _DEFAULT_STOPS = ["<|im_start|>", "<|im_end|>", "<|endoftext|>", "<|eot_id|>", "<end_of_turn>", "Assistant:", "User:"]

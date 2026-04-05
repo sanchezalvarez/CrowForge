@@ -104,7 +104,7 @@ async def lifespan(app: FastAPI):
         model_path = app_repo.get_setting("ai_model_path") or ""
         ctx_size = int(app_repo.get_setting("ai_ctx_size") or "8192")
         gemini_api_key_db = app_repo.get_setting("ai_gemini_api_key") or os.getenv("GEMINI_API_KEY", "")
-        gemini_model_db = app_repo.get_setting("ai_gemini_model") or os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+        gemini_model_db = app_repo.get_setting("ai_gemini_model") or os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
         try:
             engine_manager.clear()
@@ -702,7 +702,7 @@ async def get_ai_settings():
         "models_dir": _get("ai_models_dir", LLM_MODELS_DIR),
         "ctx_size": int(_get("ai_ctx_size", os.getenv("LLM_CTX_SIZE", "8192")) or "8192"),
         "gemini_api_key": _get("ai_gemini_api_key", os.getenv("GEMINI_API_KEY", "")),
-        "gemini_model": _get("ai_gemini_model", os.getenv("GEMINI_MODEL", "gemini-2.0-flash")),
+        "gemini_model": _get("ai_gemini_model", os.getenv("GEMINI_MODEL", "gemini-2.5-flash")),
     }
 
 
@@ -740,7 +740,7 @@ async def save_ai_settings(data: dict, background_tasks: BackgroundTasks):
     model_path = app_repo.get_setting("ai_model_path") or ""
     ctx_size = int(app_repo.get_setting("ai_ctx_size") or "8192")
     gemini_api_key = app_repo.get_setting("ai_gemini_api_key") or os.getenv("GEMINI_API_KEY", "")
-    gemini_model = app_repo.get_setting("ai_gemini_model") or os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+    gemini_model = app_repo.get_setting("ai_gemini_model") or os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
     # Persist settings to .env file for restart durability
     _write_env({

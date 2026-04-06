@@ -87,7 +87,8 @@
       "Bash(echo \"EXIT: $?\")",
       "Bash(kill %1)",
       "Bash(npm test:*)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Bash(git branch:*)"
     ]
   }
 }
